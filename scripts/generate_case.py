@@ -19,10 +19,10 @@ def verify_prerequisites(args):
     ), 'ccomp (CompCert) does not exist or it is not executable (can be specified with --ccomp)'
     assert shutil.which(
         args['sanity_gcc']
-    ), 'gcc (used for sanity checks) does not exist or it is not executable (can be specified with --gcc-sanity)'
+    ), 'gcc (used for sanity checks) does not exist or it is not executable (can be specified with --sanity-gcc)'
     assert shutil.which(
         args['sanity_clang']
-    ), 'clang (used for sanity checks) does not exist or it is not executable (can be specified with --gcc-sanity)'
+    ), 'clang (used for sanity checks) does not exist or it is not executable (can be specified with --sanity-clang)'
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
