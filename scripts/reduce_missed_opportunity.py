@@ -1,15 +1,19 @@
-#!/usr/bin/env python3
+#!/bin/env python3
 
 import argparse
 import shutil
-import re
+import os
+import multiprocessing
+from pathlib import Path
 import subprocess
-from tempfile import NamedTemporaryFile
-from sanitize import sanitize
-from check_marker import check_marker_against_compilers, opt_level_arg, cc_opt_pair_arg
 
+from check_marker import opt_level_arg, cc_opt_pair_arg
+from utils import make_output_dir
 
 def verify_prerequisites(args):
+    assert shutil.which(
+        args['creduce']
+    ), 'creduce  does not exist or it is not executable (can be specified with --creduce)'
     assert shutil.which(
         args['ccomp']
     ), 'ccomp (CompCert) does not exist or it is not executable (can be specified with --ccomp)'
@@ -28,10 +32,13 @@ def verify_prerequisites(args):
         assert shutil.which(cc), f'{cc} does not exist or it is not executable'
 
 
+
+
 def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description='Reduction check to use with creduce',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='Reduces a missed opportunity with the help of creduce')
+    parser.add_argument('--creduce',
+                        help='Path to the creduce binary.',
+                        default='creduce')
     parser.add_argument('--ccomp',
                         help='Path to the CompCert binary.',
                         default='ccomp')
@@ -47,7 +54,15 @@ def parse_arguments():
         '--common-flags',
         help='Flags passed to all compilers (including for sanity checks)',
         default='')
-
+    parser.add_argument(
+        '-m',
+        '--markers',
+        help='The optimization markers used for differential testing.',
+        default='DCEFunc')
+    parser.add_argument('-j',
+                            type=int,
+                            help='Number of creduce jobs.',
+                            default=multiprocessing.cpu_count())
     parser.add_argument(
         'cc-bad', help='Compiler which cannot eliminate the missed marker.')
     parser.add_argument('-O', type=opt_level_arg,
@@ -60,52 +75,33 @@ def parse_arguments():
         help=
         'Pairs of (compiler, optimization levels) which can eliminate the missed marker.'
     )
-    parser.add_argument(
-        '-m',
-        '--markers',
-        help='The optimization markers used for differential testing.',
-        default='DCEFunc')
+
     parser.add_argument('file', help='The file to reduce')
     parser.add_argument('missed-marker', help='The missed optimization marker')
 
+    parser.add_argument('outputdir', type=str, help='Output directory')
+
     return parser.parse_args()
-
-
-def temporary_file_with_empty_marker_bodies(file, marker):
-    tf = NamedTemporaryFile(suffix='.c')
-    p = re.compile(f'void {marker}(.*)\(void\);')
-    with open(file, 'r') as f, open(tf.name, 'w') as new_cfile:
-        for line in f.readlines():
-            m = p.match(line)
-            if m:
-                print(f'void {marker}{m.group(1)}(void){{}}', file=new_cfile)
-            else:
-                print(line, file=new_cfile, end='')
-    return tf
-
-
-def check_marker_in_asm(cc, file, flags, marker):
-    with NamedTemporaryFile(suffix='.s') as asmf:
-        cmd = [cc, file, '-S', f'-o{asmf.name}'] + flags.split()
-        result = subprocess.run(cmd,
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL)
-        assert result.returncode == 0
-        with open(asmf.name, 'r') as f:
-            #remove the +'\n' hack when the markers are fixed
-            if marker+'\n' in f.read():
-                return True
-        return False
 
 
 if __name__ == '__main__':
     args = vars(parse_arguments())
     verify_prerequisites(args)
-    with temporary_file_with_empty_marker_bodies(args['file'],
-                                                 args['markers']) as cfile:
-        if not sanitize(args['sanity_gcc'], args['sanity_clang'],
-                        args['ccomp'], cfile.name, args['common_flags']):
-            exit(1)
-    exit(not check_marker_against_compilers(
-        args['cc-bad'], args['O'], args['cc-good'], args['common_flags'],
-        args['file'], args['missed-marker']))
+    make_output_dir(args['outputdir'])
+    script_name=str( Path(args['outputdir']) / (Path(args['file']).stem + '_' + args['missed-marker'] + '.sh'))
+    with open(script_name , 'w') as f:
+        print('#/usr/bin/env bash', file=f)
+        print(f'{Path(__file__).parent.resolve()}/dce_reduction_check.py'
+              f' -m {args["markers"]} --common-flags "{args["common_flags"]}"'
+              f' {args["cc-bad"]} -{args["O"]} ' +
+              ' '.join(map(lambda x: ','.join(x), args['cc-good'])) +
+              f' {Path(args["file"]).name} {args["missed-marker"]}',
+              file=f)
+    os.chmod(script_name, 0o777)
+    shutil.copyfile(args['file'], Path(args['outputdir'])/Path(args['file']).name)
+    os.chdir(args['outputdir'])
+    subprocess.run([
+        'creduce', '--n', str(args["j"]),
+        Path(script_name).name,
+        Path(args['file']).name
+    ])
