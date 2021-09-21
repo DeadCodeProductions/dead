@@ -7,6 +7,8 @@ from sanitize import sanitize
 from random import randint
 from tempfile import NamedTemporaryFile
 
+from utils import find_include_paths
+
 def verify_prerequisites(args):
     assert shutil.which(
         args['dcei']
@@ -89,22 +91,6 @@ def run_csmith(csmith):
                             stderr=subprocess.STDOUT)
     assert result.returncode == 0
     return result.stdout.decode('utf-8')
-
-
-def find_include_paths(clang, file, flags):
-    cmd = [clang, file, '-c', '-o/dev/null', '-v']
-    if flags:
-        cmd.extend(flags.split())
-    result = subprocess.run(cmd,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT)
-    assert result.returncode == 0
-    output = result.stdout.decode('utf-8').split('\n')
-    start = next(i for i, line in enumerate(output)
-                 if '#include <...> search starts here:' in line) + 1
-    end = next(i for i, line in enumerate(output) if 'End of search list.' in line)
-    return [output[i].strip() for i in range(start, end)]
-
 
 def instrument_program(dcei, file, include_paths):
     cmd = [dcei, file]

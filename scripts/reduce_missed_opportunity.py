@@ -12,6 +12,9 @@ from utils import make_output_dir
 
 def verify_prerequisites(args):
     assert shutil.which(
+        args['static_annotator']
+    ), 'f["static_annotator"] does not exist or it is not executable (can be specified with --static-annotator)'
+    assert shutil.which(
         args['creduce']
     ), 'creduce  does not exist or it is not executable (can be specified with --creduce)'
     assert shutil.which(
@@ -59,6 +62,9 @@ def parse_arguments():
         '--markers',
         help='The optimization markers used for differential testing.',
         default='DCEFunc')
+    parser.add_argument('--static-annotator',
+                        help='Path to the static-annotator binary.',
+                        required=True)
     parser.add_argument('-j',
                             type=int,
                             help='Number of creduce jobs.',
@@ -93,6 +99,7 @@ if __name__ == '__main__':
         print('#/usr/bin/env bash', file=f)
         print(f'{Path(__file__).parent.resolve()}/dce_reduction_check.py'
               f' -m {args["markers"]} --common-flags "{args["common_flags"]}"'
+              f' --static-annotator {os.path.abspath(args["static_annotator"])}'
               f' {args["cc-bad"]} -{args["O"]} ' +
               ' '.join(map(lambda x: ','.join(x), args['cc-good'])) +
               f' {Path(args["file"]).name} {args["missed-marker"]}',

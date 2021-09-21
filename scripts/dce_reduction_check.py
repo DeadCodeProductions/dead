@@ -5,11 +5,15 @@ import shutil
 import re
 import subprocess
 from tempfile import NamedTemporaryFile
+
 from sanitize import sanitize
 from check_marker import check_marker_against_compilers, opt_level_arg, cc_opt_pair_arg
-
+from utils import find_include_paths
 
 def verify_prerequisites(args):
+    assert shutil.which(
+        args['static_annotator']
+    ), 'f["static_annotator"] does not exist or it is not executable (can be specified with --static-annotator)'
     assert shutil.which(
         args['ccomp']
     ), 'ccomp (CompCert) does not exist or it is not executable (can be specified with --ccomp)'
@@ -47,7 +51,9 @@ def parse_arguments():
         '--common-flags',
         help='Flags passed to all compilers (including for sanity checks)',
         default='')
-
+    parser.add_argument('--static-annotator',
+                        help='Path to the static-annotator binary.',
+                        required=True)
     parser.add_argument(
         'cc-bad', help='Compiler which cannot eliminate the missed marker.')
     parser.add_argument('-O', type=opt_level_arg,
@@ -84,18 +90,16 @@ def temporary_file_with_empty_marker_bodies(file, marker):
     return tf
 
 
-def check_marker_in_asm(cc, file, flags, marker):
-    with NamedTemporaryFile(suffix='.s') as asmf:
-        cmd = [cc, file, '-S', f'-o{asmf.name}'] + flags.split()
-        result = subprocess.run(cmd,
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL)
-        assert result.returncode == 0
-        with open(asmf.name, 'r') as f:
-            #remove the +'\n' hack when the markers are fixed
-            if marker+'\n' in f.read():
-                return True
-        return False
+def annotate_program_with_static(annotator, file, include_paths):
+    cmd = [annotator, file]
+    for path in include_paths:
+        cmd.append(f'--extra-arg=-isystem{path}')
+    result = subprocess.run(cmd,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL)
+    assert result.returncode == 0
+
+
 
 
 if __name__ == '__main__':
@@ -106,6 +110,10 @@ if __name__ == '__main__':
         if not sanitize(args['sanity_gcc'], args['sanity_clang'],
                         args['ccomp'], cfile.name, args['common_flags']):
             exit(1)
+
+    include_paths = find_include_paths(args['sanity_clang'], args['file'], args['common_flags'])
+    annotate_program_with_static(args['static_annotator'], args['file'], include_paths)
+
     exit(not check_marker_against_compilers(
         args['cc-bad'], args['O'], args['cc-good'], args['common_flags'],
         args['file'], args['missed-marker']))
