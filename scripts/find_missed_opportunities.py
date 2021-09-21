@@ -7,7 +7,9 @@ import os
 import subprocess
 from tempfile import NamedTemporaryFile
 from collections import defaultdict
+
 from process_signature import MarkerSets, OptimizationLevelSignature, CompilerSignature, Signature
+from utils import get_compiler_name_and_version
 
 
 def verify_prerequisites(args):
@@ -71,14 +73,6 @@ def get_marker_set(compiler, flags, file, marker_prefix):
     alive_markers = set_of_alive_markers(compiler, flags, file, marker_prefix)
     return MarkerSets(all_markers - alive_markers, alive_markers)
 
-
-def get_compiler_name_and_version(compiler):
-    result = subprocess.run([compiler, '--version'],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL)
-    assert result.returncode == 0
-    line = result.stdout.decode('utf-8').split('\n')[0].split()
-    return line[0], line[2]
 
 
 def compute_signature(compilers, flags, file, marker_prefix):
