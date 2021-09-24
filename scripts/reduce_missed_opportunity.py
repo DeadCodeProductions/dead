@@ -34,9 +34,6 @@ def verify_prerequisites(args):
                        'O3'], f'{opt} is not a valid optimization level'
         assert shutil.which(cc), f'{cc} does not exist or it is not executable'
 
-
-
-
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Reduces a missed opportunity with the help of creduce')
     parser.add_argument('--creduce',
@@ -97,6 +94,8 @@ if __name__ == '__main__':
     script_name=str( Path(args['outputdir']) / (Path(args['file']).stem + '_' + args['missed-marker'] + '.sh'))
     with open(script_name , 'w') as f:
         print('#/usr/bin/env bash', file=f)
+        print('TMPD=$(mktemp -d)', file=f)
+        print('trap \'{ rm -rf "$TMPD"; }\' EXIT', file=f)
         print(f'{Path(__file__).parent.resolve()}/dce_reduction_check.py'
               f' -m {args["markers"]} --common-flags "{args["common_flags"]}"'
               f' --static-annotator {os.path.abspath(args["static_annotator"])}'
