@@ -84,7 +84,8 @@ def check_cc_warnings(cc_output):
         'comparison of distinct pointer types', 'pointer from integer',
         'incompatible implicit', 'excess elements in struct initializer',
         'comparison between pointer and integer',
-        'return type of ‘main’ is not ‘int’'
+        'return type of ‘main’ is not ‘int’',
+        'past the end of the array'
     ]
     for warning in warnings:
         if warning in cc_output:
