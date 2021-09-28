@@ -98,7 +98,6 @@ def annotate_program_with_static(annotator, file, include_paths):
                             stderr=subprocess.DEVNULL)
     assert result.returncode == 0
 
-@contextmanager
 def temporary_file_with_static_globals(annotator, file, include_paths):
     tf = NamedTemporaryFile(suffix='.c')
     with open(file, 'r') as f, open(tf.name, 'w') as new_cfile:
@@ -110,17 +109,20 @@ if __name__ == '__main__':
     args = vars(parse_arguments())
     verify_prerequisites(args)
     try:
-        with temporary_file_with_empty_marker_bodies(args['file'],
-                                                     args['markers']) as cfile:
-            if not sanitize(args['sanity_gcc'], args['sanity_clang'],
-                            args['ccomp'], cfile.name, args['common_flags']):
-                exit(1)
-
         include_paths = find_include_paths(args['sanity_clang'], args['file'], args['common_flags'])
         with temporary_file_with_static_globals(args['static_annotator'], args['file'], include_paths) as cfile:
             interesting = check_marker_against_compilers(
                 args['cc-bad'], args['O'], args['cc-good'],
                 args['common_flags'], cfile.name, args['missed-marker'])
-        exit(not interesting)
+        if not interesting:
+            exit(1)
+        with temporary_file_with_empty_marker_bodies(args['file'],
+                                                     args['markers']) as cfile:
+            if not sanitize(args['sanity_gcc'], args['sanity_clang'],
+                            args['ccomp'], cfile.name, args['common_flags']):
+                exit(1)
+        exit(0)
     except subprocess.TimeoutExpired:
+        exit(1)
+    except AssertionError:
         exit(1)
