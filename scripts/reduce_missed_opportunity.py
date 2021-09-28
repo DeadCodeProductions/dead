@@ -95,7 +95,7 @@ if __name__ == '__main__':
     with open(script_name , 'w') as f:
         print('#/usr/bin/env bash', file=f)
         print('TMPD=$(mktemp -d)', file=f)
-        print('trap \'{ rm -rf "$TMPD"; }\' EXIT', file=f)
+        print('trap \'{ rm -rf "$TMPD"; }\' INT TERM EXIT', file=f)
         print(f'{Path(__file__).parent.resolve()}/dce_reduction_check.py'
               f' -m {args["markers"]} --common-flags "{args["common_flags"]}"'
               f' --static-annotator {os.path.abspath(args["static_annotator"])}'
