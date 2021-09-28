@@ -3,12 +3,14 @@
 import argparse
 import shutil
 import os
+import re
 import multiprocessing
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 from check_marker import opt_level_arg, cc_opt_pair_arg
 from utils import make_output_dir
+
 
 def verify_prerequisites(args):
     assert shutil.which(
@@ -34,8 +36,10 @@ def verify_prerequisites(args):
                        'O3'], f'{opt} is not a valid optimization level'
         assert shutil.which(cc), f'{cc} does not exist or it is not executable'
 
+
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='Reduces a missed opportunity with the help of creduce')
+    parser = argparse.ArgumentParser(
+        description='Reduces a missed opportunity with the help of creduce')
     parser.add_argument('--creduce',
                         help='Path to the creduce binary.',
                         default='creduce')
@@ -62,13 +66,21 @@ def parse_arguments():
     parser.add_argument('--static-annotator',
                         help='Path to the static-annotator binary.',
                         required=True)
+    parser.add_argument(
+        '--preprocess',
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help=
+        'Preprocess the file before reducing it. Only tested with CSmith files.'
+    )
     parser.add_argument('-j',
-                            type=int,
-                            help='Number of creduce jobs.',
-                            default=multiprocessing.cpu_count())
+                        type=int,
+                        help='Number of creduce jobs.',
+                        default=multiprocessing.cpu_count())
     parser.add_argument(
         'cc-bad', help='Compiler which cannot eliminate the missed marker.')
-    parser.add_argument('-O', type=opt_level_arg,
+    parser.add_argument('-O',
+                        type=opt_level_arg,
                         help='Optimization level of the first compiler',
                         default='')
     parser.add_argument(
@@ -87,27 +99,91 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def find_end_of_marker_decls(lines, markers):
+    p = re.compile(f'void {markers}(.*)\(void\);')
+    for i, line in enumerate(lines):
+        if p.match(line):
+            continue
+        return i
+
+
+def find_platform_main_end(lines):
+    p = re.compile('.*platform_main_end.*')
+    for i, line in enumerate(lines):
+        if p.match(line):
+            return i
+
+
+def remove_platform_main_begin(lines):
+    p = re.compile('.*platform_main_begin.*')
+    for line in lines:
+        if not p.match(line):
+            yield line
+
+
+def remove_print_hash_value(lines):
+    p = re.compile('.*print_hash_value = 1.*')
+    for line in lines:
+        if not p.match(line):
+            yield line
+
+
+def preprocess_csmith_file(cc, flags, file, markers):
+    file = Path(file)
+    new_file = file.with_stem(file.stem + '_pp')
+    cmd = [cc, file, '-P', '-E'] + flags.split()
+    result = subprocess.run(cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT)
+    assert result.returncode == 0
+    lines = result.stdout.decode('utf-8').split('\n')
+    end_of_markers = find_end_of_marker_decls(lines, markers)
+    platform_main_end_line = find_platform_main_end(lines)
+    marker_decls = lines[:end_of_markers]
+
+    lines = lines[platform_main_end_line + 1:]
+    lines = remove_print_hash_value(remove_platform_main_begin(lines))
+    lines = marker_decls + [
+        'typedef unsigned int size_t;', 'typedef signed char int8_t;',
+        'typedef short int int16_t;', 'typedef int int32_t;',
+        'typedef long long int int64_t;', 'typedef unsigned char uint8_t;',
+        'typedef unsigned short int uint16_t;',
+        'typedef unsigned int uint32_t;',
+        'typedef unsigned long long int uint64_t;',
+        'int printf (const char *, ...);',
+        'void __assert_fail (const char *__assertion, const char *__file, unsigned int __line, const char *__function);',
+        'static void', 'platform_main_end(uint32_t crc, int flag)'
+    ] + list(lines)
+    with open(str(new_file), 'w') as f:
+        print('\n'.join(lines), file=f)
+    return new_file
+
 if __name__ == '__main__':
     args = vars(parse_arguments())
     verify_prerequisites(args)
     make_output_dir(args['outputdir'])
-    script_name=str( Path(args['outputdir']) / (Path(args['file']).stem + '_' + args['missed-marker'] + '.sh'))
-    with open(script_name , 'w') as f:
+    cfile = Path(args['outputdir']) / Path(args['file']).name
+    shutil.copyfile(args['file'], cfile)
+    if args['preprocess']:
+        cfile = preprocess_csmith_file(args['cc-bad'], args['common_flags'], cfile, args['markers'])
+    script_name = str(
+        Path(args['outputdir']) /
+        (Path(args['file']).stem + '_' + args['missed-marker'] + '.sh'))
+    with open(script_name, 'w') as f:
         print('#/usr/bin/env bash', file=f)
         print('TMPD=$(mktemp -d)', file=f)
         print('trap \'{ rm -rf "$TMPD"; }\' INT TERM EXIT', file=f)
-        print(f'{Path(__file__).parent.resolve()}/dce_reduction_check.py'
-              f' -m {args["markers"]} --common-flags "{args["common_flags"]}"'
-              f' --static-annotator {os.path.abspath(args["static_annotator"])}'
-              f' {args["cc-bad"]} -{args["O"]} ' +
-              ' '.join(map(lambda x: ','.join(x), args['cc-good'])) +
-              f' {Path(args["file"]).name} {args["missed-marker"]}',
-              file=f)
+        print(
+            f'{Path(__file__).parent.resolve()}/dce_reduction_check.py'
+            f' -m {args["markers"]} --common-flags "{args["common_flags"]}"'
+            f' --static-annotator {os.path.abspath(args["static_annotator"])}'
+            f' {args["cc-bad"]} -{args["O"]} ' +
+            ' '.join(map(lambda x: ','.join(x), args['cc-good'])) +
+            f' {cfile.name} {args["missed-marker"]}',
+            file=f)
     os.chmod(script_name, 0o777)
-    shutil.copyfile(args['file'], Path(args['outputdir'])/Path(args['file']).name)
     os.chdir(args['outputdir'])
-    subprocess.run([
-        'creduce', '--n', str(args["j"]),
-        Path(script_name).name,
-        Path(args['file']).name
-    ])
+    subprocess.run(
+        ['creduce', '--n',
+         str(args["j"]),
+         Path(script_name).name, cfile.name])
