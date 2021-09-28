@@ -105,9 +105,21 @@ def temporary_file_with_static_globals(annotator, file, include_paths):
     annotate_program_with_static(annotator, tf.name, include_paths)
     return tf
 
+def check_marker_signatures(file, markers):
+    p = re.compile(f'void {markers}.*\((.*)\);')
+    with open(file, 'r') as f:
+        lines = f.readlines()
+    for line in lines:
+        if m := p.match(line):
+            if m.group(1) != 'void':
+                return False
+    return True
+
 if __name__ == '__main__':
     args = vars(parse_arguments())
     verify_prerequisites(args)
+    if not check_marker_signatures(args['file'], args['markers']):
+        exit(1)
     try:
         include_paths = find_include_paths(args['sanity_clang'], args['file'], args['common_flags'])
         with temporary_file_with_static_globals(args['static_annotator'], args['file'], include_paths) as cfile:
