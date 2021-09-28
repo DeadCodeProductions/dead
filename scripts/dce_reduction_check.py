@@ -3,6 +3,7 @@
 import argparse
 import shutil
 import re
+import os
 import subprocess
 from tempfile import NamedTemporaryFile
 
@@ -76,7 +77,6 @@ def parse_arguments():
 
     return parser.parse_args()
 
-
 def temporary_file_with_empty_marker_bodies(file, marker):
     tf = NamedTemporaryFile(suffix='.c')
     p = re.compile(f'void {marker}(.*)\(void\);')
@@ -89,7 +89,6 @@ def temporary_file_with_empty_marker_bodies(file, marker):
                 print(line, file=new_cfile, end='')
     return tf
 
-
 def annotate_program_with_static(annotator, file, include_paths):
     cmd = [annotator, file]
     for path in include_paths:
@@ -99,21 +98,29 @@ def annotate_program_with_static(annotator, file, include_paths):
                             stderr=subprocess.DEVNULL)
     assert result.returncode == 0
 
-
-
+@contextmanager
+def temporary_file_with_static_globals(annotator, file, include_paths):
+    tf = NamedTemporaryFile(suffix='.c')
+    with open(file, 'r') as f, open(tf.name, 'w') as new_cfile:
+        print(f.read(), file=new_cfile)
+    annotate_program_with_static(annotator, tf.name, include_paths)
+    return tf
 
 if __name__ == '__main__':
     args = vars(parse_arguments())
     verify_prerequisites(args)
-    with temporary_file_with_empty_marker_bodies(args['file'],
-                                                 args['markers']) as cfile:
-        if not sanitize(args['sanity_gcc'], args['sanity_clang'],
-                        args['ccomp'], cfile.name, args['common_flags']):
-            exit(1)
+    try:
+        with temporary_file_with_empty_marker_bodies(args['file'],
+                                                     args['markers']) as cfile:
+            if not sanitize(args['sanity_gcc'], args['sanity_clang'],
+                            args['ccomp'], cfile.name, args['common_flags']):
+                exit(1)
 
-    include_paths = find_include_paths(args['sanity_clang'], args['file'], args['common_flags'])
-    annotate_program_with_static(args['static_annotator'], args['file'], include_paths)
-
-    exit(not check_marker_against_compilers(
-        args['cc-bad'], args['O'], args['cc-good'], args['common_flags'],
-        args['file'], args['missed-marker']))
+        include_paths = find_include_paths(args['sanity_clang'], args['file'], args['common_flags'])
+        with temporary_file_with_static_globals(args['static_annotator'], args['file'], include_paths) as cfile:
+            interesting = check_marker_against_compilers(
+                args['cc-bad'], args['O'], args['cc-good'],
+                args['common_flags'], cfile.name, args['missed-marker'])
+        exit(not interesting)
+    except subprocess.TimeoutExpired:
+        exit(1)
