@@ -106,7 +106,7 @@ def temporary_file_with_static_globals(annotator, file, include_paths):
     return tf
 
 def check_marker_signatures(file, markers):
-    p = re.compile(f'void {markers}.*\((.*)\);')
+    p = re.compile(f'.*void {markers}.*\((.*)\);')
     with open(file, 'r') as f:
         lines = f.readlines()
     for line in lines:
