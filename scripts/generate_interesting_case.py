@@ -67,6 +67,10 @@ def parse_arguments():
         '--markers',
         help='The optimization markers used for differential testing.',
         default='DCEFunc')
+    parser.add_argument('--onlyO3',
+               default=True,
+               action=argparse.BooleanOptionalAction,
+               help='Only check for O3 regressions.')
     parser.add_argument('target-cc',
                         help='The compiler to test for missed opportunities.')
     parser.add_argument('additional-cc',
@@ -109,6 +113,11 @@ class CaseWithMissedDCE:
     bad_compiler: CompilerInfo
     missed_markers: list[MissedMarker]
 
+def contains_O3_cc(compilers):
+    for _, _, opt in compilers:
+        if opt == '3':
+            return True
+    return False
 
 def generate_interesting_case(args):
     #TODO: add this csmith path flag to all scripts and drop this
@@ -127,6 +136,13 @@ def generate_interesting_case(args):
                 marker for marker, compilers in missed_by.items()
                 for cc in compilers if cc == (target_name, target_version, '3')
             ]
+
+            if args['onlyO3']:
+                markers_missed_by_target = [
+                    marker for marker in markers_missed_by_target
+                    if contains_O3_cc(found_by[marker])
+                ]
+
             if markers_missed_by_target:
                 return CaseWithMissedDCE(
                     candidate, CompilerInfo(target_name, target_version, '3'),
