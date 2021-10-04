@@ -56,7 +56,8 @@ def parse_arguments():
 
 def get_cc_output(cc, file, flags, cc_timeout):
     cmd = [
-        cc, file, '-c', '-o/dev/null', '-Wall', '-Wextra', '-Wpedantic', '-O1'
+        cc, file, '-c', '-o/dev/null', '-Wall', '-Wextra', '-Wpedantic', '-O1',
+        '-Wno-builtin-declaration-mismatch'
     ]
     if flags:
         cmd.extend(flags.split())
@@ -84,8 +85,8 @@ def check_cc_warnings(cc_output):
         'comparison of distinct pointer types', 'pointer from integer',
         'incompatible implicit', 'excess elements in struct initializer',
         'comparison between pointer and integer',
-        'return type of ‘main’ is not ‘int’',
-        'past the end of the array'
+        'return type of ‘main’ is not ‘int’', 'past the end of the array',
+        'no return statement in function returning non-void'
     ]
     for warning in warnings:
         if warning in cc_output:
