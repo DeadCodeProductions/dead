@@ -16,6 +16,9 @@ def verify_prerequisites(args):
         args['static_annotator']
     ), 'f["static_annotator"] does not exist or it is not executable (can be specified with --static-annotator)'
     assert shutil.which(
+        args['ccc']
+    ), 'f["ccc"] does not exist or it is not executable (can be specified with --ccc)'
+    assert shutil.which(
         args['ccomp']
     ), 'ccomp (CompCert) does not exist or it is not executable (can be specified with --ccomp)'
     assert shutil.which(
@@ -54,6 +57,9 @@ def parse_arguments():
         default='')
     parser.add_argument('--static-annotator',
                         help='Path to the static-annotator binary.',
+                        required=True)
+    parser.add_argument('--ccc',
+                        help='Path to the call chain checker binary.',
                         required=True)
     parser.add_argument(
         'cc-bad', help='Compiler which cannot eliminate the missed marker.')
@@ -115,6 +121,19 @@ def check_marker_signatures(file, markers):
                 return False
     return True
 
+def check_main_to_marker_chain(ccc, file, marker, include_paths):
+    cmd = [ccc, file, '--from=main', f'--to={marker}']
+    for path in include_paths:
+        cmd.append(f'--extra-arg=-isystem{path}')
+    result = subprocess.run(cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL,
+                            timeout=8)
+    if result.returncode != 0:
+        exit(1)
+    output=result.stdout.decode('utf-8')
+    return f'call chain exists between main -> {marker}'.strip() == output.strip()
+
 if __name__ == '__main__':
     args = vars(parse_arguments())
     verify_prerequisites(args)
@@ -122,6 +141,9 @@ if __name__ == '__main__':
         exit(1)
     try:
         include_paths = find_include_paths(args['sanity_clang'], args['file'], args['common_flags'])
+        if not check_main_to_marker_chain(args['ccc'], args['file'],
+                args['missed-marker'], include_paths):
+            exit(1)
         with temporary_file_with_static_globals(args['static_annotator'], args['file'], include_paths) as cfile:
             interesting = check_marker_against_compilers(
                 args['cc-bad'], args['O'], args['cc-good'],

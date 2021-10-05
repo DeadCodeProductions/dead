@@ -12,7 +12,7 @@ The first few lines in `test_case.c` contain the missed markers in comments of t
 
 `reduced_missed_opportunity.py` tries to reduce a case for a particular missed marker, e.g.:
 
-`./reduce_missed_opportunity.py --common-flags '-I /usr/include/csmith-2.3.0/' --static-annotator ~/dce_instrumenter/build/bin/dcei gcc -O3 clang,O2 clang,O3 test_case.c DCEFunc1 reduction_output_dir`
+`./reduce_missed_opportunity.py --common-flags '-I /usr/include/csmith-2.3.0/' --static-annotator ~/dce_instrumenter/build/bin/dcei --ccc ~/dce/callchain_checker/build/bin/ccc gcc -O3 clang,O2 clang,O3 test_case.c DCEFunc1 reduction_output_dir`
 
 `reduction_output_dir` will contain the reduced C file.
 

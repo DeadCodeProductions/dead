@@ -17,6 +17,9 @@ def verify_prerequisites(args):
         args['static_annotator']
     ), 'f["static_annotator"] does not exist or it is not executable (can be specified with --static-annotator)'
     assert shutil.which(
+        args['ccc']
+    ), 'f["ccc"] does not exist or it is not executable (can be specified with --ccc)'
+    assert shutil.which(
         args['creduce']
     ), 'creduce  does not exist or it is not executable (can be specified with --creduce)'
     assert shutil.which(
@@ -65,6 +68,9 @@ def parse_arguments():
         default='DCEFunc')
     parser.add_argument('--static-annotator',
                         help='Path to the static-annotator binary.',
+                        required=True)
+    parser.add_argument('--ccc',
+                        help='Path to the call chain checker binary.',
                         required=True)
     parser.add_argument(
         '--preprocess',
@@ -185,6 +191,7 @@ if __name__ == '__main__':
             f'{Path(__file__).parent.resolve()}/dce_reduction_check.py'
             f' -m {args["markers"]} --common-flags "{args["common_flags"]}"'
             f' --static-annotator {os.path.abspath(args["static_annotator"])}'
+            f' --ccc {os.path.abspath(args["ccc"])}'
             f' {args["cc-bad"]} -{args["O"]} ' +
             ' '.join(map(lambda x: ','.join(x), args['cc-good'])) +
             f' {cfile.name} {args["missed-marker"]}',
