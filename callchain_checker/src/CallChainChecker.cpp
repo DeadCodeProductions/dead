@@ -1,5 +1,6 @@
 #include "CallChainChecker.hpp"
 
+#include <llvm/Support/raw_ostream.h>
 #include <unordered_map>
 
 #include <clang/AST/Decl.h>
@@ -24,18 +25,15 @@ bool callChainExists(const std::vector<CallPair> &Calls, std::string From,
     size_t idx = 0;
     StaticCallGraph SCG;
     for (const auto &[Caller, Callee] : Calls) {
-        auto CallerName = Caller->getName().str();
-        auto CalleeName = Callee->getName().str();
-        if (not FunctionToIdx.count(CallerName)) {
+        if (not FunctionToIdx.count(Caller)) {
             SCG.added_vertex(idx);
-            FunctionToIdx[CallerName] = idx++;
+            FunctionToIdx[Caller] = idx++;
         }
-        if (not FunctionToIdx.count(CalleeName)) {
+        if (not FunctionToIdx.count(Callee)) {
             SCG.added_vertex(idx);
-            FunctionToIdx[CalleeName] = idx++;
+            FunctionToIdx[Callee] = idx++;
         }
-        boost::add_edge(FunctionToIdx[CallerName], FunctionToIdx[CalleeName],
-                        SCG);
+        boost::add_edge(FunctionToIdx[Caller], FunctionToIdx[Callee], SCG);
     }
     if (not FunctionToIdx.count(From)) {
         llvm::errs() << From << " is not part of the call graph\n";
@@ -65,7 +63,8 @@ void CallChainCollector::run(
     const clang::ast_matchers::MatchFinder::MatchResult &Result) {
     if (const auto *Callee = Result.Nodes.getNodeAs<FunctionDecl>("callee"))
         if (const auto *Caller = Result.Nodes.getNodeAs<FunctionDecl>("caller"))
-            Calls.emplace_back(Caller, Callee);
+            Calls.emplace_back(Caller->getNameAsString(),
+                               Callee->getNameAsString());
 }
 
 } // namespace ccc

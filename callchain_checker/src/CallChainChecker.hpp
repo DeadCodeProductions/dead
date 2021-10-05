@@ -1,16 +1,14 @@
 #include <vector>
 
-#include <clang/AST/Decl.h>
 #include <clang/ASTMatchers/ASTMatchFinder.h>
 
 namespace ccc {
 
 struct CallPair {
-    const struct clang::FunctionDecl *Caller;
-    const struct clang::FunctionDecl *Callee;
+    const std::string Caller;
+    const std::string Callee;
 
-    CallPair(const clang::FunctionDecl *Caller,
-             const clang::FunctionDecl *Callee)
+    CallPair(const std::string &Caller, const std::string &Callee)
         : Caller{Caller}, Callee{Callee} {}
 };
 
