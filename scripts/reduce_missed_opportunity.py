@@ -99,12 +99,20 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def find_end_of_marker_decls(lines, markers):
+def find_marker_decl_range(lines, markers):
     p = re.compile(f'void {markers}(.*)\(void\);')
+    first = 0
     for i, line in enumerate(lines):
         if p.match(line):
+            first = i
+            break
+    for i, line in enumerate(lines[first + 1:], start=first + 1):
+        if p.match(line):
             continue
-        return i
+        else:
+            last = i
+            break
+    return first, last
 
 
 def find_platform_main_end(lines):
@@ -137,9 +145,9 @@ def preprocess_csmith_file(cc, flags, file, markers):
                             stderr=subprocess.STDOUT)
     assert result.returncode == 0
     lines = result.stdout.decode('utf-8').split('\n')
-    end_of_markers = find_end_of_marker_decls(lines, markers)
+    marker_range = find_marker_decl_range(lines, markers)
     platform_main_end_line = find_platform_main_end(lines)
-    marker_decls = lines[:end_of_markers]
+    marker_decls = lines[marker_range[0]:marker_range[1]]
 
     lines = lines[platform_main_end_line + 1:]
     lines = remove_print_hash_value(remove_platform_main_begin(lines))
