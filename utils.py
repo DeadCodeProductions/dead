@@ -8,6 +8,7 @@ import argparse
 import parsers
 import logging
 import shutil
+import stat
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -172,7 +173,7 @@ def import_config(config_path: Optional[Union[os.PathLike[str], Path]] = None, v
     # Make sure the cache dir exists
     os.makedirs(config.cachedir, exist_ok=True)
     shutil.chown(config.cachedir, group=config.cache_group)
-    os.chmod(config.cachedir, 0o770)
+    os.chmod(config.cachedir, 0o770 | stat.S_ISGID)
 
     # Make patch paths full paths to avoid confusion 
     # when working in different directories

@@ -179,8 +179,7 @@ class Builder():
                     success_indicator.touch()
 
                     # Other cache members should also be able to read the cache
-                    subprocess.run(f"chown -R :{self.config.cache_group} {prefix}".split(" "))
-                    subprocess.run(f"chmod -R g+rwx {prefix}".split(" "))
+                    subprocess.run(f"chmod -R g+rwX {prefix}".split(" "))
 
 
                 except subprocess.CalledProcessError as e:
