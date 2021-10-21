@@ -9,6 +9,7 @@ import tempfile
 import time
 import multiprocessing
 import shutil
+import io
 
 import utils
 import parsers
@@ -26,16 +27,26 @@ class BuildException(Exception):
 
 
 @contextmanager
-def build_context(prefix: Path, success_indicator: Path) -> Path:
+def build_context(prefix: Path, success_indicator: Path, compiler_config, rev, logdir: os.PathLike, cache_group: str) -> tuple[Path, io.TextIOWrapper] :
     build_dir = tempfile.mkdtemp()
     os.makedirs(prefix, exist_ok=True)
 
     starting_cwd = os.getcwd()
     os.chdir(build_dir)
 
+    # Build log file
+    current_time = time.strftime("%Y%m%d-%H%M%S")
+    build_log_path = pjoin(logdir, f"{current_time}-{compiler_config.name}-{rev}.log")
+    build_log = open(build_log_path, "a")
+    # Set permissions of logfile 
+    shutil.chown(build_log_path, group=cache_group)
+    os.chmod(build_log_path, 0o660)
+    logging.info(f"Build log at {build_log_path}")
+
     try:
-        yield build_dir
+        yield (build_dir, build_log)
     finally:
+        build_log.close()
         shutil.rmtree(build_dir)
         os.chdir(starting_cwd)
 
@@ -91,17 +102,8 @@ class Builder():
             symlink_prefix = Path(pjoin(os.getcwd(), self.config.cachedir, compiler_config.name + "-" + input_rev))
         success_indicator = Path(pjoin(prefix, "DONE"))
 
-
-        # Super safe caching "lock"/queue
-        if prefix.exists() and not success_indicator.exists():
-            logging.info(f"{prefix} is currently building; need to wait")
-            while not success_indicator.exists():
-                # TODO Make this process a bit smarter so if something dies the process will continue eventually
-                time.sleep(1)
-                if not prefix.exists():
-                    raise BuildException(f"Other build attempt failed for {prefix}")
-
-        if prefix.exists() and success_indicator.exists():
+        # Check cache
+        if self._is_in_cache(prefix, success_indicator):
             if create_input_rev_symlink:
                 utils.create_symlink(prefix, symlink_prefix)
 
@@ -116,76 +118,65 @@ class Builder():
         if not force and self.patchdb.is_known_bad(required_patches, rev, repo, compiler_config):
             raise BuildException(f"Known Bad combination {compiler_config.name} {rev} with patches {required_patches}")
 
-        with build_context(prefix, success_indicator) as tmpdir:
+        with build_context(prefix, 
+                            success_indicator, 
+                            compiler_config,
+                            rev,
+                            self.config.logdir, 
+                            self.config.cache_group) as ctxt:
+            tmpdir, build_log = ctxt;
             # Getting source code
             worktree_cmd = f"git worktree add {tmpdir} {rev} -f"
             git_output = utils.run_cmd(worktree_cmd, compiler_config.repo)
 
             tmpdir_repo = patcher.Repo(tmpdir, compiler_config.main_branch)
 
-            # Applying patches
-            logging.debug("Checking patches...")
-            for patch in required_patches:
-                if not tmpdir_repo.apply([patch], check=True):
-                    self.patchdb.save_bad(required_patches, rev, repo, compiler_config)
-                    raise BuildException(f"Single patch {patch} not applicable to {rev}")
-            logging.debug("Applying patches...")
-            if len(required_patches) > 0:
-                if not tmpdir_repo.apply(required_patches):
-                    self.patchdb.save_bad(required_patches, rev, repo, compiler_config)
-                    raise BuildException(f"All patches not applicable to {rev}: {required_patches}")
-
+            # Apply patches
+            self._apply_patches(tmpdir_repo, required_patches, compiler_config, rev)
 
             os.makedirs("build")
 
             # Debug help
-            do_cmd_logging = False#not (logging.getLogger().getEffectiveLevel() <= logging.INFO)
-            current_time = time.strftime("%Y%m%d-%H%M%S")
-            build_log_path = pjoin(self.config.logdir, f"{current_time}-{compiler_config.name}-{rev}.log")
+            do_cmd_logging = False
             
-            with open(build_log_path, 'a') as build_log: 
-                # Set permissions of logfile 
-                shutil.chown(build_log_path, group=self.config.cache_group)
-                os.chmod(build_log_path, 0o660)
-                logging.info(f"Build log at {build_log_path}")
-                try:
-                    if compiler_config.name == "gcc":
-                        pre_cmd = "./contrib/download_prerequisites"
-                        logging.debug("GCC: Starting download_prerequisites")
-                        pre_output = utils.run_cmd(pre_cmd, log=do_cmd_logging, log_file=build_log)
+            # Compiling
+            try:
+                if compiler_config.name == "gcc":
+                    pre_cmd = "./contrib/download_prerequisites"
+                    logging.debug("GCC: Starting download_prerequisites")
+                    pre_output = utils.run_cmd(pre_cmd, log=do_cmd_logging, log_file=build_log)
 
-                        os.chdir("build")
-                        logging.debug("GCC: Starting configure")
-                        configure_cmd = f"../configure --disable-multilib --disable-bootstrap --enable-languages=c,c++ --prefix={prefix}"
-                        utils.run_cmd(configure_cmd, log=do_cmd_logging, log_file=build_log)
+                    os.chdir("build")
+                    logging.debug("GCC: Starting configure")
+                    configure_cmd = f"../configure --disable-multilib --disable-bootstrap --enable-languages=c,c++ --prefix={prefix}"
+                    utils.run_cmd(configure_cmd, log=do_cmd_logging, log_file=build_log)
 
-                        logging.debug("GCC: Starting to build...")
-                        utils.run_cmd(f"make -j {cores}", log=do_cmd_logging, log_file=build_log)
-                        utils.run_cmd("make install", log=do_cmd_logging, log_file=build_log)
+                    logging.debug("GCC: Starting to build...")
+                    utils.run_cmd(f"make -j {cores}", log=do_cmd_logging, log_file=build_log)
+                    utils.run_cmd("make install", log=do_cmd_logging, log_file=build_log)
 
 
-                    elif compiler_config.name == "clang":
-                        os.chdir("build")
-                        logging.debug("LLVM: Starting cmake")
-                        cmake_cmd = f"cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=clang -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_USE_NEWPM=ON -DLLVM_TARGETS_TO_BUILD=X86 -DCMAKE_INSTALL_PREFIX={prefix} ../llvm"
-                        utils.run_cmd(cmake_cmd, 
-                                      additional_env = {"CC": "clang", "CXX": "clang++"},
-                                      log=do_cmd_logging, log_file=build_log)
+                elif compiler_config.name == "clang":
+                    os.chdir("build")
+                    logging.debug("LLVM: Starting cmake")
+                    cmake_cmd = f"cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=clang -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_USE_NEWPM=ON -DLLVM_TARGETS_TO_BUILD=X86 -DCMAKE_INSTALL_PREFIX={prefix} ../llvm"
+                    utils.run_cmd(cmake_cmd, 
+                                  additional_env = {"CC": "clang", "CXX": "clang++"},
+                                  log=do_cmd_logging, log_file=build_log)
 
-                        logging.debug("LLVM: Starting to build...")
-                        utils.run_cmd(f"ninja -j {cores} install", log=do_cmd_logging, log_file=build_log)
+                    logging.debug("LLVM: Starting to build...")
+                    utils.run_cmd(f"ninja -j {cores} install", log=do_cmd_logging, log_file=build_log)
 
-                    # Build was successful and can be cached
-                    success_indicator.touch()
+                # Build was successful and can be cached
+                success_indicator.touch()
 
-                    # Other cache members should also be able to read the cache
-                    subprocess.run(f"chmod -R g+rwX {prefix}".split(" "))
+                # Other cache members should also be able to read the cache
+                subprocess.run(f"chmod -R g+rwX {prefix}".split(" "))
 
-
-                except subprocess.CalledProcessError as e:
-                    self.patchdb.save_bad(required_patches, rev, repo, compiler_config)
-                    build_log.close()
-                    raise BuildException(f"Couldn't build {compiler_config.name} {rev} with patches {required_patches}. Exception: {e}")
+            except subprocess.CalledProcessError as e:
+                self.patchdb.save_bad(required_patches, rev, repo, compiler_config)
+                build_log.close()
+                raise BuildException(f"Couldn't build {compiler_config.name} {rev} with patches {required_patches}. Exception: {e}")
 
         # Save combination as successful
         for patch in required_patches:
@@ -197,6 +188,32 @@ class Builder():
             utils.create_symlink(prefix, symlink_prefix)
 
         return prefix
+
+    def _is_in_cache(self, prefix: os.PathLike, success_indicator: os.PathLike) -> bool:
+        # Super safe caching "lock"/queue
+        if prefix.exists() and not success_indicator.exists():
+            logging.info(f"{prefix} is currently building; need to wait")
+            while not success_indicator.exists():
+                # TODO Make this process a bit smarter so if something dies the process will continue eventually
+                time.sleep(1)
+                if not prefix.exists():
+                    raise BuildException(f"Other build attempt failed for {prefix}")
+
+        return prefix.exists() and success_indicator.exists()
+    
+
+    def _apply_patches(self, repo, patches: list[os.PathLike], compiler_config, rev: str):
+        logging.debug("Checking patches...")
+        for patch in patches:
+            if not repo.apply([patch], check=True):
+                self.patchdb.save_bad(patches, rev, repo, compiler_config)
+                raise BuildException(f"Single patch {patch} not applicable to {rev}")
+        logging.debug("Applying patches...")
+        if len(patches) > 0:
+            if not repo.apply(patches):
+                self.patchdb.save_bad(patches, rev, repo, compiler_config)
+                raise BuildException(f"All patches not applicable to {rev}: {patches}")
+
 
     def build_releases(self):
         for ver in self.llvm_versions:
