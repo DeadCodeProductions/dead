@@ -103,7 +103,7 @@ class Builder():
 
         if prefix.exists() and success_indicator.exists():
             if create_input_rev_symlink:
-                self._create_symlink(prefix, symlink_prefix)
+                utils.create_symlink(prefix, symlink_prefix)
 
             return prefix
 
@@ -194,8 +194,7 @@ class Builder():
         self.patchdb.clear_bad(required_patches, rev, repo, compiler_config)
 
         if create_input_rev_symlink:
-            self._create_symlink(prefix, symlink_prefix)
-
+            utils.create_symlink(prefix, symlink_prefix)
 
         return prefix
 
@@ -207,19 +206,6 @@ class Builder():
             print(self.build(self.config.gcc, ver, cores=cores))
         return
     
-    def _create_symlink(self, src: os.PathLike, dst: os.PathLike):
-        if dst.exists():
-            if dst.is_symlink():
-                dst.unlink()
-            else:
-                dst_symlink_config = Path(os.path.dirname(dst),
-                                               "conflict_" + str(os.path.basename(dst)))
-
-                logging.warning(f"Found non-symlink file or directory which should be a symlink: {dst}. Moving to {dst_symlink_config}...")
-                shutil.move(dst, dst_symlink_config)
-
-        logging.debug(f"Creating symlink {dst} to {src}")
-        os.symlink(src, dst)
 
 
 if __name__ == "__main__":
