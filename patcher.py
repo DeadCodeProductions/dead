@@ -298,6 +298,98 @@ class Patcher():
         self.patchdb = patchdb
         self.builder = builder.Builder(config, self.patchdb, cores=cores)
 
+    def _check_building_patch(self, compiler_config, 
+                                    rev: str, 
+                                    patch: os.PathLike, 
+                                    repo: Repo) -> tuple[bool, Optional[bool]]:
+
+        if not self.patchdb.requires_this_patch(rev, patch, repo):
+            try:
+                logging.info(f"Building {rev} without patch {patch}...")
+                self.builder.build(compiler_config, rev)
+                return True, None
+
+            except builder.BuildException as e:
+                logging.info(f"Failed to build {rev} without patch {patch}: {e}")
+
+            try:
+                logging.info(f"Building {rev} WITH patch {patch}...")
+                self.builder.build(compiler_config, rev, additional_patches=[patch])
+                return False, True
+
+            except builder.BuildException as e:
+                logging.critical(f"Failed to build {rev} with patch {patch}. Manual intervention needed. Exception: {e}")
+                self.patchdb.manual_intervention_required(compiler_config, rev)
+                return False, False
+        else:
+            logging.info(f"Read form PatchDB: {rev} requires patch {patch}")
+            return False, True
+
+    def _bisection(self, good_rev: str, bad_rev: str, 
+                        compiler_config, 
+                        patch: os.PathLike, 
+                        repo: Repo, 
+                        failure_is_good: bool = False,
+                        max_double_fail: int = 2) -> tuple[str, str]:
+
+        good = [ good_rev ]
+        bad = [ bad_rev ]
+
+        double_fail_counter = 0
+        encountered_double_fail = False
+
+        # Bisection
+        midpoint = ""
+        while True:
+            if encountered_double_fail:
+
+                if double_fail_counter >= max_double_fail:
+                    raise Exception("Failed too many times in a row while bisecting. Aborting bisection...")
+                
+                if double_fail_counter % 2 == 0:
+                    # Get size of range
+                    range_size = len(repo.direct_first_parent_path(midpoint, bad[-1]))
+
+                    # Move 10% towards the last bad
+                    step = max(int(.9 * range_size), 1)
+                    midpoint = repo.rev_to_commit(f"{bad[-1]}~{step}")
+                else:
+                    # Symmetric to case above
+                    range_size = len(repo.direct_first_parent_path(good[-1], midpoint))
+                    step = max(int(.1 * range_size), 1)
+                    midpoint = repo.rev_to_commit(f"{midpoint}~{step}")
+                
+                double_fail_counter += 1
+                encountered_double_fail = False
+
+            else:
+                old_midpoint = midpoint
+                midpoint = repo.next_bisection_commit(good=good[-1], bad=bad[-1])
+                logging.info(f"Midpoint: {midpoint}")
+                if midpoint == "" or midpoint == old_midpoint:
+                    break
+
+            built_wo_patch, built_w_patch = self._check_building_patch(compiler_config, midpoint, patch, repo)
+
+            if built_wo_patch:
+                if failure_is_good:
+                    bad.append(midpoint)
+                else:
+                    good.append(midpoint)
+                continue
+            
+            if built_w_patch:
+                if failure_is_good:
+                    good.append(midpoint)
+                else:
+                    bad.append(midpoint)
+                continue
+
+            encountered_double_fail = True
+        
+        return good[-1], bad[-1]
+
+
     def find_ranges(self, compiler_config: utils.NestedNamespace, patchable_commit, patch):
         introducer = ""
         found_introducer = False
@@ -315,8 +407,6 @@ class Patcher():
         # TODO: do something with `from packaging import version; version.parse()` 
         release_versions = ["trunk"] + compiler_config.releases 
         release_versions.reverse()
-        #print(release_versions)
-        #print(sorted(release_versions, key=lambda x: repo.get_unix_timestamp(x)))
         
         tested_ancestors = []
         no_patch_common_ancestor = ""
@@ -339,39 +429,20 @@ class Patcher():
                 logging.info(f"Common ancestor of {old_version} and {potentially_human_readable_name} was already tested. Proceeding...")
                 continue
 
-            # ==================== BUILDING ==================== 
-            # Read out patchdb entries for already found results
-            # (Builder will tell if it's a known bad combination)
+            
+            # Building of releases
+            built_wo_patch, built_w_patch = self._check_building_patch(compiler_config, common_ancestor, patch, repo)
 
-            if not self.patchdb.requires_this_patch(common_ancestor, patch, repo):
-                try:
-                    logging.info(f"Building NO-PATCH best CA {common_ancestor} of {old_version} and {potentially_human_readable_name}")
-                    logging.info(self.builder.build(compiler_config, common_ancestor))
-                    logging.info("Found good version that does not require the patch!")
-                    no_patch_common_ancestor = common_ancestor
-                    break
+            if built_wo_patch:
+                no_patch_common_ancestor = common_ancestor
+                break
 
-                except subprocess.CalledProcessError:
-                    logging.info(f"Failed to build {compiler_config.name}-{common_ancestor} WITHOUT patch ({old_version}). Might require manual checking!")
-
-                if no_patch_common_ancestor == "":
-                    try:
-                        logging.info(f"Building PATCH best CA {common_ancestor} of {old_version} and {potentially_human_readable_name}")
-                        self.builder.build(compiler_config, common_ancestor, additional_patches=[patch])
-                        self.patchdb.save(patch, [common_ancestor], repo)
-
-                        if oldest_patchable_ancestor == "": # None have been found
-                            oldest_patchable_ancestor = common_ancestor
-
-                    except subprocess.CalledProcessError:
-                        logging.critical(f"Failed to build {compiler_config.name}-{common_ancestor} WITH patch ({old_version}). MANUAL intervention needed for this commit")
-                        self.patchdb.manual_intervention_required(compiler_config, common_ancestor)
-                        tested_ancestors.append(common_ancestor)
-            else:
-                logging.info(f"Read form PatchDB: {common_ancestor} requires patch {patch}")
-                if oldest_patchable_ancestor == "":
+            if built_w_patch:
+                if oldest_patchable_ancestor == "": # None have been found
                     oldest_patchable_ancestor = common_ancestor
-                
+            else:
+                tested_ancestors.append(common_ancestor)
+
 
         # Possible cases
         # no_patch_common_ancestor was found AND oldest_patchable_ancestor was found
@@ -388,43 +459,8 @@ class Patcher():
 
         if no_patch_common_ancestor != "":
             # Find introducer commit
-            good = [ no_patch_common_ancestor ]
-            bad = [ patchable_commit ]
+            _, introducer = self._bisection(no_patch_common_ancestor, patchable_commit, compiler_config, patch, repo)
 
-            midpoint = ""
-            
-            while True:
-                old_midpoint = midpoint
-                midpoint = repo.next_bisection_commit(good=good[-1], bad=bad[-1])
-                logging.info(f"Midpoint: {midpoint}")
-                if midpoint == "" or midpoint == old_midpoint:
-                    break
-                #==================== BUILDING ==================== 
-                if not self.patchdb.requires_this_patch(midpoint, patch, repo):
-                    try:
-                        logging.info(f"Building midpoint {midpoint} WITHOUT patch {patch}...")
-                        self.builder.build(compiler_config, midpoint)
-                        good.append(midpoint)
-                        continue
-
-                    except builder.BuildException as e:
-                        logging.info(f"Failed to build {midpoint} WITHOUT patch {patch}: {e}")
-
-                    try:
-                        logging.info(f"Building {midpoint} WITH patch {patch}...")
-                        self.builder.build(compiler_config, midpoint, additional_patches=[patch])
-                        bad.append(midpoint)
-
-                    except builder.BuildException as e:
-                        logging.critical(f"Failed to build {midpoint} WITH patch {patch}. Manual intervention needed. Exception: {e}")
-                        self.patchdb.manual_intervention_required(compiler_config, midpoint)
-                        raise Exception(f"Found unbuildable commit {midpoint}; aborting bisection")
-                else:
-                    logging.info(f"Read form PatchDB: Midpoint {midpoint} requires patch {patch}")
-                    bad.append(midpoint)
-
-                #==================== DONE ==================== 
-            introducer = bad[-1]
             # Insert from introducer to and with patchable_commit as requiring patching
             # This is of course not the complete range but will help when bisecting
             rev_range = f"{introducer}~..{patchable_commit}"
@@ -443,6 +479,7 @@ class Patcher():
                                                         compiler_config=compiler_config,
                                                         patch=patch,
                                                         repo=repo)
+    
 
 
     def find_fixer_from_introducer_to_releases(self, introducer: str, compiler_config, patch: PathLike, repo: Repo) -> None:
@@ -456,30 +493,7 @@ class Patcher():
         for release in reachable_releases:
             logging.info(f"Searching fixer for release {release}")
             
-            no_patch_release = False
-            w_patch_release = False
-            #==================== BUILDING ==================== 
-            if not self.patchdb.requires_this_patch(release, patch, repo):
-                try:
-                    logging.info(f"Building release {release} WITHOUT patch {patch}...")
-                    self.builder.build(compiler_config, release)
-                    no_patch_release = True
-
-                except builder.BuildException as e:
-                    logging.info(f"Failed to build release {release} WITHOUT patch {patch}. {e}")
-
-                if not no_patch_release:
-                    try:
-                        logging.info(f"Building release {release} WITH patch {patch}...")
-                        self.builder.build(compiler_config, release)
-                        w_patch_release = True
-
-                    except builder.BuildException as e:
-                        logging.critical(f"Failed to build release {release} WITH patch {patch}. Manual intervention needed. {e}")
-                        self.patchdb.manual_intervention_required(compiler_config, release)
-            else:
-                logging.info(f"Read form PatchDB: Release {release} requires patch {patch}")
-                w_patch_release = True
+            no_patch_release, w_patch_release = self._check_building_patch(compiler_config, release, patch, repo)
 
             # Check if any of already found fixers is ancestor of release
             # As we assume that a fixer at a given point fixes all its children, this is fine.
@@ -490,11 +504,8 @@ class Patcher():
                 logging.info(f"Already known fixer {fixer} is ancestor of {release}. No additional searching required")
                 continue
 
-            #==================== DONE ==================== 
             
             if not no_patch_release and not w_patch_release:
-                # release doesn't build at all: Manual intervention needed + maybe rerun? continue
-                logging.critical(f"Unable to build {release} with or without patch {patch}!")
                 continue
 
             elif not no_patch_release and w_patch_release:
@@ -504,84 +515,10 @@ class Patcher():
                 continue
 
             elif no_patch_release and not w_patch_release:
-                # If release builds w/o patch; Bisect let's goo
-                # Searching for a fixer, thus building w/o patch is "bad"
-                good = [ introducer ]
-                bad = [ release ]
-
-                double_fail_counter = 0
-                double_fail_max = 2
-                encountered_double_fail = False
-
-                midpoint = ""
-                while True:
-                    if not encountered_double_fail:
-                        old_midpoint = midpoint
-                        midpoint = repo.next_bisection_commit(good=good[-1], bad=bad[-1])
-                        logging.info(f"Midpoint: {midpoint}")
-                        if midpoint == "" or midpoint == old_midpoint:
-                            break
-                    else:
-                        encountered_double_fail = False
-
-                    #==================== BUILDING ==================== 
-                    if not self.patchdb.requires_this_patch(midpoint, patch, repo):
-                        try:
-                            logging.info(f"Building midpoint {midpoint} WITHOUT patch {patch}...")
-                            self.builder.build(compiler_config, midpoint)
-                            bad.append(midpoint)
-                            double_fail_counter = 0
-                            continue
-
-                        except builder.BuildException as e:
-                            logging.info(f"Failed to build {midpoint} WITHOUT patch {patch}: {e}")
-
-                        try:
-                            logging.info(f"Building {midpoint} WITH patch {patch}...")
-                            self.builder.build(compiler_config, midpoint, additional_patches=[patch])
-                            good.append(midpoint)
-                            double_fail_counter = 0
-
-                        except builder.BuildException as e:
-                            logging.critical(f"Failed to build {midpoint} WITH patch {patch}. Manual intervention needed. Exception: {e}")
-                            self.patchdb.manual_intervention_required(compiler_config, midpoint)
-                            # To not directly abort when an unbuildable commit is found,
-                            # we move the midpoint Y% of the range to the last good or last bad commit
-                            # and try there again.
-                            # If we fail even after doing this X times, we definitely quit.
-                            if double_fail_counter < double_fail_max:
-                                if double_fail_counter % 2 == 0:
-                                    # Get size of range
-                                    range_size = len(repo.direct_first_parent_path(midpoint, bad[-1]))
-
-                                    # Move 10% towards the last bad and as we can only do 
-                                    step = max(int(.9 * range_size), 1)
-                                    midpoint = repo.rev_to_commit(f"{bad[-1]}~{step}")
-                                else:
-                                    # Symmetric to case above
-                                    range_size = len(repo.direct_first_parent_path(good[-1], midpoint))
-                                    step = max(int(.1 * range_size), 1)
-                                    midpoint = repo.rev_to_commit(f"{midpoint}~{step}")
-
-                                encountered_double_fail = True
-                                double_fail_counter += 1
-                                continue
-
-                            else:
-                                # Save already found established range
-                                self.patchdb.save(patch,
-                                        repo.rev_to_range_needing_patch(introducer, good[-1]),
-                                        repo)
-                                raise Exception(f"Found several unbuildable commits; aborting bisection")
-                    else:
-                        logging.info(f"Read form PatchDB: Midpoint {midpoint} requires patch {patch}")
-                        good.append(midpoint)
-
-                    #==================== DONE ==================== 
 
                 # Range A..B is includes B, thus we want B to be the last good one
                 # as good requires the patch
-                fixer = good[-1]
+                fixer, _ = self._bisection(introducer, release, compiler_config, patch, repo, failure_is_good = True)
 
                 fixer_list.append(fixer)
 
@@ -592,7 +529,7 @@ class Patcher():
         logging.info("Done finding fixers")
         return
     
-    def bisect_build(self, good: str, bad: str, repo: Repo, failure_is_good: bool=False) -> tuple[str, str]:
+    def bisect_build(self, good: str, bad: str, compiler_config, repo: Repo, failure_is_good: bool=False) -> tuple[str, str]:
 
         midpoint = ""
         while True:
@@ -664,7 +601,7 @@ class Patcher():
         msg = f"Staring bisection between {current_commit} and {prev_commit}, should take at most around {math.log(max(2**exp, 11) - 2**min(exp-1, 0), 2)} steps"
         logging.info(msg)
         print(msg)
-        _, introducer = self.bisect_build(good=current_commit, bad=prev_commit, repo=repo, failure_is_good=False)
+        _, introducer = self.bisect_build(good=current_commit, bad=prev_commit, compiler_config=compiler_config, repo=repo, failure_is_good=False)
         msg = f"Found introducer {introducer}"
         logging.info(msg)
         print(msg)
