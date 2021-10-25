@@ -1,20 +1,22 @@
-import os
-import io
-import sys
-import shutil
-import json
-import subprocess
 import argparse
-import parsers
+import grp
+import io
+import json
 import logging
+import os
+import shutil
 import shutil
 import stat
+import subprocess
+import sys
 
+import parsers
+
+from functools import reduce
+from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional, Union, Tuple, Hashable
-from os.path import join as pjoin
-from functools import reduce
 
 
 class Executable(object):
@@ -217,9 +219,28 @@ def import_config(
 
     config = NestedNamespace(config)
     # Make sure the cache dir exists
-    os.makedirs(config.cachedir, exist_ok=True)
-    shutil.chown(config.cachedir, group=config.cache_group)
-    os.chmod(config.cachedir, 0o770 | stat.S_ISGID)
+    cache_path = Path(config.cachedir)
+    if not cache_path.exists():
+        os.makedirs(config.cachedir, exist_ok=True)
+        shutil.chown(config.cachedir, group=config.cache_group)
+        os.chmod(config.cachedir, 0o770 | stat.S_ISGID)
+    elif cache_path.is_dir() or cache_path.is_symlink():
+        followed_links = []
+        while cache_path.is_symlink():
+            cache_path = Path(os.readlink(cache_path))
+            if cache_path in followed_links:
+                raise Exception(f"Symlink-cycle found for {config.cachedir}. (If you actually encountered this error, drop me an email)")
+            if cache_path.group() != config.cache_group:
+                raise Exception(f"Link {cache_path} in the symlink-chain to the cache directory is not owned by {config.cache_group}")
+
+        if cache_path.group() != config.cache_group:
+            raise Exception(f"Cache {config.cachdir} is not owned by {config.cache_group}")
+
+        if cache_path.stat().st_mode != 17912:
+            raise Exception(f"Cache {config.cachdir} seems to have the wrong permissions. Please run `chmod g+rwxs {config.cachedir}`.")
+
+    else:
+        raise Exception(f"config.cachedir {config.cachedir} already exists but is not a path or a symlink")
 
     # Make patch paths full paths to avoid confusion
     # when working in different directories
