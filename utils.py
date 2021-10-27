@@ -12,6 +12,7 @@ import sys
 
 import parsers
 
+from dataclasses import dataclass
 from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
@@ -301,6 +302,37 @@ def create_symlink(src: os.PathLike, dst: os.PathLike):
 
     logging.debug(f"Creating symlink {dst} to {src}")
     os.symlink(src, dst)
+
+@dataclass
+class CompilerSetting():
+    compiler_config: NestedNamespace
+    rev: str
+    opt_level: Optional[str] = None
+    additional_flags: Optional[list[str]] = None
+
+    def __str__(self):
+        if self.additional_flags is None:
+            return f"{self.compiler_config.name} {self.rev} {self.opt_level}"
+        else:
+            return f"{self.compiler_config.name} {self.rev} {self.opt_level} " + " ".join(self.additional_flags)
+
+    @staticmethod
+    def from_str(s: str, config: NestedNamespace):
+        s = s.strip()
+        parts = s.split(" ")
+
+        compiler = parts[0]
+        rev = parts[1]
+        opt_level = parts[2]
+        additional_flags = parts[2:]
+        if compiler == "gcc":
+            compiler_config = config.gcc
+        elif compiler == "llvm" or compiler == "clang":
+            compiler_config = config.llvm
+        else:
+            raise Exception(f"Unknown compiler project {compiler}")
+
+        return CompilerSetting(compiler_config, rev, opt_level, additional_flags)
 
 
 def run_cmd(
