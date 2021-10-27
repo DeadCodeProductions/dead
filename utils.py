@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import shutil
-import shutil
 import stat
 import subprocess
 import sys
@@ -17,77 +16,45 @@ from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional, Union, Tuple, Hashable
+from typing import Hashable, Optional, Tuple, Union
+
+import parsers
 
 
 class Executable(object):
     pass
 
 
+# fmt: off
 EXPECTED_ENTRIES = [
     # Type      Path in config              Description
-    (str, ("gcc", "name"), "Prefix for the gcc cache directory"),
-    (str, ("gcc", "main_branch"), "Name of main/trunk/master branch"),
-    (Path, ("gcc", "repo"), "Path to gcc repository"),
-    (
-        list,
-        ("gcc", "patches"),
-        "List of names of patches for gcc that can be found in ./patches",
-    ),
-    (
-        Executable,
-        (
-            "gcc",
-            "sane_version",
-        ),
-        "Path to executable or name in PATH for a sane gcc",
-    ),
-    (
-        list,
-        (
-            "gcc",
-            "releases",
-        ),
-        "GCC releases of interest",
-    ),
-    (str, ("llvm", "name"), "Prefix for the llvm cache directory"),
-    (str, ("llvm", "main_branch"), "Name of main/trunk/master branch"),
-    (Path, ("llvm", "repo"), "Path to llvm-project repository"),
-    (
-        list,
-        ("llvm", "patches"),
-        "List of names of patches for gcc that can be found in ./patches",
-    ),
-    (
-        Executable,
-        (
-            "llvm",
-            "sane_version",
-        ),
-        "Path to executable or name in PATH for a sane clang",
-    ),
-    (
-        list,
-        (
-            "llvm",
-            "releases",
-        ),
-        "LLVM releases of interest",
-    ),
-    (Path, ("cachedir",), "Path where the cache should be"),
-    (
-        Executable,
-        ("csmith", "executable"),
-        "Path to executable or name in PATH for csmith",
-    ),
-    (Path, ("csmith", "include_path"), "Path to include directory of csmith"),
-    (Executable, ("dcei",), "Path to executable or name in PATH for dcei"),
-    (Executable, ("creduce",), "Path to executable or name in PATH for creduce"),
-    (Executable, ("ccomp",), "Path to executable or name in PATH for ccomp"),
-    (Path, ("patchdb",), "Path where the patchDB file is"),
-    (Path, ("logdir",), "Where build log files should be saved to"),
-    (str, ("cache_group",), "Name of group owning the cache"),
+    (str,       ("gcc", "name"),            "Prefix for the gcc cache directory"),
+    (str,       ("gcc", "main_branch"),     "Name of main/trunk/master branch"),
+    (Path,      ("gcc", "repo"),            "Path to gcc repository"),
+    (list,      ("gcc", "patches"),         "List of names of patches for gcc that can be found in ./patches" ),
+    (Executable,("gcc", "sane_version",),   "Path to executable or name in PATH for a sane gcc" ),
+    (list,      ("gcc", "releases",),       "GCC releases of interest"),
+
+    (str,       ("llvm", "name"),           "Prefix for the llvm cache directory"),
+    (str,       ("llvm", "main_branch"),    "Name of main/trunk/master branch"),
+    (Path,      ("llvm", "repo"),           "Path to llvm-project repository"),
+    (list,      ("llvm", "patches"),        "List of names of patches for gcc that can be found in ./patches" ),
+    (Executable,("llvm", "sane_version",),  "Path to executable or name in PATH for a sane clang" ),
+    (list,      ("llvm", "releases",),      "LLVM releases of interest"),
+
+    (Path,      ("cachedir", ),             "Path where the cache should be"),
+    (Executable,("csmith", "executable"),   "Path to executable or name in PATH for csmith"),
+    (Path,      ("csmith", "include_path"), "Path to include directory of csmith"),
+    (int,       ("csmith", "max_size"),     "Maximum size of csmith-generated candidate"),
+    (int,       ("csmith", "min_size"),     "Minimum size of csmith-generated candidate"),
+    (Executable,("dcei",),                  "Path to executable or name in PATH for dcei" ),
+    (Executable,("creduce", ),              "Path to executable or name in PATH for creduce" ),
+    (Executable,("ccomp", ),                "Path to executable or name in PATH for ccomp" ),
+    (Path,      ("patchdb", ),              "Path where the patchDB file is"),
+    (Path,      ("logdir", ),               "Where build log files should be saved to"),
+    (str,       ("cache_group", ),          "Name of group owning the cache"),
 ]
+# fmt: on
 
 
 class NestedNamespace(SimpleNamespace):
@@ -230,18 +197,28 @@ def import_config(
         while cache_path.is_symlink():
             cache_path = Path(os.readlink(cache_path))
             if cache_path in followed_links:
-                raise Exception(f"Symlink-cycle found for {config.cachedir}. (If you actually encountered this error, drop me an email)")
+                raise Exception(
+                    f"Symlink-cycle found for {config.cachedir}. (If you actually encountered this error, drop me an email)"
+                )
             if cache_path.group() != config.cache_group:
-                raise Exception(f"Link {cache_path} in the symlink-chain to the cache directory is not owned by {config.cache_group}")
+                raise Exception(
+                    f"Link {cache_path} in the symlink-chain to the cache directory is not owned by {config.cache_group}"
+                )
 
         if cache_path.group() != config.cache_group:
-            raise Exception(f"Cache {config.cachdir} is not owned by {config.cache_group}")
+            raise Exception(
+                f"Cache {config.cachdir} is not owned by {config.cache_group}"
+            )
 
         if cache_path.stat().st_mode != 17912:
-            raise Exception(f"Cache {config.cachdir} seems to have the wrong permissions. Please run `chmod g+rwxs {config.cachedir}`.")
+            raise Exception(
+                f"Cache {config.cachdir} seems to have the wrong permissions. Please run `chmod g+rwxs {config.cachedir}`."
+            )
 
     else:
-        raise Exception(f"config.cachedir {config.cachedir} already exists but is not a path or a symlink")
+        raise Exception(
+            f"config.cachedir {config.cachedir} already exists but is not a path or a symlink"
+        )
 
     # Make patch paths full paths to avoid confusion
     # when working in different directories
