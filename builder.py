@@ -281,7 +281,7 @@ class Builder:
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.builder_parser())
 
-    cores = None if args.cores is None else args.cores[0]
+    cores = None if args.cores is None else args.cores
 
     patchdb = patcher.PatchDB(config.patchdb)
     builder = Builder(config, cores=cores, patchdb=patchdb)

@@ -690,7 +690,7 @@ class Patcher:
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.patcher_parser())
 
-    cores = None if args.cores is None else args.cores[0]
+    cores = None if args.cores is None else args.cores
 
     patchdb = PatchDB(config.patchdb)
     p = Patcher(config, patchdb, cores=cores)

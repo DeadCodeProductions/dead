@@ -17,6 +17,10 @@ def config_parser(expected_entries: list[tuple]):
         help="Log level",
     )
 
+    parser.add_argument('--cores',
+                        help = "Amount of build cores to use. Defaults to all.",
+                        type=int)
+
     return parser
 
 
@@ -33,13 +37,6 @@ def builder_parser():
         help="Which revision of the compiler project to use. Use 'trunk' to use the latest commit",
         nargs="+",
         type=str,
-    )
-
-    parser.add_argument(
-        "--cores",
-        help="Amount of build cores to use. Defaults to all.",
-        nargs=1,
-        type=int,
     )
 
     parser.add_argument(
@@ -104,11 +101,5 @@ def patcher_parser():
     )
     # ====================
 
-    parser.add_argument(
-        "--cores",
-        help="Amount of build cores to use. Defaults to all.",
-        nargs=1,
-        type=int,
-    )
 
     return parser
