@@ -1,22 +1,16 @@
 import argparse
-import grp
-import io
 import json
 import logging
 import os
 import shutil
 import stat
 import subprocess
-import sys
-
-import parsers
-
 from dataclasses import dataclass
 from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Hashable, Optional, Tuple, Union
+from typing import Hashable, Optional, TextIO, Tuple, Union
 
 import parsers
 
@@ -110,7 +104,6 @@ class NestedNamespace(SimpleNamespace):
 
 def validate_config(config: dict):
     # TODO: Also check if there are fields that are not supposed to be there
-    missing_keys = False
     key_problems = set()
     for exkeys in EXPECTED_ENTRIES:
         pos = []
@@ -121,7 +114,6 @@ def validate_config(config: dict):
             pos.append(key)
             if key not in tmpconfig:
                 exists = False
-                missing_keys = True
                 s = ".".join(pos)
                 key_problems.add(f"Missing entry for '{s}' in config")
             else:
@@ -132,32 +124,26 @@ def validate_config(config: dict):
             if key_type is str:
                 if tmpconfig == "":
                     key_problems.add(f"{s} should be a non-empty string, but is empty.")
-                    missing_keys = True
             elif key_type is Path:
-                if tmpconfig == "":
+                if not isinstance(tmpconfig, str) or tmpconfig == "":
                     key_problems.add(f"{s} should be a non-empty Path, but is empty.")
-                    missing_keys = True
                 elif not Path(tmpconfig).exists():
                     key_problems.add(f"Path {tmpconfig} at {s} doesn't exist.")
-                    missing_keys = True
             elif key_type is Executable:
                 if shutil.which(tmpconfig) is None:
                     key_problems.add(
                         f"Executable {tmpconfig} in {s} doesn't exist or is not executable."
                     )
-                    missing_keys = True
             elif key_type is list:
                 if type(tmpconfig) is not list:
                     key_problems.add(
                         f"{s} should be a list but is not. It contains {tmpconfig} instead."
                     )
-                    missing_keys = True
 
                 if exkeys[1][-1] == "patches":
                     for patch in tmpconfig:
                         if not Path(pjoin("patches", patch)).exists():
                             key_problems.add(f"Patch at {patch} in {s} doesn't exist")
-                            missing_keys = True
 
     if key_problems:
         print("The config has problems:")
@@ -263,7 +249,7 @@ def get_config_and_parser(own_parser: Optional[argparse.ArgumentParser] = None):
     return config, args_parser
 
 
-def create_symlink(src: os.PathLike, dst: os.PathLike):
+def create_symlink(src: Path, dst: Path):
     if dst.exists():
         if dst.is_symlink():
             dst.unlink()
@@ -316,25 +302,49 @@ def run_cmd(
     cmd: Union[str, list[str]],
     working_dir: Optional[os.PathLike] = None,
     additional_env: dict = {},
-    log: bool = True,
-    log_file: Optional[io.TextIOWrapper] = None,
-) -> Optional[str]:
+) -> str:
 
     if working_dir is None:
-        working_dir = os.getcwd()
+        working_dir = Path(os.getcwd())
     env = os.environ.copy()
     env.update(additional_env)
 
     if isinstance(cmd, str):
         cmd = cmd.strip().split(" ")
-    if log:
-        output = subprocess.run(
-            cmd, cwd=working_dir, check=True, env=env, capture_output=True
-        )
+    output = subprocess.run(
+        cmd, cwd=working_dir, check=True, env=env, capture_output=True
+    )
 
-        logging.debug(output.stdout.decode("utf-8").strip())
-        logging.debug(output.stderr.decode("utf-8").strip())
-        return output.stdout.decode("utf-8").strip()
+    logging.debug(output.stdout.decode("utf-8").strip())
+    logging.debug(output.stderr.decode("utf-8").strip())
+    return output.stdout.decode("utf-8").strip()
+
+
+def run_cmd_to_logfile(
+    cmd: Union[str, list[str]],
+    log_file: TextIO = None,
+    working_dir: Optional[os.PathLike[str]] = None,
+    additional_env: dict = {},
+) -> None:
+
+    if working_dir is None:
+        working_dir = Path(os.getcwd())
+    env = os.environ.copy()
+    env.update(additional_env)
+
+    if isinstance(cmd, str):
+        cmd = cmd.strip().split(" ")
+
+    subprocess.run(
+        cmd,
+        cwd=working_dir,
+        check=True,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        env=env,
+        capture_output=False,
+    )
+
     else:
         if log_file is not None:
             output = subprocess.run(

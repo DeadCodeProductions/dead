@@ -1,26 +1,20 @@
 #!/usr/bin/env python3
 
-import json
-import os
-import argparse
 import logging
+import multiprocessing
+import os
+import shutil
 import subprocess
 import tempfile
 import time
-import multiprocessing
-import shutil
-import io
+from contextlib import contextmanager
+from os.path import join as pjoin
+from pathlib import Path
+from typing import Optional, TextIO, Union
 
-import utils
 import parsers
 import patcher
-
-from types import SimpleNamespace
-from typing import Optional, Union
-from tempfile import TemporaryDirectory, NamedTemporaryFile
-from pathlib import Path
-from os.path import join as pjoin
-from contextlib import contextmanager
+import utils
 
 
 class BuildException(Exception):
@@ -35,7 +29,7 @@ def build_context(
     rev,
     logdir: os.PathLike,
     cache_group: str,
-) -> tuple[Path, io.TextIOWrapper]:
+) -> tuple[Path, TextIO]:
     build_dir = tempfile.mkdtemp()
     os.makedirs(prefix, exist_ok=True)
 
@@ -52,7 +46,7 @@ def build_context(
     logging.info(f"Build log at {build_log_path}")
 
     try:
-        yield (build_dir, build_log)
+        yield (Path(build_dir), build_log)
     finally:
         build_log.close()
         shutil.rmtree(build_dir)
@@ -167,55 +161,50 @@ class Builder:
             tmpdir, build_log = ctxt
             # Getting source code
             worktree_cmd = f"git worktree add {tmpdir} {rev} -f"
-            git_output = utils.run_cmd(worktree_cmd, compiler_config.repo)
+            utils.run_cmd(worktree_cmd, compiler_config.repo)
 
-            tmpdir_repo = patcher.Repo(tmpdir, compiler_config.main_branch)
+            tmpdir_repo = patcher.Repo(Path(tmpdir), compiler_config.main_branch)
 
             # Apply patches
             self._apply_patches(tmpdir_repo, required_patches, compiler_config, rev)
 
             os.makedirs("build")
 
-            # Debug help
-            do_cmd_logging = False
-
             # Compiling
             try:
                 if compiler_config.name == "gcc":
                     pre_cmd = "./contrib/download_prerequisites"
                     logging.debug("GCC: Starting download_prerequisites")
-                    pre_output = utils.run_cmd(
-                        pre_cmd, log=do_cmd_logging, log_file=build_log
+                    utils.run_cmd_to_logfile(
+                        pre_cmd, log_file=build_log
                     )
 
                     os.chdir("build")
                     logging.debug("GCC: Starting configure")
                     configure_cmd = f"../configure --disable-multilib --disable-bootstrap --enable-languages=c,c++ --prefix={prefix}"
-                    utils.run_cmd(configure_cmd, log=do_cmd_logging, log_file=build_log)
+                    utils.run_cmd_to_logfile(configure_cmd, log_file=build_log)
 
                     logging.debug("GCC: Starting to build...")
-                    utils.run_cmd(
-                        f"make -j {cores}", log=do_cmd_logging, log_file=build_log
+                    utils.run_cmd_to_logfile(
+                        f"make -j {cores}", log_file=build_log
                     )
-                    utils.run_cmd(
-                        "make install", log=do_cmd_logging, log_file=build_log
+                    utils.run_cmd_to_logfile(
+                        "make install", log_file=build_log
                     )
 
                 elif compiler_config.name == "clang":
                     os.chdir("build")
                     logging.debug("LLVM: Starting cmake")
                     cmake_cmd = f"cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=clang -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_USE_NEWPM=ON -DLLVM_TARGETS_TO_BUILD=X86 -DCMAKE_INSTALL_PREFIX={prefix} ../llvm"
-                    utils.run_cmd(
+                    utils.run_cmd_to_logfile(
                         cmake_cmd,
                         additional_env={"CC": "clang", "CXX": "clang++"},
-                        log=do_cmd_logging,
                         log_file=build_log,
                     )
 
                     logging.debug("LLVM: Starting to build...")
-                    utils.run_cmd(
+                    utils.run_cmd_to_logfile(
                         f"ninja -j {cores} install",
-                        log=do_cmd_logging,
                         log_file=build_log,
                     )
 
@@ -227,7 +216,6 @@ class Builder:
 
             except subprocess.CalledProcessError as e:
                 self.patchdb.save_bad(required_patches, rev, repo, compiler_config)
-                build_log.close()
                 raise BuildException(
                     f"Couldn't build {compiler_config.name} {rev} with patches {required_patches}. Exception: {e}"
                 )
@@ -243,7 +231,7 @@ class Builder:
 
         return prefix
 
-    def _is_in_cache(self, prefix: os.PathLike, success_indicator: os.PathLike) -> bool:
+    def _is_in_cache(self, prefix: Path, success_indicator: Path) -> bool:
         # Super safe caching "lock"/queue
         if prefix.exists() and not success_indicator.exists():
             logging.info(f"{prefix} is currently building; need to wait")
