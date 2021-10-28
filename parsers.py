@@ -101,5 +101,51 @@ def patcher_parser():
     )
     # ====================
 
+    return parser
+
+def generator_parser():
+    parser = argparse.ArgumentParser(add_help=False)
+
+    parser.add_argument('-a',
+                        '--amount',
+                        help = "Amount of cases to generate.",
+                        type=int)
+
+    parser.add_argument('--interesting',
+                        help = "If the generated case should be an interesting one.",
+                        action = argparse.BooleanOptionalAction,
+                        default = True
+                        )
+
+    parser.add_argument('-t',
+                        '--target',
+                        help = "Project name and revision of compiler to use.",
+                        nargs = 2,
+                        type=str)
+
+    parser.add_argument('-tol',
+                        '--target-opt-levels',
+                        help = "Optimization levels for the target to be checked against.",
+                        nargs = "+",
+                        default="3",
+                        type=str)
+
+    parser.add_argument('-ac',
+                        '--additional-compiler',
+                        help = "Additional compiler to compare the target against.",
+                        nargs = '*',
+                        type=str)
+
+    parser.add_argument('-p',
+                        '--parallel',
+                        help = "Run the search in parallel for --parallel processes. Works only in combination wiht --interesting.",
+                        type=int
+                        )
+
+    parser.add_argument('-d',
+                        '--output-directory',
+                        help = "Where the cases should be saved to.",
+                        type=str
+                        )
 
     return parser

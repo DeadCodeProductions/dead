@@ -47,6 +47,8 @@ EXPECTED_ENTRIES = [
     (Path,      ("patchdb", ),              "Path where the patchDB file is"),
     (Path,      ("logdir", ),               "Where build log files should be saved to"),
     (str,       ("cache_group", ),          "Name of group owning the cache"),
+    (Executable,("ccc",),                   "Path to executable or name in PATH for the callchain checker"),
+    (Executable,("static_annotator",),      "Path to executable or name in PATH for the static annotator"),
 ]
 # fmt: on
 
@@ -345,18 +347,61 @@ def run_cmd_to_logfile(
         capture_output=False,
     )
 
+def find_include_paths(clang, file, flags):
+    cmd = [clang, file, '-c', '-o/dev/null', '-v']
+    if flags:
+        cmd.extend(flags.split())
+    result = subprocess.run(cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT)
+    assert result.returncode == 0
+    output = result.stdout.decode('utf-8').split('\n')
+    start = next(i for i, line in enumerate(output)
+                 if '#include <...> search starts here:' in line) + 1
+    end = next(i for i, line in enumerate(output) if 'End of search list.' in line)
+    return [output[i].strip() for i in range(start, end)]
+
+
+def get_compiler_config(config: NestedNamespace, arg: Union[list[str], str]):
+    if isinstance(arg, list):
+        compiler = arg[0]
     else:
-        if log_file is not None:
-            output = subprocess.run(
-                cmd,
-                cwd=working_dir,
-                check=True,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                env=env,
-                capture_output=False,
-            )
-        else:
-            output = subprocess.run(
-                cmd, cwd=working_dir, check=True, env=env, capture_output=False
-            )
+        compiler = arg
+
+    if compiler == "gcc":
+        compiler_config = config.gcc
+    elif compiler == "llvm" or compiler == "clang":
+        compiler_config = config.llvm
+    else:
+        print(f"Unknown compiler project {compiler}")
+        exit(1)
+    return compiler_config
+
+#==================== After imports  ==================== 
+# TODO: This setup will cause issues in no time
+import patcher
+
+
+def get_compiler_settings(config: NestedNamespace, args: list[str], default_opt_levels: list[str]) -> list[CompilerSetting]:
+    settings: list[CompilerSetting] = []
+    
+    possible_opt_levels = [ "1", "2", "3", "s", "z" ]
+    
+    pos = 0
+    while len(args[pos:]) > 1:
+        compiler_config = get_compiler_config(config, args[pos:])
+        repo = patcher.Repo(compiler_config.repo, compiler_config.main_branch)
+        rev = repo.rev_to_commit(args[pos+1])
+        pos += 2
+
+        opt_levels: set[str] = set(default_opt_levels)
+        while pos < len(args) and args[pos] in possible_opt_levels:
+            opt_levels.add(args[pos])
+            pos += 1
+
+        settings.extend([ CompilerSetting(compiler_config, rev, lvl) for lvl in opt_levels ])
+
+    if len(args[pos:]) != 0:
+        raise Exception(f"Couldn't completely parse compiler settings. Parsed {args[:pos]}; missed {args[pos:]}")
+
+    return settings
