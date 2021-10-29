@@ -2,9 +2,12 @@ import argparse
 import json
 import logging
 import os
+import re
 import shutil
 import stat
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import reduce
 from os.path import join as pjoin
@@ -13,6 +16,7 @@ from types import SimpleNamespace
 from typing import Hashable, Optional, TextIO, Tuple, Union
 
 import parsers
+import repository
 
 
 class Executable(object):
@@ -158,11 +162,11 @@ def import_config(
     config_path: Optional[Union[os.PathLike[str], Path]] = None, validate: bool = True
 ):
     if config_path is None:
-        p = pjoin(Path.home(), ".config/dce/config.json")
+        p = Path(pjoin(Path.home(), ".config/dce/config.json"))
         if Path(p).exists():
             config_path = p
         elif Path("./config.json").exists():
-            config_path = "./config.json"
+            config_path = Path("./config.json")
         else:
             raise Exception("Found no config.json file at {p} or ./config.json!")
         logging.debug(f"Using config found at {config_path}")
@@ -268,8 +272,9 @@ def create_symlink(src: Path, dst: Path):
     logging.debug(f"Creating symlink {dst} to {src}")
     os.symlink(src, dst)
 
+
 @dataclass
-class CompilerSetting():
+class CompilerSetting:
     compiler_config: NestedNamespace
     rev: str
     opt_level: Optional[str] = None
@@ -279,7 +284,29 @@ class CompilerSetting():
         if self.additional_flags is None:
             return f"{self.compiler_config.name} {self.rev} {self.opt_level}"
         else:
-            return f"{self.compiler_config.name} {self.rev} {self.opt_level} " + " ".join(self.additional_flags)
+            return (
+                f"{self.compiler_config.name} {self.rev} {self.opt_level} "
+                + " ".join(self.additional_flags)
+            )
+
+    def add_flag(self, flag: str):
+        if not self.additional_flags:
+            self.additional_flags = [flag]
+        else:
+            self.additional_flags.append(flag)
+
+    def get_flag_str(self) -> str:
+        if self.additional_flags:
+            return " ".join(self.additional_flags)
+        else:
+            return ""
+
+    def get_flag_cmd(self) -> list[str]:
+        s = self.get_flag_str()
+        if s == "":
+            return []
+        else:
+            return s.split(" ")
 
     @staticmethod
     def from_str(s: str, config: NestedNamespace):
@@ -289,7 +316,7 @@ class CompilerSetting():
         compiler = parts[0]
         rev = parts[1]
         opt_level = parts[2]
-        additional_flags = parts[2:]
+        additional_flags = parts[3:]
         if compiler == "gcc":
             compiler_config = config.gcc
         elif compiler == "llvm" or compiler == "clang":
@@ -300,10 +327,70 @@ class CompilerSetting():
         return CompilerSetting(compiler_config, rev, opt_level, additional_flags)
 
 
+@dataclass
+class ReduceCase:
+    code: str
+    marker: str
+    bad_setting: CompilerSetting
+    good_settings: list[CompilerSetting]
+
+    def __str__(self):
+        s = (
+            f"//marker::: {self.marker}\n"
+            + f"//bad::: {self.bad_setting}\n"
+            + "//good::: "
+            + "\n//good::: ".join(map(str, self.good_settings))
+            + "\n"
+            + self.code
+        )
+        return s
+
+    @staticmethod
+    def from_file(path: os.PathLike, config):
+        with open(path, "r") as f:
+            marker_line = f.readline()
+            bad_line = f.readline()
+            good_lines = []
+            curr = f.readline()  # One good setting must exist
+            while curr.startswith("//good:::"):
+                good_lines.append(curr)
+                curr = f.readline()
+            code = "".join([curr] + f.readlines())
+        # Extract
+        marker = marker_line.split(":::")[1].strip()
+        bad_setting = CompilerSetting.from_str(bad_line.split(":::")[1], config)
+        good_settings = [
+            CompilerSetting.from_str(l.split(":::")[1], config) for l in good_lines
+        ]
+
+        return ReduceCase(code, marker, bad_setting, good_settings)
+
+    @staticmethod
+    def from_str(s: str, config):
+        sl = s.split("\n")
+        marker_line = sl[0]
+        bad_line = sl[1]
+        i = 2
+        while sl[i].startswith("//good:::"):
+            i += 1
+        good_lines = sl[1:i]
+        code = "\n".join(sl[i:])
+
+        # Extract
+        marker = marker_line.split(":::")[1].strip()
+        bad_setting = CompilerSetting.from_str(bad_line.split(":::")[1], config)
+        good_settings = [
+            CompilerSetting.from_str(l.split(":::")[1], config) for l in good_lines
+        ]
+
+        return ReduceCase(code, marker, bad_setting, good_settings)
+
+
 def run_cmd(
     cmd: Union[str, list[str]],
     working_dir: Optional[os.PathLike] = None,
     additional_env: dict = {},
+    **kwargs,
 ) -> str:
 
     if working_dir is None:
@@ -314,7 +401,7 @@ def run_cmd(
     if isinstance(cmd, str):
         cmd = cmd.strip().split(" ")
     output = subprocess.run(
-        cmd, cwd=working_dir, check=True, env=env, capture_output=True
+        cmd, cwd=working_dir, check=True, env=env, capture_output=True, **kwargs
     )
 
     logging.debug(output.stdout.decode("utf-8").strip())
@@ -347,18 +434,23 @@ def run_cmd_to_logfile(
         capture_output=False,
     )
 
+
 def find_include_paths(clang, file, flags):
-    cmd = [clang, file, '-c', '-o/dev/null', '-v']
+    cmd = [clang, file, "-c", "-o/dev/null", "-v"]
     if flags:
         cmd.extend(flags.split())
-    result = subprocess.run(cmd,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT)
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     assert result.returncode == 0
-    output = result.stdout.decode('utf-8').split('\n')
-    start = next(i for i, line in enumerate(output)
-                 if '#include <...> search starts here:' in line) + 1
-    end = next(i for i, line in enumerate(output) if 'End of search list.' in line)
+    output = result.stdout.decode("utf-8").split("\n")
+    start = (
+        next(
+            i
+            for i, line in enumerate(output)
+            if "#include <...> search starts here:" in line
+        )
+        + 1
+    )
+    end = next(i for i, line in enumerate(output) if "End of search list." in line)
     return [output[i].strip() for i in range(start, end)]
 
 
@@ -377,21 +469,24 @@ def get_compiler_config(config: NestedNamespace, arg: Union[list[str], str]):
         exit(1)
     return compiler_config
 
-#==================== After imports  ==================== 
-# TODO: This setup will cause issues in no time
-import patcher
+
+def get_marker_prefix(marker: str) -> str:
+    # Marker are of the form [a-Z]+[0-9]+_
+    return marker.rstrip("_").rstrip("0123456789")
 
 
-def get_compiler_settings(config: NestedNamespace, args: list[str], default_opt_levels: list[str]) -> list[CompilerSetting]:
+def get_compiler_settings(
+    config: NestedNamespace, args: list[str], default_opt_levels: list[str]
+) -> list[CompilerSetting]:
     settings: list[CompilerSetting] = []
-    
-    possible_opt_levels = [ "1", "2", "3", "s", "z" ]
-    
+
+    possible_opt_levels = ["1", "2", "3", "s", "z"]
+
     pos = 0
     while len(args[pos:]) > 1:
         compiler_config = get_compiler_config(config, args[pos:])
-        repo = patcher.Repo(compiler_config.repo, compiler_config.main_branch)
-        rev = repo.rev_to_commit(args[pos+1])
+        repo = repository.Repo(compiler_config.repo, compiler_config.main_branch)
+        rev = repo.rev_to_commit(args[pos + 1])
         pos += 2
 
         opt_levels: set[str] = set(default_opt_levels)
@@ -399,9 +494,13 @@ def get_compiler_settings(config: NestedNamespace, args: list[str], default_opt_
             opt_levels.add(args[pos])
             pos += 1
 
-        settings.extend([ CompilerSetting(compiler_config, rev, lvl) for lvl in opt_levels ])
+        settings.extend(
+            [CompilerSetting(compiler_config, rev, lvl) for lvl in opt_levels]
+        )
 
     if len(args[pos:]) != 0:
-        raise Exception(f"Couldn't completely parse compiler settings. Parsed {args[:pos]}; missed {args[pos:]}")
+        raise Exception(
+            f"Couldn't completely parse compiler settings. Parsed {args[:pos]}; missed {args[pos:]}"
+        )
 
     return settings

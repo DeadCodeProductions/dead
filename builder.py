@@ -3,6 +3,7 @@
 import logging
 import multiprocessing
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -13,10 +14,12 @@ from pathlib import Path
 from typing import Optional, TextIO, Union
 
 import parsers
-import patcher
 import utils
+from patchdatabase import PatchDB
+from repository import Repo
 
 
+# =================== Builder ====================
 class BuildException(Exception):
     pass
 
@@ -92,9 +95,7 @@ class Builder:
         if cores is None:
             cores = self.cores
 
-        repo = patcher.Repo(
-            compiler_config.repo, main_branch=compiler_config.main_branch
-        )
+        repo = Repo(compiler_config.repo, main_branch=compiler_config.main_branch)
 
         input_rev = rev
         rev = repo.rev_to_commit(rev)
@@ -163,7 +164,7 @@ class Builder:
             worktree_cmd = f"git worktree add {tmpdir} {rev} -f"
             utils.run_cmd(worktree_cmd, compiler_config.repo)
 
-            tmpdir_repo = patcher.Repo(Path(tmpdir), compiler_config.main_branch)
+            tmpdir_repo = Repo(Path(tmpdir), compiler_config.main_branch)
 
             # Apply patches
             self._apply_patches(tmpdir_repo, required_patches, compiler_config, rev)
@@ -175,9 +176,7 @@ class Builder:
                 if compiler_config.name == "gcc":
                     pre_cmd = "./contrib/download_prerequisites"
                     logging.debug("GCC: Starting download_prerequisites")
-                    utils.run_cmd_to_logfile(
-                        pre_cmd, log_file=build_log
-                    )
+                    utils.run_cmd_to_logfile(pre_cmd, log_file=build_log)
 
                     os.chdir("build")
                     logging.debug("GCC: Starting configure")
@@ -185,12 +184,8 @@ class Builder:
                     utils.run_cmd_to_logfile(configure_cmd, log_file=build_log)
 
                     logging.debug("GCC: Starting to build...")
-                    utils.run_cmd_to_logfile(
-                        f"make -j {cores}", log_file=build_log
-                    )
-                    utils.run_cmd_to_logfile(
-                        "make install", log_file=build_log
-                    )
+                    utils.run_cmd_to_logfile(f"make -j {cores}", log_file=build_log)
+                    utils.run_cmd_to_logfile("make install", log_file=build_log)
 
                 elif compiler_config.name == "clang":
                     os.chdir("build")
@@ -266,12 +261,80 @@ class Builder:
         return
 
 
+# =================== Helper ====================
+@contextmanager
+def compile_context(code: str):
+    fd_code, code_file = tempfile.mkstemp(suffix=".c")
+    fd_asm, asm_file = tempfile.mkstemp(suffix=".s")
+
+    with open(code_file, "w") as f:
+        f.write(code)
+
+    try:
+        yield (code_file, asm_file)
+    finally:
+        os.remove(code_file)
+        os.close(fd_code)
+        os.remove(asm_file)
+        os.close(fd_asm)
+
+
+def get_compiler_executable(
+    compiler_setting: utils.CompilerSetting, bldr: Builder
+) -> Path:
+    compiler_path = bldr.build(compiler_setting.compiler_config, compiler_setting.rev)
+    compiler_exe = pjoin(compiler_path, "bin", compiler_setting.compiler_config.name)
+    return Path(compiler_exe)
+
+
+def get_asm_str(
+    code: str, compiler_setting: utils.CompilerSetting, bldr: Builder
+) -> str:
+    # Get the assembly output of `code` compiled with `compiler_setting` as str
+
+    compiler_exe = get_compiler_executable(compiler_setting, bldr)
+
+    with compile_context(code) as context_res:
+        code_file, asm_file = context_res
+
+        cmd = f"{compiler_exe} -S {code_file} -o{asm_file} -O{compiler_setting.opt_level}".split(
+            " "
+        )
+        cmd += compiler_setting.get_flag_cmd()
+        utils.run_cmd(cmd)
+
+        with open(asm_file, "r") as f:
+            return f.read()
+
+
+def find_alive_markers(
+    code: str,
+    compiler_setting: utils.CompilerSetting,
+    marker_prefix: str,
+    bldr: Builder,
+) -> set[str]:
+    alive_markers = set()
+
+    # Extract alive markers
+    alive_regex = re.compile(f".*[call|jmp].*{marker_prefix}([0-9]+)_.*")
+
+    asm = get_asm_str(code, compiler_setting, bldr)
+
+    for line in asm.split("\n"):
+        line = line.strip()
+        m = alive_regex.match(line)
+        if m:
+            alive_markers.add(f"{marker_prefix}{m.group(1)}_")
+
+    return alive_markers
+
+
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.builder_parser())
 
     cores = None if args.cores is None else args.cores
 
-    patchdb = patcher.PatchDB(config.patchdb)
+    patchdb = PatchDB(config.patchdb)
     builder = Builder(config, cores=cores, patchdb=patchdb)
 
     if args.build_releases:
