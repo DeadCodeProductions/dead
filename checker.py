@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import dataclasses
 import logging
 import os
 import re
@@ -173,6 +174,9 @@ def sanitize(
     exe_timeout=2,
     compcert_timeout=16,
 ):
+    # print("San 0", check_compiler_warnings(gcc, clang, file, flags, cc_timeout))
+    # print("San 1", use_ub_sanitizers(clang, file, flags, cc_timeout, exe_timeout))
+    # print("San 2", verify_with_ccomp(ccomp, file, flags, compcert_timeout))
     # Taking advantage of shortciruit logic...
     return (
         check_compiler_warnings(gcc, clang, file, flags, cc_timeout)
@@ -308,6 +312,10 @@ class Checker:
         # TODO: Optimization potential. Less calls to clang etc.
         # when tests are combined.
 
+        # print("Check 0", self.is_interesting_wrt_marker(case))
+        # print("Check 1", self.is_interesting_wrt_ccc(case))
+        # print("Check 2", self.is_interesting_with_static_globals(case))
+        # print("Check 3", self.is_interesting_with_empty_marker_bodies(case))
         # Taking advantage of shortciruit logic
         return (
             self.is_interesting_wrt_marker(case)
@@ -317,6 +325,38 @@ class Checker:
         )
 
 
+def copy_flag(
+    frm: utils.CompilerSetting, to: list[utils.CompilerSetting]
+) -> list[utils.CompilerSetting]:
+    res: list[utils.CompilerSetting] = []
+    for setting in to:
+        cpy = dataclasses.replace(setting)
+        cpy.additional_flags = frm.additional_flags
+        res.append(cpy)
+    return res
+
+
+def override_bad(
+    case: utils.ReduceCase, override_settings: list[utils.CompilerSetting]
+) -> list[utils.ReduceCase]:
+    res = []
+    bsettings = copy_flag(case.bad_setting, override_settings)
+    for s in bsettings:
+        cpy = dataclasses.replace(case)
+        cpy.bad_setting = s
+        res.append(cpy)
+    return res
+
+
+def override_good(
+    case: utils.ReduceCase, override_settings: list[utils.CompilerSetting]
+) -> utils.ReduceCase:
+    gsettings = copy_flag(case.good_settings[0], override_settings)
+    cpy = dataclasses.replace(case)
+    cpy.good_settings = gsettings
+    return cpy
+
+
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.checker_parser())
 
@@ -324,9 +364,52 @@ if __name__ == "__main__":
     bldr = builder.Builder(config, patchdb, args.cores)
     chkr = Checker(config, bldr)
 
-    case = utils.ReduceCase.from_file(args.file, config)
+    bad_settings = []
+    if args.bad_settings:
+        bad_settings = utils.get_compiler_settings(
+            config, args.bad_settings, args.bad_settings_default_opt_levels
+        )
 
-    if chkr.is_interesting(case):
+    good_settings = []
+    if args.good_settings:
+        good_settings = utils.get_compiler_settings(
+            config, args.good_settings, args.good_settings_default_opt_levels
+        )
+
+    cases_to_test: list[utils.ReduceCase] = []
+    check_marker: bool = False
+    if args.bad_settings and args.good_settings:
+        # Override all options defined in the case
+        with open(args.file, "r") as f:
+            code = f.read()
+
+        cases_to_test = [
+            utils.ReduceCase(code, "", bs, good_settings) for bs in bad_settings
+        ]
+        check_marker = True
+
+    elif args.bad_settings and not args.good_settings:
+        # TODO: Get flags from somewhere. For now,
+        # take the ones from the first config.
+        case = utils.ReduceCase.from_file(args.file, config)
+
+        cases_to_test = override_bad(case, bad_settings)
+
+    elif not args.bad_settings and args.good_settings:
+        case = utils.ReduceCase.from_file(args.file, config)
+
+        cases_to_test = [override_good(case, good_settings)]
+
+    else:
+        cases_to_test = [utils.ReduceCase.from_file(args.file, config)]
+
+    if args.marker is not None:
+        for c in cases_to_test:
+            c.marker = args.marker
+    elif check_marker:
+        raise Exception("You need to specify a marker")
+
+    if all(chkr.is_interesting(c) for c in cases_to_test):
         sys.exit(0)
     else:
         sys.exit(1)

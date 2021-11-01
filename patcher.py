@@ -389,7 +389,7 @@ class Patcher:
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.patcher_parser())
 
-    cores = None if args.cores is None else args.cores
+    cores = args.cores
 
     patchdb = PatchDB(config.patchdb)
     p = Patcher(config, patchdb, cores=cores)
@@ -397,70 +397,33 @@ if __name__ == "__main__":
     if args.find_range:
         problems = []
         if args.patch is None:
-            problems.append("Missing argument for `patch` when using --find-range.")
-        else:
-            patch = args.patch[0]
-
-        if args.compiler is None:
-            problems.append("Missing argument for `compiler` when using --find-range.")
-        else:
-            compiler = args.compiler[0]
-            if compiler == "gcc":
-                compiler_config = config.gcc
-            elif compiler == "llvm" or compiler == "clang":
-                compiler_config = config.llvm
-            else:
-                problems.append(
-                    f"Unknown compiler {compiler}. gcc and llvm/clang are supported options."
-                )
-
-        if args.patchable_revision is None:
-            problems.append(
-                "Missing argument for `patchable-revision` when using --find-range."
-            )
-        else:
-            patchable_commit = args.patchable_revision[0]
-
-        if len(problems) > 0:
-            print("Some arguments required for --find-range have problems:")
-            for pr in problems:
-                print(" - " + pr)
+            print("Missing argument for `patch` when using --find-range.")
             exit(1)
         else:
-            p.find_ranges(
-                compiler_config, patchable_commit=patchable_commit, patch=patch
-            )
+            patch = args.patch
+
+        compiler_config = utils.get_compiler_config(config, args.compiler)
+
+        if args.patchable_revision is None:
+            print("Missing argument for `patchable-revision` when using --find-range.")
+            exit(1)
+        else:
+            patchable_commit = args.patchable_revision
+
+        p.find_ranges(compiler_config, patchable_commit=patchable_commit, patch=patch)
 
     # ====================
     elif args.find_introducer:
         problems = []
 
         if args.broken_revision is None:
-            problems.append(
+            print(
                 "Missing argument for `broken-revision` when using --find-introducer."
             )
-        else:
-            broken_rev = args.broken_revision[0]
-
-        if args.compiler is None:
-            problems.append(
-                "Missing argument for `compiler` when using --find-introducer."
-            )
-        else:
-            compiler = args.compiler[0]
-            if compiler == "gcc":
-                compiler_config = config.gcc
-            elif compiler == "llvm" or compiler == "clang":
-                compiler_config = config.llvm
-            else:
-                problems.append(
-                    f"Unknown compiler {compiler}. gcc and llvm/clang are supported options."
-                )
-
-        if len(problems) > 0:
-            print("Some arguments required for --find-introducer have problems:")
-            for pr in problems:
-                print(" - " + pr)
             exit(1)
         else:
-            p.find_introducer(compiler_config, broken_rev)
+            broken_rev = args.broken_revision
+
+        compiler_config = utils.get_compiler_config(config, args.compiler)
+
+        p.find_introducer(compiler_config, broken_rev)

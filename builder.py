@@ -332,7 +332,7 @@ def find_alive_markers(
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.builder_parser())
 
-    cores = None if args.cores is None else args.cores
+    cores = args.cores
 
     patchdb = PatchDB(config.patchdb)
     builder = Builder(config, cores=cores, patchdb=patchdb)
@@ -341,19 +341,11 @@ if __name__ == "__main__":
         builder.build_releases()
         exit(0)
 
-    if args.compiler is None:
+    if args.compiler is None or args.revision is None:
         print("Error: Need --compiler and --revision")
         exit(1)
 
-    compiler = args.compiler[0]
-
-    if compiler == "gcc":
-        compiler_config = config.gcc
-    elif compiler == "llvm" or compiler == "clang":
-        compiler_config = config.llvm
-    else:
-        print(f"Unknown compiler project {compiler}")
-        exit(1)
+    compiler_config = utils.get_compiler_config(config, args.compiler)
 
     additional_patches = None
     if args.add_patches is not None:

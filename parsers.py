@@ -72,21 +72,24 @@ def patcher_parser():
     )
 
     parser.add_argument(
-        "-c", "--compiler", help="Which compiler project to use", nargs=1, type=str
+        "-c",
+        "--compiler",
+        help="Which compiler project to use",
+        nargs=1,
+        type=str,
+        required=True,
     )
 
     parser.add_argument(
         "-pr",
         "--patchable-revision",
         help="Which revision is patchable with the commit specified in --patch",
-        nargs=1,
         type=str,
     )
 
     parser.add_argument(
         "--patch",
         help="Which revision is patchable with the commit specified in --patch",
-        nargs=1,
         type=str,
     )
     # ====================
@@ -97,7 +100,7 @@ def patcher_parser():
     )
 
     parser.add_argument(
-        "-br", "--broken-revision", help="Which revision is borken", nargs=1, type=str
+        "-br", "--broken-revision", help="Which revision is borken", type=str
     )
     # ====================
 
@@ -118,16 +121,16 @@ def generator_parser():
 
     parser.add_argument(
         "-t",
-        "--target",
+        "--targets",
         help="Project name and revision of compiler to use.",
-        nargs=2,
+        nargs="+",
         type=str,
     )
 
     parser.add_argument(
-        "-tol",
-        "--target-opt-levels",
-        help="Optimization levels for the target to be checked against.",
+        "-tdol",
+        "--targets-default-opt-levels",
+        help="Default optimization levels for the target to be checked against.",
         nargs="+",
         default="3",
         type=str,
@@ -138,6 +141,15 @@ def generator_parser():
         "--additional-compiler",
         help="Additional compiler to compare the target against.",
         nargs="*",
+        type=str,
+    )
+
+    parser.add_argument(
+        "-acdol",
+        "--additional-compilers-default-opt-levels",
+        help="Default optimization levels for the additional compilers to be checked against.",
+        nargs="+",
+        default=["1", "2", "3", "s", "z"],
         type=str,
     )
 
@@ -160,6 +172,42 @@ def checker_parser():
 
     parser.add_argument(
         "-f", "--file", help="Which file to work on.", type=str, required=True
+    )
+
+    parser.add_argument("-m", "--marker", help="Marker to check for.", type=str)
+
+    parser.add_argument(
+        "-bad",
+        "--bad-settings",
+        help="Settings which are supposed to *not* eliminate the marker",
+        nargs="+",
+        type=str,
+    )
+
+    parser.add_argument(
+        "-bsdol",
+        "--bad-settings-default-opt-levels",
+        help="Default optimization levels for the bad-settings to be checked against.",
+        nargs="+",
+        default=[],
+        type=str,
+    )
+
+    parser.add_argument(
+        "-good",
+        "--good-settings",
+        help="Settings which are supposed to eliminate the marker",
+        nargs="+",
+        type=str,
+    )
+
+    parser.add_argument(
+        "-gsdol",
+        "--good-settings-default-opt-levels",
+        help="Default optimization levels for the good-settings to be checked against.",
+        nargs="+",
+        default=[],
+        type=str,
     )
 
     return parser

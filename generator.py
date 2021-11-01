@@ -130,31 +130,14 @@ class CSmithCaseGenerator:
 
     def generate_interesting_case(
         self,
-        target_compiler: utils.CompilerSetting,
-        target_opt_levels: list[str],
+        target_compiler: list[utils.CompilerSetting],
         additional_compiler: list[utils.CompilerSetting],
     ):
         # Because the resulting code will be of csmith origin, we have to add
         # the csmith include path to all settings
         csmith_include_flag = f"-I{self.config.csmith.include_path}"
-        target_compiler.add_flag(csmith_include_flag)
-        for acs in additional_compiler:
+        for acs in target_compiler + additional_compiler:
             acs.add_flag(csmith_include_flag)
-
-        all_opt_levels = ["1", "2", "s", "z", "3"]
-
-        target_tests = []
-        for opt in target_opt_levels:
-            cp = dataclasses.replace(target_compiler)
-            cp.opt_level = opt
-            target_tests.append(cp)
-
-        tests = []
-        for opt in all_opt_levels:
-            for setting in additional_compiler + [target_compiler]:
-                cp = dataclasses.replace(setting)
-                cp.opt_level = opt
-                tests.append(cp)
 
         try_counter = 0
         while True:
@@ -170,7 +153,7 @@ class CSmithCaseGenerator:
                         candidate_code, tt, marker_prefix, self.builder
                     ),
                 )
-                for tt in target_tests
+                for tt in target_compiler
             ]
 
             tester_alive_marker_list = [
@@ -180,7 +163,7 @@ class CSmithCaseGenerator:
                         candidate_code, tt, marker_prefix, self.builder
                     ),
                 )
-                for tt in tests
+                for tt in additional_compiler
             ]
 
             target_alive_markers = set()
@@ -229,21 +212,17 @@ class CSmithCaseGenerator:
     def _wrapper_interesting(
         self,
         queue: Queue,
-        target_compiler: utils.CompilerSetting,
-        target_opt_levels: list[str],
+        target_compiler: list[utils.CompilerSetting],
         additional_compiler: list[utils.CompilerSetting],
     ):
         logging.info("Starting worker...")
         while True:
-            case = self.generate_interesting_case(
-                target_compiler, target_opt_levels, additional_compiler
-            )
+            case = self.generate_interesting_case(target_compiler, additional_compiler)
             queue.put(str(case))
 
     def parallel_interesting_case(
         self,
-        target_compiler: utils.CompilerSetting,
-        target_opt_levels: list[str],
+        target_compiler: list[utils.CompilerSetting],
         additional_compiler: list[utils.CompilerSetting],
         processes: int,
         output_dir: os.PathLike,
@@ -255,7 +234,7 @@ class CSmithCaseGenerator:
         procs = [
             Process(
                 target=self._wrapper_interesting,
-                args=(queue, target_compiler, target_opt_levels, additional_compiler),
+                args=(queue, target_compiler, additional_compiler),
             )
             for _ in range(processes)
         ]
@@ -307,49 +286,22 @@ if __name__ == "__main__":
 
     if args.interesting:
         if args.target is None:
-            print("--target is required for --interesting")
+            print("--targets is required for --interesting")
             exit(1)
         else:
-            compiler = args.target[0]
-            if compiler == "gcc":
-                compiler_config = config.gcc
-            elif compiler == "llvm" or compiler == "clang":
-                compiler_config = config.llvm
-            else:
-                print(f"Unknown compiler project {compiler}")
-                exit(1)
-            # Use full hash to avoid ambiguity
-            repo = repository.Repo(compiler_config.repo, compiler_config.main_branch)
-            rev = repo.rev_to_commit(args.target[1])
-            target_setting = utils.CompilerSetting(compiler_config, rev)
+            target_settings = utils.get_compiler_settings(
+                config, args.target, default_opt_levels=args.target_default_opt_levels
+            )
 
-        additional_compiler = []
-        if args.additional_compiler is not None:
-            len_addcomp = len(args.additional_compiler)
-            if len_addcomp % 2 == 1:
-                print(
-                    f"Odd number of arguments for --additional-compiler; must be of form [PROJECT REV]*"
-                )
-                exit(1)
-            else:
-                for i in range(0, len_addcomp, 2):
-                    compiler = args.additional_compiler[i]
-                    if compiler == "gcc":
-                        compiler_config = config.gcc
-                    elif compiler == "llvm" or compiler == "clang":
-                        compiler_config = config.llvm
-                    else:
-                        print(f"Unknown compiler project {compiler}")
-                        exit(1)
-                    # Use full hash to avoid ambiguity
-                    repo = repository.Repo(
-                        compiler_config.repo, compiler_config.main_branch
-                    )
-                    rev = repo.rev_to_commit(args.additional_compiler[i + 1])
-                    setting = utils.CompilerSetting(compiler_config, rev)
-                    additional_compiler.append(setting)
-
-        target_opt_levels = args.target_opt_levels
+        if args.additional_compiler is None:
+            print("--additional_compilers is required for --interesting")
+            exit(1)
+        else:
+            additional_compilers = utils.get_compiler_settings(
+                config,
+                args.additional_compiler,
+                default_opt_levels=args.additional_compiler_default_opt_levels,
+            )
 
         if args.output_directory is None:
             print("Missing output directory!")
@@ -362,9 +314,8 @@ if __name__ == "__main__":
             amount_cases = args.amount if args.amount is not None else 0
             amount_processes = max(1, args.parallel)
             gen = case_generator.parallel_interesting_case(
-                target_compiler=target_setting,
-                target_opt_levels=target_opt_levels,
-                additional_compiler=additional_compiler,
+                target_compiler=target_settings,
+                additional_compiler=additional_compilers,
                 processes=amount_processes,
                 output_dir=output_dir,
                 start_stop=False,
@@ -374,9 +325,8 @@ if __name__ == "__main__":
         else:
             print(
                 case_generator.generate_interesting_case(
-                    target_compiler=target_setting,
-                    target_opt_levels=target_opt_levels,
-                    additional_compiler=additional_compiler,
+                    target_compiler=target_settings,
+                    additional_compiler=additional_compilers,
                 )
             )
     else:

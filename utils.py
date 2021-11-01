@@ -2,12 +2,9 @@ import argparse
 import json
 import logging
 import os
-import re
 import shutil
 import stat
 import subprocess
-import tempfile
-from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import reduce
 from os.path import join as pjoin
@@ -471,7 +468,7 @@ def get_compiler_config(config: NestedNamespace, arg: Union[list[str], str]):
 
 
 def get_marker_prefix(marker: str) -> str:
-    # Marker are of the form [a-Z]+[0-9]+_
+    # Markers are of the form [a-Z]+[0-9]+_
     return marker.rstrip("_").rstrip("0123456789")
 
 
