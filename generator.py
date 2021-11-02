@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 
-import dataclasses
 import logging
 import os
-import re
 import signal
 import subprocess
-import tempfile
-from contextlib import contextmanager
-from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from os.path import join as pjoin
 from pathlib import Path
@@ -20,9 +15,7 @@ import builder
 import checker
 import parsers
 import patcher
-import repository
 import utils
-from sanitize import sanitize
 
 
 def run_csmith(csmith):
@@ -96,11 +89,11 @@ def generate_file(config: utils.NestedNamespace, additional_flags: str):
                 with open(ntf.name, "w") as f:
                     print(candidate, file=f)
                 logging.debug("Checking if program is sane...")
-                if not sanitize(
+                if not checker.sanitize(
                     config.gcc.sane_version,
                     config.llvm.sane_version,
                     config.ccomp,
-                    ntf.name,
+                    Path(ntf.name),
                     additional_flags,
                 ):
                     continue
@@ -130,13 +123,13 @@ class CSmithCaseGenerator:
 
     def generate_interesting_case(
         self,
-        target_compiler: list[utils.CompilerSetting],
-        additional_compiler: list[utils.CompilerSetting],
+        target_compilers: list[utils.CompilerSetting],
+        additional_compilers: list[utils.CompilerSetting],
     ):
         # Because the resulting code will be of csmith origin, we have to add
         # the csmith include path to all settings
         csmith_include_flag = f"-I{self.config.csmith.include_path}"
-        for acs in target_compiler + additional_compiler:
+        for acs in target_compilers + additional_compilers:
             acs.add_flag(csmith_include_flag)
 
         try_counter = 0
@@ -153,7 +146,7 @@ class CSmithCaseGenerator:
                         candidate_code, tt, marker_prefix, self.builder
                     ),
                 )
-                for tt in target_compiler
+                for tt in target_compilers
             ]
 
             tester_alive_marker_list = [
@@ -163,7 +156,7 @@ class CSmithCaseGenerator:
                         candidate_code, tt, marker_prefix, self.builder
                     ),
                 )
-                for tt in additional_compiler
+                for tt in additional_compilers
             ]
 
             target_alive_markers = set()
@@ -212,18 +205,20 @@ class CSmithCaseGenerator:
     def _wrapper_interesting(
         self,
         queue: Queue,
-        target_compiler: list[utils.CompilerSetting],
-        additional_compiler: list[utils.CompilerSetting],
+        target_compilers: list[utils.CompilerSetting],
+        additional_compilers: list[utils.CompilerSetting],
     ):
         logging.info("Starting worker...")
         while True:
-            case = self.generate_interesting_case(target_compiler, additional_compiler)
+            case = self.generate_interesting_case(
+                target_compilers, additional_compilers
+            )
             queue.put(str(case))
 
     def parallel_interesting_case(
         self,
-        target_compiler: list[utils.CompilerSetting],
-        additional_compiler: list[utils.CompilerSetting],
+        target_compilers: list[utils.CompilerSetting],
+        additional_compilers: list[utils.CompilerSetting],
         processes: int,
         output_dir: os.PathLike,
         start_stop: Optional[bool] = False,
@@ -234,7 +229,7 @@ class CSmithCaseGenerator:
         procs = [
             Process(
                 target=self._wrapper_interesting,
-                args=(queue, target_compiler, additional_compiler),
+                args=(queue, target_compilers, additional_compilers),
             )
             for _ in range(processes)
         ]
@@ -285,22 +280,22 @@ if __name__ == "__main__":
     case_generator = CSmithCaseGenerator(config, patchdb, cores)
 
     if args.interesting:
-        if args.target is None:
+        if args.targets is None:
             print("--targets is required for --interesting")
             exit(1)
         else:
             target_settings = utils.get_compiler_settings(
-                config, args.target, default_opt_levels=args.target_default_opt_levels
+                config, args.targets, default_opt_levels=args.targets_default_opt_levels
             )
 
-        if args.additional_compiler is None:
-            print("--additional_compilers is required for --interesting")
+        if args.additional_compilers is None:
+            print("--additional-compilers is required for --interesting")
             exit(1)
         else:
             additional_compilers = utils.get_compiler_settings(
                 config,
-                args.additional_compiler,
-                default_opt_levels=args.additional_compiler_default_opt_levels,
+                args.additional_compilers,
+                default_opt_levels=args.additional_compilers_default_opt_levels,
             )
 
         if args.output_directory is None:
@@ -314,8 +309,8 @@ if __name__ == "__main__":
             amount_cases = args.amount if args.amount is not None else 0
             amount_processes = max(1, args.parallel)
             gen = case_generator.parallel_interesting_case(
-                target_compiler=target_settings,
-                additional_compiler=additional_compilers,
+                target_compilers=target_settings,
+                additional_compilers=additional_compilers,
                 processes=amount_processes,
                 output_dir=output_dir,
                 start_stop=False,
@@ -325,8 +320,8 @@ if __name__ == "__main__":
         else:
             print(
                 case_generator.generate_interesting_case(
-                    target_compiler=target_settings,
-                    additional_compiler=additional_compilers,
+                    target_compilers=target_settings,
+                    additional_compilers=additional_compilers,
                 )
             )
     else:

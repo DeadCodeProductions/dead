@@ -138,7 +138,7 @@ def generator_parser():
 
     parser.add_argument(
         "-ac",
-        "--additional-compiler",
+        "--additional-compilers",
         help="Additional compiler to compare the target against.",
         nargs="*",
         type=str,

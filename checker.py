@@ -174,9 +174,6 @@ def sanitize(
     exe_timeout=2,
     compcert_timeout=16,
 ):
-    # print("San 0", check_compiler_warnings(gcc, clang, file, flags, cc_timeout))
-    # print("San 1", use_ub_sanitizers(clang, file, flags, cc_timeout, exe_timeout))
-    # print("San 2", verify_with_ccomp(ccomp, file, flags, compcert_timeout))
     # Taking advantage of shortciruit logic...
     return (
         check_compiler_warnings(gcc, clang, file, flags, cc_timeout)
@@ -312,10 +309,6 @@ class Checker:
         # TODO: Optimization potential. Less calls to clang etc.
         # when tests are combined.
 
-        # print("Check 0", self.is_interesting_wrt_marker(case))
-        # print("Check 1", self.is_interesting_wrt_ccc(case))
-        # print("Check 2", self.is_interesting_with_static_globals(case))
-        # print("Check 3", self.is_interesting_with_empty_marker_bodies(case))
         # Taking advantage of shortciruit logic
         return (
             self.is_interesting_wrt_marker(case)
