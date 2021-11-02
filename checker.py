@@ -138,30 +138,31 @@ def use_ub_sanitizers(
     if flags:
         cmd.extend(flags.split())
 
-    with tempfile.NamedTemporaryFile(suffix=".exe", delete=False) as exe:
-        exe.close()
-        os.chmod(exe.name, 0o777)
-        cmd.append(f"-o{exe.name}")
-        result = subprocess.run(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=cc_timeout,
-        )
-        if result.returncode != 0:
+    with ccomp_env():
+        with tempfile.NamedTemporaryFile(suffix=".exe", delete=False) as exe:
+            exe.close()
+            os.chmod(exe.name, 0o777)
+            cmd.append(f"-o{exe.name}")
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=cc_timeout,
+            )
+            if result.returncode != 0:
+                logging.debug(f"UB Sanitizer returncode {result.returncode}")
+                if os.path.exists(exe.name):
+                    os.remove(exe.name)
+                return False
+            result = subprocess.run(
+                exe.name,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=exe_timeout,
+            )
+            os.remove(exe.name)
             logging.debug(f"UB Sanitizer returncode {result.returncode}")
-            if os.path.exists(exe.name):
-                os.remove(exe.name)
-            return False
-        result = subprocess.run(
-            exe.name,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=exe_timeout,
-        )
-        os.remove(exe.name)
-        logging.debug(f"UB Sanitizer returncode {result.returncode}")
-        return result.returncode == 0
+            return result.returncode == 0
 
 
 def sanitize(
