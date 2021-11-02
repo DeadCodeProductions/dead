@@ -315,8 +315,13 @@ if __name__ == "__main__":
                 output_dir=output_dir,
                 start_stop=False,
             )
-            for i in range(amount_cases):
-                print(next(gen))
+            if amount_cases == 0:
+                while True:
+                    print(next(gen))
+            else:
+                for i in range(amount_cases):
+                    print(next(gen))
+
         else:
             print(
                 case_generator.generate_interesting_case(
