@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import logging
 import os
 import signal
@@ -9,7 +10,7 @@ from os.path import join as pjoin
 from pathlib import Path
 from random import randint
 from tempfile import NamedTemporaryFile
-from typing import Optional, Union
+from typing import Generator, Optional, Union
 
 import builder
 import checker
@@ -121,16 +122,11 @@ class CSmithCaseGenerator:
         self.builder = builder.Builder(config, patchdb, cores)
         self.chkr = checker.Checker(config, self.builder)
 
-    def generate_interesting_case(
-        self,
-        target_compilers: list[utils.CompilerSetting],
-        additional_compilers: list[utils.CompilerSetting],
-    ):
+    def generate_interesting_case(self, scenario: utils.Scenario):
         # Because the resulting code will be of csmith origin, we have to add
         # the csmith include path to all settings
         csmith_include_flag = f"-I{self.config.csmith.include_path}"
-        for acs in target_compilers + additional_compilers:
-            acs.add_flag(csmith_include_flag)
+        scenario.add_flags([csmith_include_flag])
 
         try_counter = 0
         while True:
@@ -146,7 +142,7 @@ class CSmithCaseGenerator:
                         candidate_code, tt, marker_prefix, self.builder
                     ),
                 )
-                for tt in target_compilers
+                for tt in scenario.target_settings
             ]
 
             tester_alive_marker_list = [
@@ -156,7 +152,7 @@ class CSmithCaseGenerator:
                         candidate_code, tt, marker_prefix, self.builder
                     ),
                 )
-                for tt in additional_compilers
+                for tt in scenario.attacker_settings
             ]
 
             target_alive_markers = set()
@@ -180,11 +176,15 @@ class CSmithCaseGenerator:
                             marker in bad_alive_markers
                         ):  # i.e. the setting didn't eliminate the call
                             # Create reduce case
-                            case = utils.ReduceCase(
+                            case = utils.Case(
                                 code=candidate_code,
                                 marker=marker,
                                 bad_setting=bad_setting,
                                 good_settings=good,
+                                scenario=scenario,
+                                reduced_code=[],
+                                bisections=[],
+                                path=None,
                             )
                             # We already know that the case is_interesting_wrt_marker
                             # and because csmith have static globals, we also don't need
@@ -202,34 +202,26 @@ class CSmithCaseGenerator:
                 logging.info(f"Try {try_counter}: Found no case. Onto the next one!")
                 try_counter += 1
 
-    def _wrapper_interesting(
-        self,
-        queue: Queue,
-        target_compilers: list[utils.CompilerSetting],
-        additional_compilers: list[utils.CompilerSetting],
-    ):
+    def _wrapper_interesting(self, queue: Queue, scenario: utils.Scenario):
         logging.info("Starting worker...")
         while True:
-            case = self.generate_interesting_case(
-                target_compilers, additional_compilers
-            )
-            queue.put(str(case))
+            case = self.generate_interesting_case(scenario)
+            queue.put(json.dumps(case.to_jsonable_dict()))
 
     def parallel_interesting_case(
         self,
-        target_compilers: list[utils.CompilerSetting],
-        additional_compilers: list[utils.CompilerSetting],
+        scenario: utils.Scenario,
         processes: int,
         output_dir: os.PathLike,
         start_stop: Optional[bool] = False,
-    ):
+    ) -> Generator[Path, None, None]:
         queue = Queue()
 
         # Create processes
         procs = [
             Process(
                 target=self._wrapper_interesting,
-                args=(queue, target_compilers, additional_compilers),
+                args=(queue, scenario),
             )
             for _ in range(processes)
         ]
@@ -243,15 +235,14 @@ class CSmithCaseGenerator:
         counter = 0
         while True:
             # TODO: handle process failure
-            case: str = queue.get()
+            case_str: str = queue.get()
 
-            h = hash(case)
+            h = hash(case_str)
             h = max(h, -h)
-            path = pjoin(output_dir, f"case_{counter:08}-{h:019}.c")
-            with open(path, "w") as f:
-                logging.debug("Writing case to {path}...")
-                f.write(case)
-                f.flush()
+            path = Path(pjoin(output_dir, f"case_{counter:08}-{h:019}.tar"))
+            logging.debug("Writing case to {path}...")
+            case = utils.Case.from_jsonable_dict(config, json.loads(case_str))
+            case.to_file(path)
 
             counter += 1
             if start_stop:
@@ -280,23 +271,34 @@ if __name__ == "__main__":
     case_generator = CSmithCaseGenerator(config, patchdb, cores)
 
     if args.interesting:
-        if args.targets is None:
-            print("--targets is required for --interesting")
+        scenario = utils.Scenario([], [])
+        if args.scenario:
+            scenario = utils.Scenario.from_file(config, Path(args.scenario))
+
+        if not args.scenario and args.targets is None:
+            print(
+                "--targets is required for --interesting if you don't specify a scenario"
+            )
             exit(1)
-        else:
+        elif args.targets:
             target_settings = utils.get_compiler_settings(
                 config, args.targets, default_opt_levels=args.targets_default_opt_levels
             )
+            scenario.target_settings = target_settings
 
-        if args.additional_compilers is None:
-            print("--additional-compilers is required for --interesting")
+        if not args.scenario and args.additional_compilers is None:
+            print(
+                "--additional-compilers is required for --interesting if you don't specify a scenario"
+            )
             exit(1)
-        else:
+        elif args.additional_compilers:
             additional_compilers = utils.get_compiler_settings(
                 config,
                 args.additional_compilers,
                 default_opt_levels=args.additional_compilers_default_opt_levels,
             )
+
+            scenario.attacker_settings = additional_compilers
 
         if args.output_directory is None:
             print("Missing output directory!")
@@ -309,8 +311,7 @@ if __name__ == "__main__":
             amount_cases = args.amount if args.amount is not None else 0
             amount_processes = max(1, args.parallel)
             gen = case_generator.parallel_interesting_case(
-                target_compilers=target_settings,
-                additional_compilers=additional_compilers,
+                scenario=scenario,
                 processes=amount_processes,
                 output_dir=output_dir,
                 start_stop=False,
@@ -323,12 +324,7 @@ if __name__ == "__main__":
                     print(next(gen))
 
         else:
-            print(
-                case_generator.generate_interesting_case(
-                    target_compilers=target_settings,
-                    additional_compilers=additional_compilers,
-                )
-            )
+            print(case_generator.generate_interesting_case(scenario))
     else:
         # TODO
         print("Not implemented yet")

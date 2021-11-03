@@ -153,6 +153,8 @@ def generator_parser():
         type=str,
     )
 
+    parser.add_argument("-s", "--scenario", help="Which scenario to work on.", type=str)
+
     parser.add_argument(
         "-p",
         "--parallel",

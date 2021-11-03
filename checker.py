@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -202,7 +203,7 @@ class Checker:
         self.builder = bldr
         return
 
-    def is_interesting_wrt_marker(self, case: utils.ReduceCase) -> bool:
+    def is_interesting_wrt_marker(self, case: utils.Case) -> bool:
         # Checks if the bad_setting does include the marker and
         # all the good settings do not.
 
@@ -222,7 +223,7 @@ class Checker:
                 break
         return not uninteresting
 
-    def is_interesting_wrt_ccc(self, case: utils.ReduceCase) -> bool:
+    def is_interesting_wrt_ccc(self, case: utils.Case) -> bool:
         # Checks if there is a callchain between main and the marker
         with tempfile.NamedTemporaryFile(suffix=".c") as tf:
             with open(tf.name, "w") as f:
@@ -251,7 +252,7 @@ class Checker:
                 logging.debug("CCC timed out")
                 return False
 
-    def is_interesting_with_static_globals(self, case: utils.ReduceCase) -> bool:
+    def is_interesting_with_static_globals(self, case: utils.Case) -> bool:
         # TODO: Why do we do this?
 
         with tempfile.NamedTemporaryFile(suffix=".c") as tf:
@@ -282,7 +283,7 @@ class Checker:
                     break
             return not uninteresting
 
-    def is_interesting_with_empty_marker_bodies(self, case: utils.ReduceCase):
+    def is_interesting_with_empty_marker_bodies(self, case: utils.Case):
 
         marker_prefix = utils.get_marker_prefix(case.marker)
         p = re.compile(f"void {marker_prefix}(.*)\(void\);")
@@ -306,7 +307,7 @@ class Checker:
                 f"-I{self.config.csmith.include_path}",
             )
 
-    def is_interesting(self, case: utils.ReduceCase):
+    def is_interesting(self, case: utils.Case):
         # TODO: Optimization potential. Less calls to clang etc.
         # when tests are combined.
 
@@ -331,8 +332,8 @@ def copy_flag(
 
 
 def override_bad(
-    case: utils.ReduceCase, override_settings: list[utils.CompilerSetting]
-) -> list[utils.ReduceCase]:
+    case: utils.Case, override_settings: list[utils.CompilerSetting]
+) -> list[utils.Case]:
     res = []
     bsettings = copy_flag(case.bad_setting, override_settings)
     for s in bsettings:
@@ -343,8 +344,8 @@ def override_bad(
 
 
 def override_good(
-    case: utils.ReduceCase, override_settings: list[utils.CompilerSetting]
-) -> utils.ReduceCase:
+    case: utils.Case, override_settings: list[utils.CompilerSetting]
+) -> utils.Case:
     gsettings = copy_flag(case.good_settings[0], override_settings)
     cpy = dataclasses.replace(case)
     cpy.good_settings = gsettings
@@ -358,6 +359,8 @@ if __name__ == "__main__":
     bldr = builder.Builder(config, patchdb, args.cores)
     chkr = Checker(config, bldr)
 
+    file = Path(args.file)
+
     bad_settings = []
     if args.bad_settings:
         bad_settings = utils.get_compiler_settings(
@@ -370,38 +373,51 @@ if __name__ == "__main__":
             config, args.good_settings, args.good_settings_default_opt_levels
         )
 
-    cases_to_test: list[utils.ReduceCase] = []
+    cases_to_test: list[utils.Case] = []
     check_marker: bool = False
     if args.bad_settings and args.good_settings:
         # Override all options defined in the case
-        with open(args.file, "r") as f:
-            code = f.read()
+        scenario = utils.Scenario(bad_settings, good_settings)
+        if tarfile.is_tarfile(file):
+            case = utils.Case.from_file(config, file)
+            code = case.code
+            args.marker = case.marker
+            bad_settings = copy_flag(case.scenario.target_settings[0], bad_settings)
+            good_settings = copy_flag(case.scenario.attacker_settings[0], good_settings)
+        else:
+            with open(file, "r") as f:
+                code = f.read()
+            check_marker = True
 
         cases_to_test = [
-            utils.ReduceCase(code, "", bs, good_settings) for bs in bad_settings
+            utils.Case(code, args.marker, bs, good_settings, scenario, [], [], None)
+            for bs in bad_settings
         ]
-        check_marker = True
 
     elif args.bad_settings and not args.good_settings:
         # TODO: Get flags from somewhere. For now,
         # take the ones from the first config.
-        case = utils.ReduceCase.from_file(args.file, config)
+        case = utils.Case.from_file(config, file)
 
         cases_to_test = override_bad(case, bad_settings)
 
     elif not args.bad_settings and args.good_settings:
-        case = utils.ReduceCase.from_file(args.file, config)
+        case = utils.Case.from_file(config, file)
 
         cases_to_test = [override_good(case, good_settings)]
 
     else:
-        cases_to_test = [utils.ReduceCase.from_file(args.file, config)]
+        cases_to_test = [utils.Case.from_file(config, file)]
 
     if args.marker is not None:
         for c in cases_to_test:
             c.marker = args.marker
     elif check_marker:
         raise Exception("You need to specify a marker")
+
+    if len(cases_to_test) == 0:
+        print("No cases arrived. Have you forgotten to specify an optimization level?")
+        exit(2)
 
     if all(chkr.is_interesting(c) for c in cases_to_test):
         sys.exit(0)

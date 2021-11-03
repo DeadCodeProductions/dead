@@ -5,6 +5,8 @@ import os
 import shutil
 import stat
 import subprocess
+import tarfile
+import tempfile
 from dataclasses import dataclass
 from functools import reduce
 from os.path import join as pjoin
@@ -286,10 +288,30 @@ class CompilerSetting:
                 + " ".join(self.additional_flags)
             )
 
+    def to_jsonable_dict(self):
+        d = {}
+        d["compiler_config"] = self.compiler_config.name
+        d["rev"] = self.rev
+        d["opt_level"] = self.opt_level
+        d["additional_flags"] = (
+            self.additional_flags if self.additional_flags is not None else []
+        )
+
+        return d
+
+    @staticmethod
+    def from_jsonable_dict(config: NestedNamespace, d: dict):
+        return CompilerSetting(
+            get_compiler_config(config, d["compiler_config"]),
+            d["rev"],
+            d["opt_level"],
+            d["additional_flags"],
+        )
+
     def add_flag(self, flag: str):
         if not self.additional_flags:
             self.additional_flags = [flag]
-        else:
+        elif flag not in self.additional_flags:
             self.additional_flags.append(flag)
 
     def get_flag_str(self) -> str:
@@ -381,6 +403,46 @@ class ReduceCase:
         ]
 
         return ReduceCase(code, marker, bad_setting, good_settings)
+
+
+@dataclass
+class Scenario:
+    target_settings: list[CompilerSetting]
+    attacker_settings: list[CompilerSetting]
+
+    def add_flags(self, new_flags: list[str]):
+        for f in new_flags:
+            for s in self.target_settings:
+                s.add_flag(f)
+            for s in self.attacker_settings:
+                s.add_flag(f)
+
+    def to_jsonable_dict(self) -> dict:
+        d = {}
+        d["target_settings"] = [s.to_jsonable_dict() for s in self.target_settings]
+        d["attacker_settings"] = [s.to_jsonable_dict() for s in self.attacker_settings]
+
+        return d
+
+    @staticmethod
+    def from_jsonable_dict(config: NestedNamespace, d: dict):
+
+        target_settings = [
+            CompilerSetting.from_jsonable_dict(config, cs)
+            for cs in d["target_settings"]
+        ]
+        attacker_settings = [
+            CompilerSetting.from_jsonable_dict(config, cs)
+            for cs in d["attacker_settings"]
+        ]
+
+        return Scenario(target_settings, attacker_settings)
+
+    @staticmethod
+    def from_file(config: NestedNamespace, file: Path):
+        with open(file, "r") as f:
+            js = json.load(f)
+            return Scenario.from_jsonable_dict(config, js)
 
 
 def run_cmd(
@@ -501,3 +563,159 @@ def get_compiler_settings(
         )
 
     return settings
+
+
+def save_to_tmp_file(content: str):
+    ntf = tempfile.NamedTemporaryFile()
+    with open(ntf.name, "w") as f:
+        f.write(content)
+
+    return ntf
+
+
+def save_to_file_in_dir(directory: str, name: str, content: str) -> Path:
+    path = Path(directory) / Path(name)
+    with open(path, "w") as f:
+        f.write(content)
+    return path
+
+
+def check_and_get(tf: tarfile.TarFile, member: str) -> str:
+    f = tf.extractfile(member)
+    if not f:
+        raise Exception(f"File does not include member {member}!")
+    res = f.read().decode("utf-8")
+
+    return res
+
+
+@dataclass
+class Case:
+    code: str
+    marker: str
+    bad_setting: CompilerSetting
+    good_settings: list[CompilerSetting]
+    scenario: Scenario
+
+    reduced_code: list[str]
+    bisections: list[str]
+
+    path: Optional[Path]
+
+    def add_flags(self, flags: list[str]):
+        for f in flags:
+            self.bad_setting.add_flag(f)
+            for gs in self.good_settings:
+                gs.add_flag(f)
+
+        self.scenario.add_flags(flags)
+
+    @staticmethod
+    def from_file(config: NestedNamespace, file: Path):
+        with tarfile.open(file, "r") as tf:
+
+            names = tf.getnames()
+
+            code = check_and_get(tf, "code.c")
+            marker = check_and_get(tf, "marker.txt")
+            int_settings = json.loads(check_and_get(tf, "interesting_settings.json"))
+            bad_setting = CompilerSetting.from_jsonable_dict(
+                config, int_settings["bad_setting"]
+            )
+            good_settings = [
+                CompilerSetting.from_jsonable_dict(config, jgs)
+                for jgs in int_settings["good_settings"]
+            ]
+
+            scenario = Scenario.from_jsonable_dict(
+                config, json.loads(check_and_get(tf, "scenario.json"))
+            )
+            reduced_code = []
+            counter = 0
+            red_n = f"reduced_code_{counter}.c"
+            while red_n in names:
+                reduced_code.append(check_and_get(tf, red_n))
+                counter += 1
+                red_n = f"reduced_code_{counter}.c"
+
+            bisections = []
+            counter = 0
+            bis_n = f"bisection_{counter}.txt"
+            while bis_n in names:
+                bisections.append(check_and_get(tf, bis_n))
+                counter += 1
+                bis_n = f"bisection_{counter}.txt"
+
+            return Case(
+                code,
+                marker,
+                bad_setting,
+                good_settings,
+                scenario,
+                reduced_code,
+                bisections,
+                file.absolute(),
+            )
+
+    def to_file(self, file: Path):
+        with tarfile.open(file, "w") as tf:
+            ntf = save_to_tmp_file(self.code)
+
+            tf.add(ntf.name, "code.c")
+
+            ntf = save_to_tmp_file(self.marker)
+            tf.add(ntf.name, "marker.txt")
+
+            int_settings = {}
+            int_settings["bad_setting"] = self.bad_setting.to_jsonable_dict()
+            int_settings["good_settings"] = [
+                gs.to_jsonable_dict() for gs in self.good_settings
+            ]
+            ntf = save_to_tmp_file(json.dumps(int_settings))
+            tf.add(ntf.name, "interesting_settings.json")
+
+            scenario_str = json.dumps(self.scenario.to_jsonable_dict())
+            ntf = save_to_tmp_file(scenario_str)
+            tf.add(ntf.name, "scenario.json")
+
+            for i, rcode in enumerate(self.reduced_code):
+                ntf = save_to_tmp_file(rcode)
+                tf.add(ntf.name, f"reduced_code_{i}.c")
+
+            for i, bisection_rev in enumerate(self.bisections):
+                ntf = save_to_tmp_file(bisection_rev)
+                tf.add(ntf.name, f"bisection_{i}.c")
+
+    def to_jsonable_dict(self) -> dict:
+        d = {}
+        d["code"] = self.code
+        d["marker"] = self.marker
+        d["bad_setting"] = self.bad_setting.to_jsonable_dict()
+        d["good_settings"] = [gs.to_jsonable_dict() for gs in self.good_settings]
+        d["scenario"] = self.scenario.to_jsonable_dict()
+
+        d["reduced_code"] = self.reduced_code
+        d["bisections"] = self.bisections
+
+        d["path"] = self.path
+        return d
+
+    @staticmethod
+    def from_jsonable_dict(config: NestedNamespace, d: dict):
+        bad_setting = CompilerSetting.from_jsonable_dict(config, d["bad_setting"])
+        good_settings = [
+            CompilerSetting.from_jsonable_dict(config, dgs)
+            for dgs in d["good_settings"]
+        ]
+
+        scenario = Scenario.from_jsonable_dict(config, d["scenario"])
+        return Case(
+            d["code"],
+            d["marker"],
+            bad_setting,
+            good_settings,
+            scenario,
+            d["reduced_code"],
+            d["bisections"],
+            Path(d["path"]),
+        )
