@@ -7,7 +7,7 @@ def config_parser(expected_entries: list[tuple]):
 
     for _, path, desc in expected_entries:
         parser.add_argument("--" + ".".join(path), help=desc)
-    parser.add_argument("--config", type=os.PathLike[str], help="Path to config.json")
+    parser.add_argument("--config", type=str, help="Path to config.json")
 
     parser.add_argument(
         "-ll",
@@ -223,6 +223,71 @@ def checker_parser():
         "-gsdol",
         "--good-settings-default-opt-levels",
         help="Default optimization levels for the good-settings to be checked against.",
+        nargs="+",
+        default=[],
+        type=str,
+    )
+
+    return parser
+
+
+def reducer_parser():
+    parser = argparse.ArgumentParser(add_help=False)
+
+    parser.add_argument("-f", "--file", help="Which file to work on.", type=str)
+
+    parser.add_argument(
+        "-g",
+        "--generate",
+        help="Whether or not to generate and reduce cases",
+        action="store_true",
+    )
+
+    parser.add_argument(
+        "--work-through",
+        help="Look at all cases found in directory specified in --output-directory and reduce them when they are not.",
+        action="store_true",
+    )
+
+    parser.add_argument("-s", "--scenario", help="Which scenario to work on.", type=str)
+
+    parser.add_argument(
+        "-a", "--amount", help="How many cases to find and reduce.", type=str, default=0
+    )
+
+    parser.add_argument(
+        "-d", "--output-directory", help="Where the cases should be saved to.", type=str
+    )
+
+    parser.add_argument(
+        "-t",
+        "--targets",
+        help="Project name and revision of compiler to use.",
+        nargs="+",
+        type=str,
+    )
+
+    parser.add_argument(
+        "-tdol",
+        "--targets-default-opt-levels",
+        help="Default optimization levels for the target to be checked against.",
+        nargs="+",
+        default=[],
+        type=str,
+    )
+
+    parser.add_argument(
+        "-ac",
+        "--additional-compilers",
+        help="Additional compiler to compare the target against.",
+        nargs="*",
+        type=str,
+    )
+
+    parser.add_argument(
+        "-acdol",
+        "--additional-compilers-default-opt-levels",
+        help="Default optimization levels for the additional compilers to be checked against.",
         nargs="+",
         default=[],
         type=str,

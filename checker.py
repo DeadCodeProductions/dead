@@ -387,7 +387,7 @@ if __name__ == "__main__":
 
     cases_to_test: list[utils.Case] = []
     check_marker: bool = False
-    if args.bad_settings and args.good_settings:
+    if args.bad_settings and args.good_settings or args.interesting_settings:
         # Override all options defined in the case
         scenario = utils.Scenario(bad_settings, good_settings)
         if tarfile.is_tarfile(file):

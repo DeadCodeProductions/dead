@@ -52,6 +52,8 @@ EXPECTED_ENTRIES = [
     (str,       ("cache_group", ),          "Name of group owning the cache"),
     (Executable,("ccc",),                   "Path to executable or name in PATH for the callchain checker"),
     (Executable,("static_annotator",),      "Path to executable or name in PATH for the static annotator"),
+
+    (Path,      ("project_dir", ),          "Path where to the project is."),
 ]
 # fmt: on
 
@@ -173,6 +175,11 @@ def import_config(
     with open(config_path, "r") as f:
         config = json.load(f)
 
+    config["config_path"] = str(Path(config_path).absolute())
+
+    if "project_dir" not in config:
+        raise Exception("config.project_dir is not configured")
+
     if validate:
         validate_config(config)
 
@@ -214,10 +221,10 @@ def import_config(
     # Make patch paths full paths to avoid confusion
     # when working in different directories
     config.gcc.patches = [
-        pjoin(os.getcwd(), "patches", patch) for patch in config.gcc.patches
+        pjoin(config.project_dir, "patches", patch) for patch in config.gcc.patches
     ]
     config.llvm.patches = [
-        pjoin(os.getcwd(), "patches", patch) for patch in config.llvm.patches
+        pjoin(config.project_dir, "patches", patch) for patch in config.llvm.patches
     ]
 
     return config
@@ -468,6 +475,36 @@ def get_compiler_config(config: NestedNamespace, arg: Union[list[str], str]):
         print(f"Unknown compiler project {compiler}")
         exit(1)
     return compiler_config
+
+
+def get_scenario(config: NestedNamespace, args: argparse.Namespace) -> Scenario:
+    # This function requires
+    # args.scenario
+    # args.targets
+    # args.targets-default_opt_levels and
+    # args.additional_compilers
+    # args.additional_compilers_default_opt_levels
+
+    scenario = Scenario([], [])
+
+    if args.scenario:
+        scenario = Scenario.from_file(config, Path(args.scenario))
+
+    if args.targets:
+        target_settings = get_compiler_settings(
+            config, args.targets, default_opt_levels=args.targets_default_opt_levels
+        )
+        scenario.target_settings = target_settings
+
+    if args.additional_compilers:
+        additional_compilers = get_compiler_settings(
+            config,
+            args.additional_compilers,
+            default_opt_levels=args.additional_compilers_default_opt_levels,
+        )
+        scenario.attacker_settings = additional_compilers
+
+    return scenario
 
 
 def get_marker_prefix(marker: str) -> str:
