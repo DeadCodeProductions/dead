@@ -347,65 +347,6 @@ class CompilerSetting:
 
 
 @dataclass
-class ReduceCase:
-    code: str
-    marker: str
-    bad_setting: CompilerSetting
-    good_settings: list[CompilerSetting]
-
-    def __str__(self):
-        s = (
-            f"//marker::: {self.marker}\n"
-            + f"//bad::: {self.bad_setting}\n"
-            + "//good::: "
-            + "\n//good::: ".join(map(str, self.good_settings))
-            + "\n"
-            + self.code
-        )
-        return s
-
-    @staticmethod
-    def from_file(path: os.PathLike, config):
-        with open(path, "r") as f:
-            marker_line = f.readline()
-            bad_line = f.readline()
-            good_lines = []
-            curr = f.readline()  # One good setting must exist
-            while curr.startswith("//good:::"):
-                good_lines.append(curr)
-                curr = f.readline()
-            code = "".join([curr] + f.readlines())
-        # Extract
-        marker = marker_line.split(":::")[1].strip()
-        bad_setting = CompilerSetting.from_str(bad_line.split(":::")[1], config)
-        good_settings = [
-            CompilerSetting.from_str(l.split(":::")[1], config) for l in good_lines
-        ]
-
-        return ReduceCase(code, marker, bad_setting, good_settings)
-
-    @staticmethod
-    def from_str(s: str, config):
-        sl = s.split("\n")
-        marker_line = sl[0]
-        bad_line = sl[1]
-        i = 2
-        while sl[i].startswith("//good:::"):
-            i += 1
-        good_lines = sl[1:i]
-        code = "\n".join(sl[i:])
-
-        # Extract
-        marker = marker_line.split(":::")[1].strip()
-        bad_setting = CompilerSetting.from_str(bad_line.split(":::")[1], config)
-        good_settings = [
-            CompilerSetting.from_str(l.split(":::")[1], config) for l in good_lines
-        ]
-
-        return ReduceCase(code, marker, bad_setting, good_settings)
-
-
-@dataclass
 class Scenario:
     target_settings: list[CompilerSetting]
     attacker_settings: list[CompilerSetting]
