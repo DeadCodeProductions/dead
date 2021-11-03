@@ -172,11 +172,27 @@ def generator_parser():
 def checker_parser():
     parser = argparse.ArgumentParser(add_help=False)
 
+    group = parser.add_mutually_exclusive_group()
+
     parser.add_argument(
         "-f", "--file", help="Which file to work on.", type=str, required=True
     )
 
     parser.add_argument("-m", "--marker", help="Marker to check for.", type=str)
+
+    group.add_argument(
+        "-s",
+        "--scenario",
+        help="Which scenario to use as testing replacement.",
+        type=str,
+    )
+
+    group.add_argument(
+        "-is",
+        "--interesting-settings",
+        help="Which interesting settings to use.",
+        type=str,
+    )
 
     parser.add_argument(
         "-bad",

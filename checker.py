@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import dataclasses
+import json
 import logging
 import os
 import re
@@ -362,12 +363,23 @@ if __name__ == "__main__":
     file = Path(args.file)
 
     bad_settings = []
+    good_settings = []
+
+    if args.scenario:
+        scenario = utils.Scenario.from_file(config, Path(args.scenario))
+        bad_settings = scenario.target_settings
+        good_settings = scenario.attacker_settings
+    elif args.interesting_settings:
+        tmp, good_settings = utils.get_interesting_settings(
+            config, args.interesting_settings
+        )
+        bad_settings = [tmp]
+
     if args.bad_settings:
         bad_settings = utils.get_compiler_settings(
             config, args.bad_settings, args.bad_settings_default_opt_levels
         )
 
-    good_settings = []
     if args.good_settings:
         good_settings = utils.get_compiler_settings(
             config, args.good_settings, args.good_settings_default_opt_levels

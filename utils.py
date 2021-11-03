@@ -514,13 +514,6 @@ def save_to_tmp_file(content: str):
     return ntf
 
 
-def save_to_file_in_dir(directory: str, name: str, content: str) -> Path:
-    path = Path(directory) / Path(name)
-    with open(path, "w") as f:
-        f.write(content)
-    return path
-
-
 def check_and_get(tf: tarfile.TarFile, member: str) -> str:
     f = tf.extractfile(member)
     if not f:
@@ -528,6 +521,19 @@ def check_and_get(tf: tarfile.TarFile, member: str) -> str:
     res = f.read().decode("utf-8")
 
     return res
+
+
+def get_interesting_settings(
+    config: NestedNamespace, file: Path
+) -> tuple[CompilerSetting, list[CompilerSetting]]:
+    with open(file, "r") as f:
+        d = json.load(f)
+        bad_setting = CompilerSetting.from_jsonable_dict(config, d["bad_setting"])
+        good_settings = [
+            CompilerSetting.from_jsonable_dict(config, gs) for gs in d["good_settings"]
+        ]
+
+        return bad_setting, good_settings
 
 
 @dataclass
@@ -650,6 +656,9 @@ class Case:
         ]
 
         scenario = Scenario.from_jsonable_dict(config, d["scenario"])
+        path = None
+        if d["path"]:
+            path = Path(d["path"])
         return Case(
             d["code"],
             d["marker"],
@@ -658,5 +667,5 @@ class Case:
             scenario,
             d["reduced_code"],
             d["bisections"],
-            Path(d["path"]),
+            path,
         )
