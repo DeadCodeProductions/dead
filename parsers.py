@@ -132,7 +132,7 @@ def generator_parser():
         "--targets-default-opt-levels",
         help="Default optimization levels for the target to be checked against.",
         nargs="+",
-        default="3",
+        default=[],
         type=str,
     )
 
@@ -149,7 +149,7 @@ def generator_parser():
         "--additional-compilers-default-opt-levels",
         help="Default optimization levels for the additional compilers to be checked against.",
         nargs="+",
-        default=["1", "2", "3", "s", "z"],
+        default=[],
         type=str,
     )
 

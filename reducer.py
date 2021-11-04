@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -10,6 +11,7 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import builder
 import generator
@@ -139,7 +141,7 @@ class Reducer:
     config: utils.NestedNamespace
     bldr: builder.Builder
 
-    def reduce(self, file: Path):
+    def reduce(self, file: Path) -> tuple[bool, Path]:
         case = utils.Case.from_file(self.config, file)
 
         # creduce likes to kill unfinished processes with SIGKILL
@@ -196,7 +198,12 @@ class Reducer:
                 str(script_path.name),
                 str(pp_code_path.name),
             ]
-            subprocess.run(creduce_cmd, cwd=Path(tmpdir))
+
+            try:
+                subprocess.run(creduce_cmd, cwd=Path(tmpdir), check=True)
+            except subprocess.CalledProcessError as e:
+                logging.info(f"Failed to process {file}. Exception: {e}")
+                return False, file
 
             # save result in tar
             with open(pp_code_path, "r") as f:
@@ -205,7 +212,7 @@ class Reducer:
                 case.path = file
             case.to_file(case.path)
 
-            return case.path
+            return True, case.path
 
 
 if __name__ == "__main__":

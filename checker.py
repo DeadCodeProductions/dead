@@ -394,8 +394,12 @@ if __name__ == "__main__":
             case = utils.Case.from_file(config, file)
             code = case.code
             args.marker = case.marker
-            bad_settings = copy_flag(case.scenario.target_settings[0], bad_settings)
-            good_settings = copy_flag(case.scenario.attacker_settings[0], good_settings)
+            if len(bad_settings) == 0:
+                bad_settings = copy_flag(case.scenario.target_settings[0], bad_settings)
+            if len(good_settings) == 0:
+                good_settings = copy_flag(
+                    case.scenario.attacker_settings[0], good_settings
+                )
         else:
             with open(file, "r") as f:
                 code = f.read()
