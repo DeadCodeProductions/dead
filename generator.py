@@ -210,6 +210,7 @@ class CSmithCaseGenerator:
 
     def parallel_interesting_case(
         self,
+        config: utils.NestedNamespace,
         scenario: utils.Scenario,
         processes: int,
         output_dir: os.PathLike,
@@ -311,6 +312,7 @@ if __name__ == "__main__":
             amount_cases = args.amount if args.amount is not None else 0
             amount_processes = max(1, args.parallel)
             gen = case_generator.parallel_interesting_case(
+                config=config,
                 scenario=scenario,
                 processes=amount_processes,
                 output_dir=output_dir,
