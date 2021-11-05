@@ -228,6 +228,13 @@ def checker_parser():
         type=str,
     )
 
+    parser.add_argument(
+        "-cr",
+        "--check-reduced",
+        help="Instead of checking the original file, check the latest reduced code.",
+        action="store_true",
+    )
+
     return parser
 
 

@@ -435,6 +435,12 @@ if __name__ == "__main__":
         print("No cases arrived. Have you forgotten to specify an optimization level?")
         exit(2)
 
+    if args.check_reduced:
+        for c in cases_to_test:
+            if len(c.reduced_code) == 0:
+                raise Exception("Case does not include reduced code!")
+            c.code = c.reduced_code[-1]
+
     if all(chkr.is_interesting(c) for c in cases_to_test):
         sys.exit(0)
     else:
