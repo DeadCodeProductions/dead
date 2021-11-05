@@ -299,4 +299,10 @@ def reducer_parser():
         action="store_true",
     )
 
+    parser.add_argument(
+        "--check-pp",
+        help="Run the preprocessed version through the checker.",
+        action="store_true",
+    )
+
     return parser

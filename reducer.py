@@ -225,6 +225,28 @@ if __name__ == "__main__":
     gnrtr = generator.CSmithCaseGenerator(config, patchdb)
     rdcr = Reducer(config, bldr)
 
+    if args.check_pp:
+        file = Path(args.file).absolute()
+        case = utils.Case.from_file(config, file)
+        # preprocess file
+        pp_code = preprocess_csmith_code(
+            case.code,
+            utils.get_marker_prefix(case.marker),
+            case.bad_setting,
+            bldr,
+        )
+
+        case.code = pp_code
+        # Taking advantage of shortciruit logic
+        a = gnrtr.chkr.is_interesting_wrt_marker(case)
+        b = gnrtr.chkr.is_interesting_wrt_ccc(case)
+        c = gnrtr.chkr.is_interesting_with_static_globals(case)
+        d = gnrtr.chkr.is_interesting_with_empty_marker_bodies(case)
+        print(a, b, c, d)
+        if not all((a, b, c, d)):
+            exit(1)
+        exit(0)
+
     if args.work_through:
         if args.output_directory is None:
             print("Missing output/work-through directory!")
