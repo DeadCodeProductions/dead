@@ -293,4 +293,10 @@ def reducer_parser():
         type=str,
     )
 
+    parser.add_argument(
+        "--force",
+        help="Force another reduction even if one already exists.",
+        action="store_true",
+    )
+
     return parser

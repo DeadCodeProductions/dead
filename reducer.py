@@ -141,8 +141,10 @@ class Reducer:
     config: utils.NestedNamespace
     bldr: builder.Builder
 
-    def reduce(self, file: Path) -> tuple[bool, Path]:
+    def reduce(self, file: Path, force: bool = False) -> tuple[bool, Path]:
         case = utils.Case.from_file(self.config, file)
+        if not force and len(case.reduced_code) > 0:
+            return True, file
 
         # creduce likes to kill unfinished processes with SIGKILL
         # so they can't clean up after themselves.
@@ -194,7 +196,7 @@ class Reducer:
             creduce_cmd = [
                 self.config.creduce,
                 "--n",
-                "64",
+                f"{self.bldr.cores}",
                 str(script_path.name),
                 str(pp_code_path.name),
             ]
@@ -239,9 +241,9 @@ if __name__ == "__main__":
 
         print(f"Processing {len(tars)} tars")
         for tf in tars:
+            print(f"Processing {tf}")
             case = utils.Case.from_file(config, tf)
-            if len(case.reduced_code) == 0:
-                rdcr.reduce(tf)
+            rdcr.reduce(tf, args.force)
 
     # if (We want to generate something and not only reduce a file)
     if args.generate:
@@ -277,5 +279,9 @@ if __name__ == "__main__":
                 print(rdcr.reduce(path))
 
     else:
+        if not args.file:
+            print(
+                "--file is needed when just running checking for a file. Have you forgotten to set --generate?"
+            )
         file = Path(args.file).absolute()
-        print(rdcr.reduce(file))
+        print(rdcr.reduce(file, args.force))
