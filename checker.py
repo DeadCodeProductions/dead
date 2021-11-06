@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import dataclasses
+import copy
 import json
 import logging
 import os
@@ -326,7 +326,7 @@ def copy_flag(
 ) -> list[utils.CompilerSetting]:
     res: list[utils.CompilerSetting] = []
     for setting in to:
-        cpy = dataclasses.replace(setting)
+        cpy = copy.deepcopy(setting)
         cpy.additional_flags = frm.additional_flags
         res.append(cpy)
     return res
@@ -338,7 +338,7 @@ def override_bad(
     res = []
     bsettings = copy_flag(case.bad_setting, override_settings)
     for s in bsettings:
-        cpy = dataclasses.replace(case)
+        cpy = copy.deepcopy(case)
         cpy.bad_setting = s
         res.append(cpy)
     return res
@@ -348,7 +348,7 @@ def override_good(
     case: utils.Case, override_settings: list[utils.CompilerSetting]
 ) -> utils.Case:
     gsettings = copy_flag(case.good_settings[0], override_settings)
-    cpy = dataclasses.replace(case)
+    cpy = copy.deepcopy(case)
     cpy.good_settings = gsettings
     return cpy
 

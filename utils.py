@@ -1,4 +1,5 @@
 import argparse
+import copy
 import json
 import logging
 import os
@@ -107,6 +108,19 @@ class NestedNamespace(SimpleNamespace):
                 return key[0] in self.__dict__
         else:
             return key in self.__dict__
+
+    def __asdict(self) -> dict:
+        d = {}
+        for key, value in self.__dict__.items():
+            if isinstance(value, NestedNamespace):
+                dvalue = value.__asdict()
+            else:
+                dvalue = copy.deepcopy(value)
+            d[key] = dvalue
+        return d
+
+    def __deepcopy__(self, memo):
+        return type(self)(self.__asdict())
 
 
 def validate_config(config: dict):
