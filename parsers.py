@@ -313,3 +313,11 @@ def reducer_parser():
     )
 
     return parser
+
+
+def bisector_parser():
+    parser = argparse.ArgumentParser(add_help=False)
+
+    parser.add_argument("-f", "--file", help="Which file to work on.", type=str)
+
+    return parser
