@@ -631,7 +631,7 @@ class Case:
 
             for i, bisection_rev in enumerate(self.bisections):
                 ntf = save_to_tmp_file(bisection_rev)
-                tf.add(ntf.name, f"bisection_{i}.c")
+                tf.add(ntf.name, f"bisection_{i}.txt")
 
     def to_jsonable_dict(self) -> dict:
         d = {}
