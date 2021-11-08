@@ -199,7 +199,7 @@ class CSmithCaseGenerator:
                                 )
                                 return case
             else:
-                logging.info(f"Try {try_counter}: Found no case. Onto the next one!")
+                logging.debug(f"Try {try_counter}: Found no case. Onto the next one!")
                 try_counter += 1
 
     def _wrapper_interesting(self, queue: Queue, scenario: utils.Scenario):

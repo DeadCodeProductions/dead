@@ -320,4 +320,51 @@ def bisector_parser():
 
     parser.add_argument("-f", "--file", help="Which file to work on.", type=str)
 
+    parser.add_argument(
+        "-a", "--amount", help="How many cases to find and reduce.", type=str, default=0
+    )
+
+    parser.add_argument(
+        "-g",
+        "--generate",
+        help="Whether or not to generate, reduce and bisect cases",
+        action="store_true",
+    )
+
+    parser.add_argument("-s", "--scenario", help="Which scenario to work on.", type=str)
+
+    parser.add_argument(
+        "-t",
+        "--targets",
+        help="Project name and revision of compiler to use.",
+        nargs="+",
+        type=str,
+    )
+
+    parser.add_argument(
+        "-tdol",
+        "--targets-default-opt-levels",
+        help="Default optimization levels for the target to be checked against.",
+        nargs="+",
+        default=[],
+        type=str,
+    )
+
+    parser.add_argument(
+        "-ac",
+        "--additional-compilers",
+        help="Additional compiler to compare the target against.",
+        nargs="*",
+        type=str,
+    )
+
+    parser.add_argument(
+        "-acdol",
+        "--additional-compilers-default-opt-levels",
+        help="Default optimization levels for the additional compilers to be checked against.",
+        nargs="+",
+        default=[],
+        type=str,
+    )
+
     return parser

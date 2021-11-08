@@ -5,13 +5,16 @@ import dataclasses
 import functools
 import logging
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 import builder
 import checker
+import generator
 import parsers
 import patchdatabase
+import reducer
 import repository
 import utils
 
@@ -42,7 +45,7 @@ class Bisector:
         case_cpy = copy.deepcopy(case)
         case_cpy.bad_setting.rev = rev
         # TODO: Shall we do this?
-        case_cpy.code = case.reduced_code[-1]
+        case_cpy.code = case_cpy.reduced_code[-1]
         return self.chkr.is_interesting(case_cpy)
 
     def bisect(self, file: Path):
@@ -67,6 +70,10 @@ class Bisector:
             if gs.opt_level == case.bad_setting.opt_level
             and gs.compiler_config.name == bad_compiler_config.name
         ]
+
+        if len(possible_good_commits) == 0:
+            logging.info(f"No matching optimization level found. Aborting...")
+            return
         # Sort commits based on branch point wrt to the bad commit
         # Why? Look at the following commit graph
         # Bad
@@ -288,8 +295,48 @@ if __name__ == "__main__":
     patchdb = patchdatabase.PatchDB(config.patchdb)
     bldr = builder.Builder(config, patchdb, args.cores)
     chkr = checker.Checker(config, bldr)
+    gnrtr = generator.CSmithCaseGenerator(config, patchdb)
+    rdcr = reducer.Reducer(config, bldr)
     bsctr = Bisector(config, bldr, chkr)
 
-    file = Path(args.file)
+    # TODO: This is duplicate code
+    if args.generate:
+        if args.output_directory is None:
+            print("Missing output directory!")
+            exit(1)
+        else:
+            output_dir = os.path.abspath(args.output_directory)
+            os.makedirs(output_dir, exist_ok=True)
 
-    bsctr.bisect(file)
+        scenario = utils.Scenario([], [])
+        # When file is specified, use scenario of file as base
+        if args.file:
+            file = Path(args.file).absolute()
+            scenario = utils.Case.from_file(config, file).scenario
+
+        tmp = utils.get_scenario(config, args)
+        if len(tmp.target_settings) > 0:
+            scenario.target_settings = tmp.target_settings
+        if len(tmp.attacker_settings) > 0:
+            scenario.attacker_settings = tmp.attacker_settings
+
+        gen = gnrtr.parallel_interesting_case(
+            config, scenario, bldr.cores, output_dir, start_stop=True
+        )
+
+        if args.amount == 0:
+            while True:
+                path = next(gen)
+                worked, _ = rdcr.reduce(path)
+                if worked:
+                    bsctr.bisect(path)
+        else:
+            for i in range(args.amount):
+                path = next(gen)
+                worked, _ = rdcr.reduce(path)
+                if worked:
+                    bsctr.bisect(path)
+
+    else:
+        file = Path(args.file)
+        bsctr.bisect(file)
