@@ -47,7 +47,7 @@ class Bisector:
         case_cpy.bad_setting.rev = rev
         # TODO: Shall we do this?
         case_cpy.code = case_cpy.reduced_code[-1]
-        return self.chkr.is_interesting(case_cpy)
+        return self.chkr.is_interesting(case_cpy, preprocess=False)
 
     def bisect(self, file: Path):
         case = utils.Case.from_file(self.config, file)
@@ -240,6 +240,7 @@ class Bisector:
             if not failed_to_build:
                 old_midpoint = midpoint
                 midpoint = repo.next_bisection_commit(good_rev, bad_rev)
+                failed_to_build_counter = 0
                 if midpoint == "" or midpoint == old_midpoint:
                     break
             else:
@@ -255,9 +256,9 @@ class Bisector:
                     step = max(int(0.9 * range_size), 1)
                     midpoint = repo.rev_to_commit(f"{bad_rev}~{step}")
                 else:
-                    # Symmetric to case above
+                    # Symmetric to case above but jumping 10% into the other directory i.e 20% from our position.
                     range_size = len(repo.direct_first_parent_path(good_rev, midpoint))
-                    step = max(int(0.1 * range_size), 1)
+                    step = max(int(0.2 * range_size), 1)
                     midpoint = repo.rev_to_commit(f"{midpoint}~{step}")
 
                 failed_to_build_counter += 1

@@ -414,10 +414,19 @@ class Checker:
                 f"-I{self.config.csmith.include_path}",
             )
 
-    def is_interesting(self, case: utils.Case):
+    def is_interesting(self, case: utils.Case, preprocess: bool = True):
         # TODO: Optimization potential. Less calls to clang etc.
         # when tests are combined.
 
+        if preprocess:
+            code_pp = preprocess_csmith_code(
+                case.code,
+                utils.get_marker_prefix(case.marker),
+                case.bad_setting,
+                self.builder,
+            )
+            case_cpy = copy.deepcopy(case)
+            case_cpy.code = code_pp
         # Taking advantage of shortciruit logic
         return (
             self.is_interesting_wrt_marker(case)

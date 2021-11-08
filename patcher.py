@@ -76,6 +76,7 @@ class Patcher:
                         "Failed too many times in a row while bisecting. Aborting bisection..."
                     )
 
+                # TODO: More robust testing.
                 if double_fail_counter % 2 == 0:
                     # Get size of range
                     range_size = len(repo.direct_first_parent_path(midpoint, bad[-1]))
@@ -86,7 +87,7 @@ class Patcher:
                 else:
                     # Symmetric to case above
                     range_size = len(repo.direct_first_parent_path(good[-1], midpoint))
-                    step = max(int(0.1 * range_size), 1)
+                    step = max(int(0.2 * range_size), 1)
                     midpoint = repo.rev_to_commit(f"{midpoint}~{step}")
 
                 double_fail_counter += 1

@@ -186,14 +186,8 @@ class CSmithCaseGenerator:
                                 bisections=[],
                                 path=None,
                             )
-                            # We already know that the case is_interesting_wrt_marker
-                            # and because csmith have static globals, we also don't need
-                            # is_interesting_with_static_globals
-                            if self.chkr.is_interesting_wrt_ccc(
-                                case
-                            ) and self.chkr.is_interesting_with_empty_marker_bodies(
-                                case
-                            ):
+                            # TODO: Optimize interestingness test and document behaviour
+                            if self.chkr.is_interesting(case):
                                 logging.info(
                                     f"Try {try_counter}: Found case! LENGTH: {len(candidate_code)}"
                                 )
