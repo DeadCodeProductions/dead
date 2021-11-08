@@ -367,4 +367,10 @@ def bisector_parser():
         type=str,
     )
 
+    parser.add_argument(
+        "--work-through",
+        help="Look at all cases found in directory specified in --output-directory and bisect them when they are not.",
+        action="store_true",
+    )
+
     return parser

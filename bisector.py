@@ -6,6 +6,7 @@ import functools
 import logging
 import math
 import os
+import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -300,6 +301,25 @@ if __name__ == "__main__":
     bsctr = Bisector(config, bldr, chkr)
 
     # TODO: This is duplicate code
+    if args.work_through:
+        if args.output_directory is None:
+            print("Missing output/work-through directory!")
+            exit(1)
+        else:
+            output_dir = Path(os.path.abspath(args.output_directory))
+            os.makedirs(output_dir, exist_ok=True)
+
+        tars = [
+            output_dir / d
+            for d in os.listdir(output_dir)
+            if tarfile.is_tarfile(output_dir / d)
+        ]
+
+        print(f"Processing {len(tars)} tars")
+        for tf in tars:
+            print(f"Processing {tf}")
+            bsctr.bisect(tf)
+
     if args.generate:
         if args.output_directory is None:
             print("Missing output directory!")
