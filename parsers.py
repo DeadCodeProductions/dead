@@ -235,6 +235,12 @@ def checker_parser():
         action="store_true",
     )
 
+    parser.add_argument(
+        "--check-pp",
+        help="Run the preprocessed version through the checker.",
+        action="store_true",
+    )
+
     return parser
 
 
@@ -303,12 +309,6 @@ def reducer_parser():
     parser.add_argument(
         "--force",
         help="Force another reduction even if one already exists.",
-        action="store_true",
-    )
-
-    parser.add_argument(
-        "--check-pp",
-        help="Run the preprocessed version through the checker.",
         action="store_true",
     )
 
