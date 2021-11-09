@@ -1,0 +1,7 @@
+__pycache__
+*.tar
+*.c
+*.s
+*.o
+*.log
+platform.info
