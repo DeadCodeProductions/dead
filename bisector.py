@@ -319,7 +319,11 @@ if __name__ == "__main__":
         print(f"Processing {len(tars)} tars")
         for tf in tars:
             print(f"Processing {tf}")
-            bsctr.bisect(tf)
+            try:
+                bsctr.bisect(tf)
+            except AssertionError or builder.BuildException as e:
+                print("Exception: {e}")
+                continue
 
     if args.generate:
         if args.output_directory is None:

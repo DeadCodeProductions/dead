@@ -578,7 +578,10 @@ if __name__ == "__main__":
                 raise Exception("Case does not include reduced code!")
             c.code = c.reduced_code[-1]
 
-    if all(chkr.is_interesting(c) for c in cases_to_test):
+    if all(
+        chkr.is_interesting(c, preprocess=(not args.check_reduced))
+        for c in cases_to_test
+    ):
         sys.exit(0)
     else:
         sys.exit(1)

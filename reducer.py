@@ -138,7 +138,10 @@ if __name__ == "__main__":
         for tf in tars:
             print(f"Processing {tf}")
             case = utils.Case.from_file(config, tf)
-            rdcr.reduce(tf, args.force)
+            try:
+                rdcr.reduce(tf, args.force)
+            except builder.BuildException as e:
+                print("{e}")
 
     # if (We want to generate something and not only reduce a file)
     if args.generate:
@@ -173,7 +176,7 @@ if __name__ == "__main__":
                 path = next(gen)
                 print(rdcr.reduce(path))
 
-    else:
+    elif not args.work_through:
         if not args.file:
             print(
                 "--file is needed when just running checking for a file. Have you forgotten to set --generate?"
