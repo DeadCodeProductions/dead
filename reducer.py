@@ -3,8 +3,6 @@
 import json
 import logging
 import os
-import re
-import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -14,11 +12,12 @@ from pathlib import Path
 from typing import Optional
 
 import builder
-import checker
 import generator
 import parsers
 import patchdatabase
+import preprocessing
 import utils
+
 
 # ==================== Reducer ====================
 @contextmanager
@@ -47,7 +46,7 @@ class Reducer:
         # up everthing
         with temp_dir_env() as tmpdir:
             # preprocess file
-            pp_code = checker.preprocess_csmith_code(
+            pp_code = preprocessing.preprocess_csmith_code(
                 case.code,
                 utils.get_marker_prefix(case.marker),
                 case.bad_setting,
