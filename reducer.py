@@ -69,8 +69,6 @@ def preprocess_csmith_file(
     with tempfile.NamedTemporaryFile(suffix=".c") as tf:
         shutil.copy(path, tf.name)
 
-        bldr
-
         additional_flags = (
             []
             if compiler_setting.additional_flags is None
@@ -143,7 +141,7 @@ class Reducer:
 
     def reduce(self, file: Path, force: bool = False) -> tuple[bool, Path]:
         case = utils.Case.from_file(self.config, file)
-        if not force and len(case.reduced_code) > 0:
+        if not force and case.reduced_code:
             return True, file
 
         # creduce likes to kill unfinished processes with SIGKILL
@@ -283,9 +281,9 @@ if __name__ == "__main__":
             scenario = utils.Case.from_file(config, file).scenario
 
         tmp = utils.get_scenario(config, args)
-        if len(tmp.target_settings) > 0:
+        if tmp.target_settings:
             scenario.target_settings = tmp.target_settings
-        if len(tmp.attacker_settings) > 0:
+        if tmp.attacker_settings:
             scenario.attacker_settings = tmp.attacker_settings
 
         gen = gnrtr.parallel_interesting_case(

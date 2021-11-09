@@ -394,9 +394,9 @@ if __name__ == "__main__":
             case = utils.Case.from_file(config, file)
             code = case.code
             args.marker = case.marker
-            if len(bad_settings) == 0:
+            if not bad_settings:
                 bad_settings = copy_flag(case.scenario.target_settings[0], bad_settings)
-            if len(good_settings) == 0:
+            if not good_settings:
                 good_settings = copy_flag(
                     case.scenario.attacker_settings[0], good_settings
                 )
@@ -431,13 +431,13 @@ if __name__ == "__main__":
     elif check_marker:
         raise Exception("You need to specify a marker")
 
-    if len(cases_to_test) == 0:
+    if not cases_to_test:
         print("No cases arrived. Have you forgotten to specify an optimization level?")
         exit(2)
 
     if args.check_reduced:
         for c in cases_to_test:
-            if len(c.reduced_code) == 0:
+            if not c.reduced_code:
                 raise Exception("Case does not include reduced code!")
             c.code = c.reduced_code[-1]
 
