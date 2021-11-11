@@ -374,3 +374,41 @@ def bisector_parser():
     )
 
     return parser
+
+
+def debugtool_parser():
+    parser = argparse.ArgumentParser(add_help=False)
+
+    parser.add_argument("-f", "--file", help="Which file to work on.", type=str)
+
+    parser.add_argument(
+        "-crb",
+        "--clean-reduced-bisections",
+        help="Delete all files related to reduction and bisection",
+        action="store_true",
+    )
+
+    parser.add_argument(
+        "--reduced",
+        help="Work on reduced files. (where applicable)",
+        action="store_true",
+    )
+
+    parser.add_argument(
+        "--asm",
+        help="Get assembly for a case asmgood.s and asmbad.s",
+        action="store_true",
+    )
+
+    parser.add_argument(
+        "--static",
+        help="Get code where functions and global variables are static in static.c",
+        action="store_true",
+    )
+
+    # TODO: help information for --viz
+    parser.add_argument("--viz", help="", action="store_true")
+
+    parser.add_argument("-pp", "--preprocess", help="", action="store_true")
+
+    return parser
