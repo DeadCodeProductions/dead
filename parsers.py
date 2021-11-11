@@ -110,7 +110,9 @@ def patcher_parser():
 def generator_parser():
     parser = argparse.ArgumentParser(add_help=False)
 
-    parser.add_argument("-a", "--amount", help="Amount of cases to generate.", type=int)
+    parser.add_argument(
+        "-a", "--amount", help="Amount of cases to generate.", type=int, default=0
+    )
 
     parser.add_argument(
         "--interesting",
@@ -265,7 +267,7 @@ def reducer_parser():
     parser.add_argument("-s", "--scenario", help="Which scenario to work on.", type=str)
 
     parser.add_argument(
-        "-a", "--amount", help="How many cases to find and reduce.", type=str, default=0
+        "-a", "--amount", help="How many cases to find and reduce.", type=int, default=0
     )
 
     parser.add_argument(
