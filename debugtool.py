@@ -142,6 +142,12 @@ if __name__ == "__main__":
         print(" |")
 
         if case.bad_setting.compiler_config.name == "clang":
+            first_CA = repo.get_best_common_ancestor(rev_main, "llvmorg-13.0.0")
+            if repo.is_ancestor(first_CA, rev_bis):
+                print(f" | bisect: {rev_bis}")
+                print(" |")
+                rev_bis = None
+
             if _print_version(cpy, ["llvmorg-13.0.0"], rev_bis):
                 rev_bis = None
             if _print_version(cpy, ["llvmorg-12.0.0", "llvmorg-12.0.1"], rev_bis):
@@ -153,6 +159,12 @@ if __name__ == "__main__":
             if _print_version(cpy, ["llvmorg-10.0.0", "llvmorg-10.0.1"], rev_bis):
                 rev_bis = None
         else:
+            first_CA = repo.get_best_common_ancestor(rev_main, "llvmorg-11.2.0")
+            if repo.is_ancestor(first_CA, rev_bis):
+                print(f" | bisect: {rev_bis}")
+                print(" |")
+                rev_bis = None
+
             if _print_version(
                 cpy,
                 ["releases/gcc-11.1.0", "releases/gcc-11.2.0"],

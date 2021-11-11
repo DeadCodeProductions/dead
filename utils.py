@@ -569,7 +569,7 @@ def check_and_get(tf: tarfile.TarFile, member: str) -> str:
     f = tf.extractfile(member)
     if not f:
         raise Exception(f"File does not include member {member}!")
-    res = f.read().decode("utf-8")
+    res = f.read().decode("utf-8").strip()
 
     return res
 
