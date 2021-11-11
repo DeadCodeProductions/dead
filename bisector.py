@@ -52,9 +52,8 @@ class Bisector:
     def bisect(self, file: Path):
         case = utils.Case.from_file(self.config, file)
 
-        if len(case.reduced_code) == 0 or len(case.reduced_code) <= len(
-            case.bisections
-        ):
+        if not case.reduced_code or len(case.reduced_code) <= len(case.bisections):
+            logging.info(f"Ignoring case {file}: Not reduced or is already bisected.")
             return
 
         bad_compiler_config = case.bad_setting.compiler_config
@@ -91,13 +90,10 @@ class Bisector:
             for rev in possible_good_commits
         ]
 
-        sorted(
+        good_commit, common_ancestor = min(
             possible_good_commits,
-            reverse=True,
             key=functools.cmp_to_key(lambda x, y: repo.is_ancestor(x[1], y[1])),
         )
-
-        good_commit, common_ancestor = possible_good_commits[0]
 
         # ====== Figure out in which part the introducer or fixer lies
         #
@@ -136,14 +132,14 @@ class Bisector:
                 # b2 case
                 logging.info("B2 Case")
                 # TODO: Figure out how to save and handle b2
-                # logging.critical("Currently ignoring b2, sorry")
-                # exit(0)
+                logging.critical(f"Currently ignoring b2, sorry ({file}")
+                return
 
-                res = self._bisection(
-                    common_ancestor, good_commit, case, repo, interesting_is_bad=False
-                )
-                self._check(case, res, repo, interesting_is_bad=False)
-                print(f"First good commit {res}")
+                # res = self._bisection(
+                #    common_ancestor, good_commit, case, repo, interesting_is_bad=False
+                # )
+                # self._check(case, res, repo, interesting_is_bad=False)
+                # print(f"First good commit {res}")
         # Sanity check
 
         case.bisections.append(res)
