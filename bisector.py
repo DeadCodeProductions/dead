@@ -49,11 +49,14 @@ class Bisector:
         case_cpy.code = case_cpy.reduced_code[-1]
         return self.chkr.is_interesting(case_cpy, preprocess=False)
 
-    def bisect(self, file: Path):
+    def bisect(self, file: Path, force: bool = False):
         case = utils.Case.from_file(self.config, file)
 
-        if not case.reduced_code or len(case.reduced_code) <= len(case.bisections):
-            logging.info(f"Ignoring case {file}: Not reduced or is already bisected.")
+        if not case.reduced_code:
+            logging.info(f"Ignoring case {file}: Not reduced")
+            return
+        if not force and len(case.reduced_code) <= len(case.bisections):
+            logging.info(f"Ignoring case {file}: Already bisected")
             return
 
         bad_compiler_config = case.bad_setting.compiler_config
@@ -316,7 +319,7 @@ if __name__ == "__main__":
         for tf in tars:
             print(f"Processing {tf}")
             try:
-                bsctr.bisect(tf)
+                bsctr.bisect(tf, force=args.force)
             except AssertionError or builder.BuildException as e:
                 print("Exception: {e}")
                 continue
@@ -350,14 +353,14 @@ if __name__ == "__main__":
                 path = next(gen)
                 worked, _ = rdcr.reduce(path)
                 if worked:
-                    bsctr.bisect(path)
+                    bsctr.bisect(path, force=args.force)
         else:
             for i in range(args.amount):
                 path = next(gen)
                 worked, _ = rdcr.reduce(path)
                 if worked:
-                    bsctr.bisect(path)
+                    bsctr.bisect(path, force=args.force)
 
     else:
         file = Path(args.file)
-        bsctr.bisect(file)
+        bsctr.bisect(file, force=args.force)

@@ -375,6 +375,12 @@ def bisector_parser():
         action="store_true",
     )
 
+    parser.add_argument(
+        "--force",
+        help="Force another bisection even if they already exist",
+        action="store_true",
+    )
+
     return parser
 
 
