@@ -234,9 +234,7 @@ class Checker:
 
             # TODO: Handle include_paths better
             include_paths = utils.find_include_paths(
-                self.config.llvm.sane_version,
-                tf.name,
-                f"-I{self.config.csmith.include_path}",
+                self.config.llvm.sane_version, tf.name, case.bad_setting.get_flag_str()
             )
             cmd = [self.config.ccc, tf.name, "--from=main", f"--to={case.marker}"]
 
@@ -264,9 +262,7 @@ class Checker:
 
             # TODO: Handle include_paths better
             include_paths = utils.find_include_paths(
-                self.config.llvm.sane_version,
-                tf.name,
-                f"-I{self.config.csmith.include_path}",
+                self.config.llvm.sane_version, tf.name, case.bad_setting.get_flag_str()
             )
             annotate_program_with_static(
                 self.config.static_annotator, tf.name, include_paths
@@ -286,8 +282,7 @@ class Checker:
                     break
             return not uninteresting
 
-    def is_interesting_with_empty_marker_bodies(self, case: utils.Case):
-
+    def _emtpy_marker_code_str(self, case: utils.Case) -> str:
         marker_prefix = utils.get_marker_prefix(case.marker)
         p = re.compile(f"void {marker_prefix}(.*)\(void\);")
         empty_body_code = ""
@@ -298,6 +293,12 @@ class Checker:
             else:
                 empty_body_code += f"\n{line}"
 
+        return empty_body_code
+
+    def is_interesting_with_empty_marker_bodies(self, case: utils.Case) -> bool:
+
+        empty_body_code = self._emtpy_marker_code_str(case)
+
         with tempfile.NamedTemporaryFile(suffix=".c") as tf:
             with open(tf.name, "w") as f:
                 f.write(empty_body_code)
@@ -307,10 +308,10 @@ class Checker:
                 self.config.llvm.sane_version,
                 self.config.ccomp,
                 Path(tf.name),
-                f"-I{self.config.csmith.include_path}",
+                case.bad_setting.get_flag_str(),
             )
 
-    def is_interesting(self, case: utils.Case, preprocess: bool = True):
+    def is_interesting(self, case: utils.Case, preprocess: bool = True) -> bool:
         # TODO: Optimization potential. Less calls to clang etc.
         # when tests are combined.
 
@@ -393,7 +394,10 @@ if __name__ == "__main__":
         b = chkr.is_interesting_wrt_ccc(case)
         c = chkr.is_interesting_with_static_globals(case)
         d = chkr.is_interesting_with_empty_marker_bodies(case)
-        print(a, b, c, d)
+        print(f"Marker:\t{a}")
+        print(f"CCC:\t{b}")
+        print(f"Static:\t{c}")
+        print(f"Empty:\t{d}")
         if not all((a, b, c, d)):
             exit(1)
         exit(0)

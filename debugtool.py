@@ -6,6 +6,8 @@ Grows with arising needs.
 """
 
 import copy
+import re
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -19,6 +21,172 @@ import preprocessing
 import reducer
 import repository
 import utils
+
+
+def _ok_fail(b: bool) -> str:
+    if b:
+        return "OK"
+    else:
+        return "FAIL"
+
+
+def sanitize_values(
+    config: utils.NestedNamespace, case: utils.Case, prefix: str, chkr: checker.Checker
+):
+    empty_body_code = chkr._emtpy_marker_code_str(case)
+    with tempfile.NamedTemporaryFile(suffix=".c") as tf:
+        with open(tf.name, "w") as f:
+            f.write(empty_body_code)
+            res_comp_warnings = checker.check_compiler_warnings(
+                config.gcc.sane_version,
+                config.llvm.sane_version,
+                Path(tf.name),
+                case.bad_setting.get_flag_str(),
+                10,
+            )
+            print(
+                ("{:.<" f"{width}}}").format(prefix + "Sanity: compiler warnings"),
+                _ok_fail(res_comp_warnings),
+            )
+            res_use_ub_san = checker.use_ub_sanitizers(
+                config.llvm.sane_version,
+                Path(tf.name),
+                case.bad_setting.get_flag_str(),
+                10,
+                10,
+            )
+            print(
+                ("{:.<" f"{width}}}").format(prefix + "Sanity: undefined behaviour"),
+                _ok_fail(res_use_ub_san),
+            )
+            res_ccomp = checker.verify_with_ccomp(
+                config.ccomp,
+                Path(tf.name),
+                case.bad_setting.get_flag_str(),
+                10,
+            )
+            print(
+                ("{:.<" f"{width}}}").format(prefix + "Sanity: ccomp"),
+                _ok_fail(res_ccomp),
+            )
+
+
+def viz(case: utils.Case):
+    def _res(case, rev):
+        lerev = repo.rev_to_commit(rev)
+        case.bad_setting.rev = lerev
+        if chkr.is_interesting(case, preprocess=False):
+            return "bad"
+        else:
+            return "good"
+
+    def _print_version(
+        case: utils.Case, revs: list[str], rev_bis: Optional[str]
+    ) -> bool:
+        revs.reverse()
+        search_bis = isinstance(rev_bis, str)
+        bis_ancestor_found = False
+        for i, rev in enumerate(revs):
+            i += 1
+            res = _res(case, rev)
+            insert_bis = False
+            if search_bis and not bis_ancestor_found:
+                if bis_ancestor_found := repo.is_ancestor(rev, rev_bis):
+                    insert_bis = True
+
+            spaces = (len(revs) - i) * " "
+            if insert_bis:
+                print(" |" + spaces + " " + f" {rev}: {res}")
+                print(" |" + spaces + " / bisect: {rev_bis}")
+                print(" |" + spaces + "/")
+            else:
+                print(" |" + spaces + f" {rev}: {res}")
+                print(" |" + spaces + "/")
+
+        rev_CA = repo.get_best_common_ancestor(rev_main, revs[0])
+        res_CA = _res(cpy, rev_CA)
+        print(f"CA_{revs[0].split('-')[-1]}: {res_CA}")
+        print(" |")
+        if search_bis and not bis_ancestor_found:
+            if bis_ancestor_found := repo.is_ancestor(rev_CA, rev_bis):
+                print(f" | bisect: {rev_bis}")
+                print(" |")
+                return True
+        return bis_ancestor_found
+
+    if case.bisections:
+        rev_bis = case.bisections[0]
+        print(f"Bisection commit {rev_bis}")
+    else:
+        rev_bis = None
+
+    repo = repository.Repo(
+        case.bad_setting.compiler_config.repo,
+        case.bad_setting.compiler_config.main_branch,
+    )
+    rev_main = repo.rev_to_commit(case.bad_setting.compiler_config.main_branch)
+    # Test bad_setting
+    cpy = copy.deepcopy(case)
+    cpy.code = cpy.reduced_code[0]
+    res_bs = "bad" if chkr.is_interesting(cpy, preprocess=False) else "good"
+    # TODO: Fix this
+    print("NOTE: This graphic assumes the 'Start' commit to be from somewhere in trunk")
+    print(f"Start:{res_bs}")
+    print(" |")
+
+    if case.bad_setting.compiler_config.name == "clang":
+        first_CA = repo.get_best_common_ancestor(rev_main, "llvmorg-13.0.0")
+        if repo.is_ancestor(first_CA, rev_bis):
+            print(f" | bisect: {rev_bis}")
+            print(" |")
+            rev_bis = None
+
+        if _print_version(cpy, ["llvmorg-13.0.0"], rev_bis):
+            rev_bis = None
+        if _print_version(cpy, ["llvmorg-12.0.0", "llvmorg-12.0.1"], rev_bis):
+            rev_bis = None
+        if _print_version(
+            cpy, ["llvmorg-11.0.0", "llvmorg-11.0.1", "llvmorg-11.1.0"], rev_bis
+        ):
+            rev_bis = None
+        if _print_version(cpy, ["llvmorg-10.0.0", "llvmorg-10.0.1"], rev_bis):
+            rev_bis = None
+    else:
+        first_CA = repo.get_best_common_ancestor(rev_main, "releases/gcc-11.2.0")
+        if repo.is_ancestor(first_CA, rev_bis):
+            print(f" | bisect: {rev_bis}")
+            print(" |")
+            rev_bis = None
+
+        if _print_version(
+            cpy,
+            ["releases/gcc-11.1.0", "releases/gcc-11.2.0"],
+            rev_bis,
+        ):
+            rev_bis = None
+
+        if _print_version(
+            cpy,
+            ["releases/gcc-10.1.0", "releases/gcc-10.2.0", "releases/gcc-10.3.0"],
+            rev_bis,
+        ):
+            rev_bis = None
+
+        if _print_version(
+            cpy,
+            [
+                "releases/gcc-9.1.0",
+                "releases/gcc-9.2.0",
+                "releases/gcc-9.3.0",
+                "releases/gcc-9.4.0",
+            ],
+            rev_bis,
+        ):
+            rev_bis = None
+
+        if _print_version(cpy, ["releases/gcc-8.4.0", "releases/gcc-8.5.0"], rev_bis):
+            rev_bis = None
+
 
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.debugtool_parser())
@@ -76,130 +244,126 @@ if __name__ == "__main__":
         )
         print("Created static.c")
     elif args.viz:
+        viz(case)
 
-        def _res(case, rev):
-            lerev = repo.rev_to_commit(rev)
-            case.bad_setting.rev = lerev
-            if chkr.is_interesting(case, preprocess=False):
-                return "bad"
-            else:
-                return "good"
-
-        def _print_version(
-            case: utils.Case, revs: list[str], rev_bis: Optional[str]
-        ) -> bool:
-            revs.reverse()
-            search_bis = isinstance(rev_bis, str)
-            bis_ancestor_found = False
-            for i, rev in enumerate(revs):
-                i += 1
-                res = _res(case, rev)
-                insert_bis = False
-                if search_bis and not bis_ancestor_found:
-                    if bis_ancestor_found := repo.is_ancestor(rev, rev_bis):
-                        insert_bis = True
-
-                spaces = (len(revs) - i) * " "
-                if insert_bis:
-                    print(" |" + spaces + " " + f" {rev}: {res}")
-                    print(" |" + spaces + " / bisect: {rev_bis}")
-                    print(" |" + spaces + "/")
-                else:
-                    print(" |" + spaces + f" {rev}: {res}")
-                    print(" |" + spaces + "/")
-
-            rev_CA = repo.get_best_common_ancestor(rev_main, revs[0])
-            res_CA = _res(cpy, rev_CA)
-            print(f"CA_{revs[0].split('-')[-1]}: {res_CA}")
-            print(" |")
-            if search_bis and not bis_ancestor_found:
-                if bis_ancestor_found := repo.is_ancestor(rev_CA, rev_bis):
-                    print(f" | bisect: {rev_bis}")
-                    print(" |")
-                    return True
-            return bis_ancestor_found
-
-        if case.bisections:
-            rev_bis = case.bisections[0]
-            print(f"Bisection commit {rev_bis}")
-        else:
-            rev_bis = None
-
-        repo = repository.Repo(
-            case.bad_setting.compiler_config.repo,
-            case.bad_setting.compiler_config.main_branch,
-        )
-        rev_main = repo.rev_to_commit(case.bad_setting.compiler_config.main_branch)
-        # Test bad_setting
-        cpy = copy.deepcopy(case)
-        cpy.code = cpy.reduced_code[0]
-        res_bs = "bad" if chkr.is_interesting(cpy, preprocess=False) else "good"
-        # TODO: Fix this
-        print(
-            "NOTE: This graphic assumes the 'Start' commit to be from somewhere in trunk"
-        )
-        print(f"Start:{res_bs}")
-        print(" |")
-
-        if case.bad_setting.compiler_config.name == "clang":
-            first_CA = repo.get_best_common_ancestor(rev_main, "llvmorg-13.0.0")
-            if repo.is_ancestor(first_CA, rev_bis):
-                print(f" | bisect: {rev_bis}")
-                print(" |")
-                rev_bis = None
-
-            if _print_version(cpy, ["llvmorg-13.0.0"], rev_bis):
-                rev_bis = None
-            if _print_version(cpy, ["llvmorg-12.0.0", "llvmorg-12.0.1"], rev_bis):
-                rev_bis = None
-            if _print_version(
-                cpy, ["llvmorg-11.0.0", "llvmorg-11.0.1", "llvmorg-11.1.0"], rev_bis
-            ):
-                rev_bis = None
-            if _print_version(cpy, ["llvmorg-10.0.0", "llvmorg-10.0.1"], rev_bis):
-                rev_bis = None
-        else:
-            first_CA = repo.get_best_common_ancestor(rev_main, "releases/gcc-11.2.0")
-            if repo.is_ancestor(first_CA, rev_bis):
-                print(f" | bisect: {rev_bis}")
-                print(" |")
-                rev_bis = None
-
-            if _print_version(
-                cpy,
-                ["releases/gcc-11.1.0", "releases/gcc-11.2.0"],
-                rev_bis,
-            ):
-                rev_bis = None
-
-            if _print_version(
-                cpy,
-                ["releases/gcc-10.1.0", "releases/gcc-10.2.0", "releases/gcc-10.3.0"],
-                rev_bis,
-            ):
-                rev_bis = None
-
-            if _print_version(
-                cpy,
-                [
-                    "releases/gcc-9.1.0",
-                    "releases/gcc-9.2.0",
-                    "releases/gcc-9.3.0",
-                    "releases/gcc-9.4.0",
-                ],
-                rev_bis,
-            ):
-                rev_bis = None
-
-            if _print_version(
-                cpy, ["releases/gcc-8.4.0", "releases/gcc-8.5.0"], rev_bis
-            ):
-                rev_bis = None
-
-    elif args.preprocess:
+    elif args.preprocess_code:
         with open("code_pp.c", "w") as f:
             code_pp = preprocessing.preprocess_csmith_code(
                 case.code, utils.get_marker_prefix(case.marker), case.bad_setting, bldr
             )
             f.write(code_pp)
         print("Written preprocessed code to code_pp.c")
+
+    elif args.empty_marker_code:
+        cpy = copy.deepcopy(case)
+        if args.preprocessed:
+            cpy.code = preprocessing.preprocess_csmith_code(
+                case.code, utils.get_marker_prefix(case.marker), case.bad_setting, bldr
+            )
+        if args.reduced:
+            cpy.code = cpy.reduced_code[-1]
+
+        empty_marker_code = chkr._emtpy_marker_code_str(cpy)
+        with open("empty_body.c", "w") as f:
+            f.write(empty_marker_code)
+        print("Written empty marker body code in empty_body.c")
+
+    elif args.diagnose:
+        repo = repository.Repo(
+            case.bad_setting.compiler_config.repo,
+            case.bad_setting.compiler_config.main_branch,
+        )
+        width = 50
+        print(("{:=^" f"{width}}}").format(" Values "))
+        # print(("{:.<"f"{width}}}").format(""), )
+        print(("{:.<" f"{width}}}").format("Marker"), case.marker)
+        print(("{:.<" f"{width}}}").format("Code lenght"), len(case.code))
+        print(("{:.<" f"{width}}}").format("Bad Setting"), case.bad_setting)
+        print(("{:.<" f"{width}}}").format("One Good Setting"), case.good_settings[0])
+        print(
+            ("{:.<" f"{width}}}").format("Check marker"),
+            _ok_fail(chkr.is_interesting_wrt_marker(case)),
+        )
+        print(
+            ("{:.<" f"{width}}}").format("Check CCC"),
+            _ok_fail(chkr.is_interesting_wrt_ccc(case)),
+        )
+        print(
+            ("{:.<" f"{width}}}").format("Check static. annotated"),
+            _ok_fail(chkr.is_interesting_with_static_globals(case)),
+        )
+        res_empty = chkr.is_interesting_with_empty_marker_bodies(case)
+        print(("{:.<" f"{width}}}").format("Check empty bodies"), _ok_fail(res_empty))
+        if not res_empty:
+            sanitize_values(config, case, "", chkr)
+
+        cpy = copy.deepcopy(case)
+        cpy.code = preprocessing.preprocess_csmith_code(
+            case.code, utils.get_marker_prefix(case.marker), case.bad_setting, bldr
+        )
+        print(
+            ("{:.<" f"{width}}}").format("PP: Check marker"),
+            _ok_fail(chkr.is_interesting_wrt_marker(cpy)),
+        )
+        print(
+            ("{:.<" f"{width}}}").format("PP: Check CCC"),
+            _ok_fail(chkr.is_interesting_wrt_ccc(cpy)),
+        )
+        print(
+            ("{:.<" f"{width}}}").format("PP: Check static. annotated"),
+            _ok_fail(chkr.is_interesting_with_static_globals(cpy)),
+        )
+        res_empty = chkr.is_interesting_with_empty_marker_bodies(cpy)
+        print(
+            ("{:.<" f"{width}}}").format("PP: Check empty bodies"), _ok_fail(res_empty)
+        )
+        if not res_empty:
+            sanitize_values(config, cpy, "PP: ", chkr)
+
+        print(
+            ("{:.<" f"{width}}}").format("Amount reduced code"), len(case.reduced_code)
+        )
+        if case.reduced_code:
+            cpy = copy.deepcopy(case)
+            cpy.code = cpy.reduced_code[-1]
+            print(
+                ("{:.<" f"{width}}}").format("Reduced: Check marker"),
+                _ok_fail(chkr.is_interesting_wrt_marker(cpy)),
+            )
+            print(
+                ("{:.<" f"{width}}}").format("Reduced: Check CCC"),
+                _ok_fail(chkr.is_interesting_wrt_ccc(cpy)),
+            )
+            print(
+                ("{:.<" f"{width}}}").format("Reduced: Check static. annotated"),
+                _ok_fail(chkr.is_interesting_with_static_globals(cpy)),
+            )
+            res_empty = chkr.is_interesting_with_empty_marker_bodies(cpy)
+            print(
+                ("{:.<" f"{width}}}").format("Reduced: Check empty bodies"),
+                _ok_fail(res_empty),
+            )
+            if not res_empty:
+                sanitize_values(config, cpy, "Reduced: ", chkr)
+
+        print(
+            ("{:.<" f"{width}}}").format("Amount Bisections"),
+            len(case.bisections) if case.bisections is not None else 0,
+        )
+
+        if case.bisections:
+            print(("{:.<" f"{width}}}").format("Last Bisection"), case.bisections[-1])
+            prev_rev = repo.rev_to_commit(case.bisections[-1] + "~")
+            print(("{:.<" f"{width}}}").format("Bisection prev commit"), prev_rev)
+            cpy = copy.deepcopy(case)
+            cpy.code = cpy.reduced_code[-1]
+            bis_res = chkr.is_interesting(cpy, preprocess=False)
+            cpy.bad_setting.rev = prev_rev
+            bis_prev_res = chkr.is_interesting(cpy, preprocess=False)
+            print(
+                ("{:.<" f"{width}}}").format("Bisection test"),
+                _ok_fail(bis_res and not bis_prev_res),
+            )
+        if case.reduced_code:
+            print(("{:=^" f"{width}}}").format(" Last Reduced Code "))
+            print(case.reduced_code[-1])

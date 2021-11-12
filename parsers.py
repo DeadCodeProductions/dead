@@ -403,6 +403,12 @@ def debugtool_parser():
     )
 
     parser.add_argument(
+        "--preprocessed",
+        help="Work on preprocessed files. (where applicable)",
+        action="store_true",
+    )
+
+    parser.add_argument(
         "--asm",
         help="Get assembly for a case asmgood.s and asmbad.s",
         action="store_true",
@@ -417,6 +423,16 @@ def debugtool_parser():
     # TODO: help information for --viz
     parser.add_argument("--viz", help="", action="store_true")
 
-    parser.add_argument("-pp", "--preprocess", help="", action="store_true")
+    parser.add_argument("--preprocess-code", help="", action="store_true")
+
+    parser.add_argument(
+        "-di", "--diagnose", help="Run general tests.", action="store_true"
+    )
+
+    parser.add_argument(
+        "--empty-marker-code",
+        help="Get empty marker body code in empty_body.c",
+        action="store_true",
+    )
 
     return parser

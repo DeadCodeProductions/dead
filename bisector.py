@@ -320,8 +320,11 @@ if __name__ == "__main__":
             print(f"Processing {tf}")
             try:
                 bsctr.bisect(tf, force=args.force)
-            except AssertionError or builder.BuildException as e:
-                print("Exception: {e}")
+            except AssertionError as e:
+                print(f"AssertionError in {tf}: '{e}'")
+                continue
+            except builder.BuildException as e:
+                print(f"BuildException in {tf}: '{e}'")
                 continue
 
     if args.generate:
