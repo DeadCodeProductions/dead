@@ -324,6 +324,7 @@ class Checker:
             )
             case_cpy = copy.deepcopy(case)
             case_cpy.code = code_pp
+            case = case_cpy
         # Taking advantage of shortciruit logic
         return (
             self.is_interesting_wrt_marker(case)

@@ -122,7 +122,7 @@ class CSmithCaseGenerator:
         self.builder = builder.Builder(config, patchdb, cores)
         self.chkr = checker.Checker(config, self.builder)
 
-    def generate_interesting_case(self, scenario: utils.Scenario):
+    def generate_interesting_case(self, scenario: utils.Scenario) -> utils.Case:
         # Because the resulting code will be of csmith origin, we have to add
         # the csmith include path to all settings
         csmith_include_flag = f"-I{self.config.csmith.include_path}"
