@@ -364,6 +364,6 @@ if __name__ == "__main__":
                 if worked:
                     bsctr.bisect(path, force=args.force)
 
-    else:
+    elif args.file:
         file = Path(args.file)
         bsctr.bisect(file, force=args.force)
