@@ -159,7 +159,7 @@ if __name__ == "__main__":
             if _print_version(cpy, ["llvmorg-10.0.0", "llvmorg-10.0.1"], rev_bis):
                 rev_bis = None
         else:
-            first_CA = repo.get_best_common_ancestor(rev_main, "llvmorg-11.2.0")
+            first_CA = repo.get_best_common_ancestor(rev_main, "releases/gcc-11.2.0")
             if repo.is_ancestor(first_CA, rev_bis):
                 print(f" | bisect: {rev_bis}")
                 print(" |")
