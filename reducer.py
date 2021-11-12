@@ -77,6 +77,7 @@ class Reducer:
                 print(
                     "timeout 10 "
                     f"{Path(__file__).parent.resolve()}/checker.py"
+                    f" --dont-preprocess"
                     f" --config {self.config.config_path}"
                     f" --marker {case.marker}"
                     f" --interesting-settings {str(settings_path)}"

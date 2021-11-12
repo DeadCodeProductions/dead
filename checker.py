@@ -480,7 +480,9 @@ if __name__ == "__main__":
             c.code = c.reduced_code[-1]
 
     if all(
-        chkr.is_interesting(c, preprocess=(not args.check_reduced))
+        chkr.is_interesting(
+            c, preprocess=(not (args.dont_preprocess or args.check_reduced))
+        )
         for c in cases_to_test
     ):
         sys.exit(0)

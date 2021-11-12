@@ -296,7 +296,7 @@ if __name__ == "__main__":
     patchdb = patchdatabase.PatchDB(config.patchdb)
     bldr = builder.Builder(config, patchdb, args.cores)
     chkr = checker.Checker(config, bldr)
-    gnrtr = generator.CSmithCaseGenerator(config, patchdb)
+    gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
     rdcr = reducer.Reducer(config, bldr)
     bsctr = Bisector(config, bldr, chkr)
 

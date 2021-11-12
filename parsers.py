@@ -243,6 +243,12 @@ def checker_parser():
         action="store_true",
     )
 
+    parser.add_argument(
+        "--dont-preprocess",
+        help="Force no preprocessing",
+        action="store_true",
+    )
+
     return parser
 
 
