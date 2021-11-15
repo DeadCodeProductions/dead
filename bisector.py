@@ -362,7 +362,7 @@ if __name__ == "__main__":
         if args.amount == 0:
             while True:
                 path = next(gen)
-                worked, _ = rdcr.reduce(path)
+                worked = rdcr.reduce_file(path)
                 if worked:
                     try:
                         bsctr.bisect(path, force=args.force)
@@ -375,7 +375,7 @@ if __name__ == "__main__":
         else:
             for i in range(args.amount):
                 path = next(gen)
-                worked, _ = rdcr.reduce(path)
+                worked = rdcr.reduce_file(path)
                 if worked:
                     try:
                         bsctr.bisect(path, force=args.force)

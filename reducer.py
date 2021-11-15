@@ -6,6 +6,7 @@ import os
 import subprocess
 import tarfile
 import tempfile
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,10 +36,33 @@ class Reducer:
     config: utils.NestedNamespace
     bldr: builder.Builder
 
-    def reduce(self, file: Path, force: bool = False) -> tuple[bool, Path]:
+    def reduce_file(self, file: Path, force: bool = False) -> bool:
         case = utils.Case.from_file(self.config, file)
+        if self.reduce_case(case, force=force):
+            case.to_file(file)
+            return True
+        return False
+
+    def reduce_case(self, case: utils.Case, force: bool = False) -> bool:
         if not force and case.reduced_code:
-            return True, file
+            return True
+
+        if not case.reduced_code:
+            case.reduced_code = []
+        if reduce_code := self.reduce_code(
+            case.code, case.marker, case.bad_setting, case.good_settings
+        ):
+            case.reduced_code.append(reduce_code)
+            return True
+        return False
+
+    def reduce_code(
+        self,
+        code: str,
+        marker: str,
+        bad_setting: utils.CompilerSetting,
+        good_settings: list[utils.CompilerSetting],
+    ) -> Optional[str]:
 
         # creduce likes to kill unfinished processes with SIGKILL
         # so they can't clean up after themselves.
@@ -47,9 +71,9 @@ class Reducer:
         with temp_dir_env() as tmpdir:
             # preprocess file
             pp_code = preprocessing.preprocess_csmith_code(
-                case.code,
-                utils.get_marker_prefix(case.marker),
-                case.bad_setting,
+                code,
+                utils.get_marker_prefix(marker),
+                bad_setting,
                 self.bldr,
             )
 
@@ -61,9 +85,9 @@ class Reducer:
             settings_path = tmpdir / "interesting_settings.json"
 
             int_settings = {}
-            int_settings["bad_setting"] = case.bad_setting.to_jsonable_dict()
+            int_settings["bad_setting"] = bad_setting.to_jsonable_dict()
             int_settings["good_settings"] = [
-                gs.to_jsonable_dict() for gs in case.good_settings
+                gs.to_jsonable_dict() for gs in good_settings
             ]
             with open(settings_path, "w") as f:
                 json.dump(int_settings, f)
@@ -79,7 +103,7 @@ class Reducer:
                     f"{Path(__file__).parent.resolve()}/checker.py"
                     f" --dont-preprocess"
                     f" --config {self.config.config_path}"
-                    f" --marker {case.marker}"
+                    f" --marker {marker}"
                     f" --interesting-settings {str(settings_path)}"
                     f" --file code_pp.c",
                     # f' --file {str(pp_code_path)}',
@@ -97,19 +121,22 @@ class Reducer:
             ]
 
             try:
-                subprocess.run(creduce_cmd, cwd=Path(tmpdir), check=True)
+                current_time = time.strftime("%Y%m%d-%H%M%S")
+                build_log_path = Path(config.logdir) / f"{current_time}-creduce.log"
+                logging.info(f"creduce logfile at {build_log_path}")
+                with open(build_log_path, "a") as build_log:
+                    utils.run_cmd_to_logfile(
+                        creduce_cmd, log_file=build_log, working_dir=Path(tmpdir)
+                    )
             except subprocess.CalledProcessError as e:
-                logging.info(f"Failed to process {file}. Exception: {e}")
-                return False, file
+                logging.info(f"Failed to process code. Exception: {e}")
+                return None
 
             # save result in tar
             with open(pp_code_path, "r") as f:
-                case.reduced_code.append(f.read())
-            if not case.path:
-                case.path = file
-            case.to_file(case.path)
+                reduced_code = f.read()
 
-            return True, case.path
+            return reduced_code
 
 
 if __name__ == "__main__":
@@ -137,9 +164,8 @@ if __name__ == "__main__":
         print(f"Processing {len(tars)} tars")
         for tf in tars:
             print(f"Processing {tf}")
-            case = utils.Case.from_file(config, tf)
             try:
-                rdcr.reduce(tf, args.force)
+                rdcr.reduce_file(tf, args.force)
             except builder.BuildException as e:
                 print("{e}")
 
@@ -170,11 +196,17 @@ if __name__ == "__main__":
         if args.amount == 0:
             while True:
                 path = next(gen)
-                print(rdcr.reduce(path))
+                try:
+                    rdcr.reduce_file(path)
+                except builder.BuildException as e:
+                    print(f"{e}")
         else:
             for i in range(args.amount):
                 path = next(gen)
-                print(rdcr.reduce(path))
+                try:
+                    rdcr.reduce_file(path)
+                except builder.BuildException as e:
+                    print(f"{e}")
 
     elif not args.work_through:
         if not args.file:
@@ -182,4 +214,5 @@ if __name__ == "__main__":
                 "--file is needed when just running checking for a file. Have you forgotten to set --generate?"
             )
         file = Path(args.file).absolute()
-        print(rdcr.reduce(file, args.force))
+        if rdcr.reduce_file(file, args.force):
+            print(file)
