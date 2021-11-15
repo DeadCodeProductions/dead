@@ -62,6 +62,7 @@ class Reducer:
         marker: str,
         bad_setting: utils.CompilerSetting,
         good_settings: list[utils.CompilerSetting],
+        preprocess: bool = True,
     ) -> Optional[str]:
 
         # creduce likes to kill unfinished processes with SIGKILL
@@ -70,12 +71,15 @@ class Reducer:
         # up everthing
         with temp_dir_env() as tmpdir:
             # preprocess file
-            pp_code = preprocessing.preprocess_csmith_code(
-                code,
-                utils.get_marker_prefix(marker),
-                bad_setting,
-                self.bldr,
-            )
+            if preprocess:
+                pp_code = preprocessing.preprocess_csmith_code(
+                    code,
+                    utils.get_marker_prefix(marker),
+                    bad_setting,
+                    self.bldr,
+                )
+            else:
+                pp_code = code
 
             pp_code_path = tmpdir / "code_pp.c"
             with open(pp_code_path, "w") as f:
@@ -214,5 +218,19 @@ if __name__ == "__main__":
                 "--file is needed when just running checking for a file. Have you forgotten to set --generate?"
             )
         file = Path(args.file).absolute()
-        if rdcr.reduce_file(file, args.force):
-            print(file)
+        if args.re_reduce:
+            case = utils.Case.from_file(config, file)
+            print(f"BEFORE\n{case.reduced_code[-1]}")
+            if reduce_code := rdcr.reduce_code(
+                case.reduced_code[-1],
+                case.marker,
+                case.bad_setting,
+                case.good_settings,
+                preprocess=False,
+            ):
+                case.reduced_code[-1] = reduce_code
+                print(f"AFTER\n{case.reduced_code[-1]}")
+                case.to_file(file)
+        else:
+            if rdcr.reduce_file(file, args.force):
+                print(file)

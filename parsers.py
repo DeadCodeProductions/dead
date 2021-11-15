@@ -320,6 +320,13 @@ def reducer_parser():
         action="store_true",
     )
 
+    parser.add_argument(
+        "-rr",
+        "--re-reduce",
+        help="Re-reduce the last reduce code",
+        action="store_true",
+    )
+
     return parser
 
 
