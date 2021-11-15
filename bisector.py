@@ -235,6 +235,8 @@ class Bisector:
         old_midpoint = ""
         failed_to_build = False
         failed_to_build_counter = 0
+
+        guaranteed_termiation_counter = 0
         while True:
             if not failed_to_build:
                 old_midpoint = midpoint
@@ -262,6 +264,12 @@ class Bisector:
 
                 failed_to_build_counter += 1
                 failed_to_build = False
+
+                if guaranteed_termiation_counter >= 20:
+                    raise Exception(
+                        "Failed too many times in a row while bisecting. Aborting bisection..."
+                    )
+                guaranteed_termiation_counter += 1
 
             logging.info(f"Midpoint: {midpoint}")
 
@@ -356,13 +364,27 @@ if __name__ == "__main__":
                 path = next(gen)
                 worked, _ = rdcr.reduce(path)
                 if worked:
-                    bsctr.bisect(path, force=args.force)
+                    try:
+                        bsctr.bisect(path, force=args.force)
+                    except AssertionError as e:
+                        print(f"AssertionError in {path}: '{e}'")
+                        continue
+                    except builder.BuildException as e:
+                        print(f"BuildException in {path}: '{e}'")
+                        continue
         else:
             for i in range(args.amount):
                 path = next(gen)
                 worked, _ = rdcr.reduce(path)
                 if worked:
-                    bsctr.bisect(path, force=args.force)
+                    try:
+                        bsctr.bisect(path, force=args.force)
+                    except AssertionError as e:
+                        print(f"AssertionError in {path}: '{e}'")
+                        continue
+                    except builder.BuildException as e:
+                        print(f"BuildException in {path}: '{e}'")
+                        continue
 
     elif args.file:
         file = Path(args.file)
