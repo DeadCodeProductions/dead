@@ -53,8 +53,6 @@ EXPECTED_ENTRIES = [
     (str,       ("cache_group", ),          "Name of group owning the cache"),
     (Executable,("ccc",),                   "Path to executable or name in PATH for the callchain checker"),
     (Executable,("static_annotator",),      "Path to executable or name in PATH for the static annotator"),
-
-    (Path,      ("project_dir", ),          "Path where to the project is."),
 ]
 # fmt: on
 
@@ -123,7 +121,7 @@ class NestedNamespace(SimpleNamespace):
         return type(self)(self.__asdict())
 
 
-def validate_config(config: dict):
+def validate_config(config: Union[dict, NestedNamespace]):
     # TODO: Also check if there are fields that are not supposed to be there
     key_problems = set()
     for exkeys in EXPECTED_ENTRIES:
@@ -173,31 +171,49 @@ def validate_config(config: dict):
         exit(1)
 
 
+def to_absolute_paths(config: NestedNamespace):
+    """
+    Convert relative paths for `Path`, `Executable` and `patches` found in config
+    into absolute paths with prefix dirname __file__.
+    """
+    project_dir = Path(__file__).parent
+    for typ, path_in_config, _ in EXPECTED_ENTRIES:
+        if typ is Path and not Path(config[path_in_config]).is_absolute():
+            config[path_in_config] = str(project_dir / config[path_in_config])
+        elif typ is list and "patches" in path_in_config:
+            patches = [str(project_dir / patch) for patch in config[path_in_config]]
+            config[path_in_config] = patches
+        elif typ is Executable:
+            exe = config[path_in_config]
+            if "/" in exe and not Path(exe).is_absolute():
+                config[path_in_config] = str(project_dir / config[path_in_config])
+
+
 def import_config(
     config_path: Optional[Union[os.PathLike[str], Path]] = None, validate: bool = True
 ):
     if config_path is None:
-        p = Path(pjoin(Path.home(), ".config/dce/config.json"))
-        if Path(p).exists():
+        p = Path.home() / ".config/dce/config.json"
+        if p.exists():
             config_path = p
-        elif Path("./config.json").exists():
-            config_path = Path("./config.json")
         else:
-            raise Exception("Found no config.json file at {p} or ./config.json!")
+            raise Exception("Found no config.json file at {p}!")
         logging.debug(f"Using config found at {config_path}")
+    else:
+        if not Path(config_path).is_file():
+            raise Exception("Found no config.json file at {p}!")
 
     with open(config_path, "r") as f:
         config = json.load(f)
 
     config["config_path"] = str(Path(config_path).absolute())
 
-    if "project_dir" not in config:
-        raise Exception("config.project_dir is not configured")
+    config = NestedNamespace(config)
+    to_absolute_paths(config)
 
     if validate:
         validate_config(config)
 
-    config = NestedNamespace(config)
     # Make sure the cache dir exists
     cache_path = Path(config.cachedir)
     if not cache_path.exists():
@@ -232,15 +248,6 @@ def import_config(
             f"config.cachedir {config.cachedir} already exists but is not a path or a symlink"
         )
 
-    # Make patch paths full paths to avoid confusion
-    # when working in different directories
-    config.gcc.patches = [
-        pjoin(config.project_dir, "patches", patch) for patch in config.gcc.patches
-    ]
-    config.llvm.patches = [
-        pjoin(config.project_dir, "patches", patch) for patch in config.llvm.patches
-    ]
-
     return config
 
 
@@ -265,6 +272,7 @@ def get_config_and_parser(own_parser: Optional[argparse.ArgumentParser] = None):
     # Get config file
     config = import_config(args_parser.config, validate=False)
 
+    # Read values from CLI and override them in config
     for _, path, _ in EXPECTED_ENTRIES:
         arg_val = args_parser.__dict__[".".join(path)]
         if arg_val is not None:

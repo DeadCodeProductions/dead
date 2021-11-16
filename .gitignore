@@ -5,3 +5,4 @@ __pycache__
 *.o
 *.log
 platform.info
+callchain_checker/build/
