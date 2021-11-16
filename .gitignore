@@ -7,3 +7,7 @@ __pycache__
 platform.info
 callchain_checker/build/
 dce_instrumenter/build/
+gcc/
+llvm-project/
+compiler_cache/
+logs/

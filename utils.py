@@ -24,6 +24,7 @@ class Executable(object):
 
 
 # fmt: off
+# When adding new options, don't forget to also put them in the init script!
 EXPECTED_ENTRIES = [
     # Type      Path in config              Description
     (str,       ("gcc", "name"),            "Prefix for the gcc cache directory"),
@@ -235,12 +236,12 @@ def import_config(
 
         if cache_path.group() != config.cache_group:
             raise Exception(
-                f"Cache {config.cachdir} is not owned by {config.cache_group}"
+                f"Cache {config.cachedir} is not owned by {config.cache_group}"
             )
 
         if cache_path.stat().st_mode != 17912:
             raise Exception(
-                f"Cache {config.cachdir} seems to have the wrong permissions. Please run `chmod g+rwxs {config.cachedir}`."
+                f"Cache {config.cachedir} seems to have the wrong permissions. Please run `chmod g+rwxs {config.cachedir}`."
             )
 
     else:
