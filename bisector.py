@@ -236,7 +236,7 @@ class Bisector:
         failed_to_build = False
         failed_to_build_counter = 0
 
-        guaranteed_termiation_counter = 0
+        guaranteed_termination_counter = 0
         while True:
             if not failed_to_build:
                 old_midpoint = midpoint
@@ -265,11 +265,11 @@ class Bisector:
                 failed_to_build_counter += 1
                 failed_to_build = False
 
-                if guaranteed_termiation_counter >= 20:
+                if guaranteed_termination_counter >= 20:
                     raise Exception(
                         "Failed too many times in a row while bisecting. Aborting bisection..."
                     )
-                guaranteed_termiation_counter += 1
+                guaranteed_termination_counter += 1
 
             logging.info(f"Midpoint: {midpoint}")
 
