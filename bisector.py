@@ -389,3 +389,5 @@ if __name__ == "__main__":
     elif args.file:
         file = Path(args.file)
         bsctr.bisect(file, force=args.force)
+
+    gnrtr.terminate_processes()

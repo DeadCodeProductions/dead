@@ -121,6 +121,7 @@ class CSmithCaseGenerator:
         self.config = config
         self.builder = builder.Builder(config, patchdb, cores)
         self.chkr = checker.Checker(config, self.builder)
+        self.procs = []
 
     def generate_interesting_case(self, scenario: utils.Scenario) -> utils.Case:
         # Because the resulting code will be of csmith origin, we have to add
@@ -210,10 +211,12 @@ class CSmithCaseGenerator:
         output_dir: os.PathLike,
         start_stop: Optional[bool] = False,
     ) -> Generator[Path, None, None]:
+        """
+        WARNING: If you use this method, you have to call `terminate_processes`"""
         queue = Queue()
 
         # Create processes
-        procs = [
+        self.procs = [
             Process(
                 target=self._wrapper_interesting,
                 args=(queue, scenario),
@@ -222,7 +225,7 @@ class CSmithCaseGenerator:
         ]
 
         # Start processes
-        for p in procs:
+        for p in self.procs:
             p.daemon = True
             p.start()
 
@@ -243,7 +246,7 @@ class CSmithCaseGenerator:
             if start_stop:
                 # Send processes to "sleep"
                 logging.debug("Stopping workers...")
-                for p in procs:
+                for p in self.procs:
                     if p.pid is None:
                         continue
                     os.kill(p.pid, signal.SIGSTOP)
@@ -251,10 +254,18 @@ class CSmithCaseGenerator:
             if start_stop:
                 logging.debug("Restarting workers...")
                 # Awake processes again for further search
-                for p in procs:
+                for p in self.procs:
                     if p.pid is None:
                         continue
                     os.kill(p.pid, signal.SIGCONT)
+
+    def terminate_processes(self):
+        for p in self.procs:
+            if p.pid is None:
+                continue
+            # This is so cruel
+            os.kill(p.pid, signal.SIGCONT)
+            p.terminate()
 
 
 if __name__ == "__main__":
@@ -324,3 +335,6 @@ if __name__ == "__main__":
     else:
         # TODO
         print("Not implemented yet")
+
+    # This is not needed here but I don't know why.
+    case_generator.terminate_processes()

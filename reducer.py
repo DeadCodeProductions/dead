@@ -234,3 +234,5 @@ if __name__ == "__main__":
         else:
             if rdcr.reduce_file(file, args.force):
                 print(file)
+
+    gnrtr.terminate_processes()
