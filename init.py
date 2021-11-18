@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
     # ====== LLVM ======
     llvm = {}
-    llvm["name"] = "llvm"
+    llvm["name"] = "clang"
     llvm["main_branch"] = "main"
 
     # Git clone repo
