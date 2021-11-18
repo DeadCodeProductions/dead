@@ -163,7 +163,7 @@ class CSmithCaseGenerator:
             # Extract reduce cases
             logging.debug("Extracting reduce cases...")
             for marker in target_alive_markers:
-                good = []
+                good: list[utils.CompilerSetting] = []
                 for good_setting, good_alive_markers in tester_alive_marker_list:
                     if (
                         marker not in good_alive_markers
@@ -172,9 +172,12 @@ class CSmithCaseGenerator:
 
                 # Find bad cases
                 if len(good) > 0:
+                    good_opt_levels = [gs.opt_level for gs in good]
                     for bad_setting, bad_alive_markers in target_alive_marker_list:
+                        # XXX: Here you can enable inter-opt_level comparison!
                         if (
                             marker in bad_alive_markers
+                            and bad_setting.opt_level in good_opt_levels
                         ):  # i.e. the setting didn't eliminate the call
                             # Create reduce case
                             case = utils.Case(
