@@ -45,17 +45,16 @@ class Bisector:
     def _is_interesting(self, case: utils.Case, rev: str) -> bool:
         case_cpy = copy.deepcopy(case)
         case_cpy.bad_setting.rev = rev
-        # TODO: Shall we do this?
-        case_cpy.code = case_cpy.reduced_code[-1]
-        return self.chkr.is_interesting(case_cpy, preprocess=False)
+        if case_cpy.reduced_code:
+            case_cpy.code = case_cpy.reduced_code[-1]
+            return self.chkr.is_interesting(case_cpy, preprocess=False)
+        else:
+            return self.chkr.is_interesting(case_cpy, preprocess=True)
 
     def bisect(self, file: Path, force: bool = False):
         case = utils.Case.from_file(self.config, file)
 
-        if not case.reduced_code:
-            logging.info(f"Ignoring case {file}: Not reduced")
-            return
-        if not force and len(case.reduced_code) <= len(case.bisections):
+        if not force and case.bisections:
             logging.info(f"Ignoring case {file}: Already bisected")
             return
 
@@ -299,7 +298,7 @@ class Bisector:
 
 
 if __name__ == "__main__":
-    config, args = utils.get_config_and_parser(parsers.reducer_parser())
+    config, args = utils.get_config_and_parser(parsers.bisector_parser())
 
     patchdb = patchdatabase.PatchDB(config.patchdb)
     bldr = builder.Builder(config, patchdb, args.cores)
@@ -362,8 +361,15 @@ if __name__ == "__main__":
         if args.amount == 0:
             while True:
                 path = next(gen)
-                worked = rdcr.reduce_file(path)
-                if worked:
+                worked = False
+                if args.reducer:
+                    try:
+                        worked = rdcr.reduce_file(path)
+                    except builder.BuildException as e:
+                        print(f"BuildException in {path}: {e}")
+                        continue
+
+                if not args.reducer or worked:
                     try:
                         bsctr.bisect(path, force=args.force)
                     except AssertionError as e:
@@ -375,8 +381,14 @@ if __name__ == "__main__":
         else:
             for i in range(args.amount):
                 path = next(gen)
-                worked = rdcr.reduce_file(path)
-                if worked:
+                worked = False
+                if args.reducer:
+                    try:
+                        worked = rdcr.reduce_file(path)
+                    except builder.BuildException as e:
+                        print(f"BuildException in {path}: {e}")
+                        continue
+                if not args.reducer or worked:
                     try:
                         bsctr.bisect(path, force=args.force)
                     except AssertionError as e:

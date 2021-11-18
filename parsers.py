@@ -336,6 +336,10 @@ def bisector_parser():
     parser.add_argument("-f", "--file", help="Which file to work on.", type=str)
 
     parser.add_argument(
+        "-d", "--output-directory", help="Where the cases should be saved to.", type=str
+    )
+
+    parser.add_argument(
         "-a", "--amount", help="How many cases to find and reduce.", type=str, default=0
     )
 
@@ -392,6 +396,13 @@ def bisector_parser():
         "--force",
         help="Force another bisection even if they already exist",
         action="store_true",
+    )
+
+    parser.add_argument(
+        "--reducer",
+        help="If the generated case should be reduced or not.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
     )
 
     return parser
