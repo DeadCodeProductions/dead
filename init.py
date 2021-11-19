@@ -113,7 +113,6 @@ if __name__ == "__main__":
         "llvmorg-11.1.0",
         "llvmorg-11.0.1",
         "llvmorg-11.0.0",
-        "llvmorg-11.0.0",
         "llvmorg-10.0.1",
         "llvmorg-10.0.0",
     ]
