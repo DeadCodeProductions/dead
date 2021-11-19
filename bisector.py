@@ -20,6 +20,10 @@ import repository
 import utils
 
 
+class BisectionException(Exception):
+    pass
+
+
 def find_cached_revisions(
     compiler_name: str, config: utils.NestedNamespace
 ) -> list[str]:
@@ -245,7 +249,7 @@ class Bisector:
                     break
             else:
                 if failed_to_build_counter >= max_build_fail:
-                    raise Exception(
+                    raise BisectionException(
                         "Failed too many times in a row while bisecting. Aborting bisection..."
                     )
                 if failed_to_build_counter % 2 == 0:
@@ -265,7 +269,7 @@ class Bisector:
                 failed_to_build = False
 
                 if guaranteed_termination_counter >= 20:
-                    raise Exception(
+                    raise BisectionException(
                         "Failed too many times in a row while bisecting. Aborting bisection..."
                     )
                 guaranteed_termination_counter += 1
@@ -327,6 +331,9 @@ if __name__ == "__main__":
             print(f"Processing {tf}")
             try:
                 bsctr.bisect(tf, force=args.force)
+            except BisectionException as e:
+                print(f"BisectionException in {tf}: '{e}'")
+                continue
             except AssertionError as e:
                 print(f"AssertionError in {tf}: '{e}'")
                 continue
@@ -372,6 +379,9 @@ if __name__ == "__main__":
                 if not args.reducer or worked:
                     try:
                         bsctr.bisect(path, force=args.force)
+                    except BisectionException as e:
+                        print(f"BisectionException in {path}: '{e}'")
+                        continue
                     except AssertionError as e:
                         print(f"AssertionError in {path}: '{e}'")
                         continue
@@ -391,6 +401,9 @@ if __name__ == "__main__":
                 if not args.reducer or worked:
                     try:
                         bsctr.bisect(path, force=args.force)
+                    except BisectionException as e:
+                        print(f"BisectionException in {path}: '{e}'")
+                        continue
                     except AssertionError as e:
                         print(f"AssertionError in {path}: '{e}'")
                         continue
