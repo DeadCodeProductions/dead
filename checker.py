@@ -35,10 +35,13 @@ def get_cc_output(cc, file, flags, cc_timeout):
     ]
     if flags:
         cmd.extend(flags.split())
-    # Not using utils.run_cmd because of redirects
-    result = subprocess.run(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=cc_timeout
-    )
+    try:
+        # Not using utils.run_cmd because of redirects
+        result = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=cc_timeout
+        )
+    except subprocess.TimeoutExpired:
+        return 1, ""
     return result.returncode, result.stdout.decode("utf-8")
 
 
@@ -180,11 +183,14 @@ def sanitize(
     compcert_timeout=16,
 ):
     # Taking advantage of shortciruit logic...
-    return (
-        check_compiler_warnings(gcc, clang, file, flags, cc_timeout)
-        and use_ub_sanitizers(clang, file, flags, cc_timeout, exe_timeout)
-        and verify_with_ccomp(ccomp, file, flags, compcert_timeout)
-    )
+    try:
+        return (
+            check_compiler_warnings(gcc, clang, file, flags, cc_timeout)
+            and use_ub_sanitizers(clang, file, flags, cc_timeout, exe_timeout)
+            and verify_with_ccomp(ccomp, file, flags, compcert_timeout)
+        )
+    except subprocess.TimeoutExpired:
+        return False
 
 
 # ==================== Checker ====================
