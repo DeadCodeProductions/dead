@@ -126,7 +126,9 @@ class Reducer:
 
             try:
                 current_time = time.strftime("%Y%m%d-%H%M%S")
-                build_log_path = Path(config.logdir) / f"{current_time}-creduce.log"
+                build_log_path = (
+                    Path(self.config.logdir) / f"{current_time}-creduce.log"
+                )
                 logging.info(f"creduce logfile at {build_log_path}")
                 with open(build_log_path, "a") as build_log:
                     utils.run_cmd_to_logfile(
