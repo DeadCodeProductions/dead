@@ -9,6 +9,7 @@ import os
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import builder
 import checker
@@ -55,12 +56,41 @@ class Bisector:
         else:
             return self.chkr.is_interesting(case_cpy, preprocess=True)
 
-    def bisect(self, file: Path, force: bool = False):
+    def bisect_file(self, file: Path, force: bool = False) -> bool:
         case = utils.Case.from_file(self.config, file)
+        if self.bisect_case(case, force):
+            case.to_file(file)
+            return True
+        return False
 
+    def bisect_case(self, case: utils.Case, force: bool = False) -> bool:
         if not force and case.bisections:
             logging.info(f"Ignoring case {file}: Already bisected")
-            return
+            return True
+        if res := self.bisect_code(
+            case.code, case.marker, case.bad_setting, case.good_settings
+        ):
+            case.bisections.append(res)
+            return True
+        return False
+
+    def bisect_code(
+        self,
+        code: str,
+        marker: str,
+        bad_setting: utils.CompilerSetting,
+        good_settings: list[utils.CompilerSetting],
+    ) -> Optional[str]:
+        case = utils.Case(
+            code,
+            marker,
+            bad_setting,
+            good_settings,
+            utils.Scenario([bad_setting], good_settings),
+            [],
+            [],
+            None,
+        )
 
         bad_compiler_config = case.bad_setting.compiler_config
         repo = repository.Repo(
@@ -138,19 +168,16 @@ class Bisector:
                 # b2 case
                 logging.info("B2 Case")
                 # TODO: Figure out how to save and handle b2
-                logging.critical(f"Currently ignoring b2, sorry ({file}")
-                return
+                logging.critical(f"Currently ignoring b2, sorry")
+                raise BisectionException("Currently ignoring Case type B2, sorry")
 
                 # res = self._bisection(
                 #    common_ancestor, good_commit, case, repo, interesting_is_bad=False
                 # )
                 # self._check(case, res, repo, interesting_is_bad=False)
                 # print(f"First good commit {res}")
-        # Sanity check
 
-        case.bisections.append(res)
-
-        case.to_file(file)
+        return res
 
     def _check(
         self,
@@ -330,7 +357,7 @@ if __name__ == "__main__":
         for tf in tars:
             print(f"Processing {tf}")
             try:
-                bsctr.bisect(tf, force=args.force)
+                bsctr.bisect_file(tf, force=args.force)
             except BisectionException as e:
                 print(f"BisectionException in {tf}: '{e}'")
                 continue
@@ -378,7 +405,7 @@ if __name__ == "__main__":
 
                 if not args.reducer or worked:
                     try:
-                        bsctr.bisect(path, force=args.force)
+                        bsctr.bisect_file(path, force=args.force)
                     except BisectionException as e:
                         print(f"BisectionException in {path}: '{e}'")
                         continue
@@ -400,7 +427,7 @@ if __name__ == "__main__":
                         continue
                 if not args.reducer or worked:
                     try:
-                        bsctr.bisect(path, force=args.force)
+                        bsctr.bisect_file(path, force=args.force)
                     except BisectionException as e:
                         print(f"BisectionException in {path}: '{e}'")
                         continue
@@ -413,6 +440,6 @@ if __name__ == "__main__":
 
     elif args.file:
         file = Path(args.file)
-        bsctr.bisect(file, force=args.force)
+        bsctr.bisect_file(file, force=args.force)
 
     gnrtr.terminate_processes()
