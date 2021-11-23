@@ -206,7 +206,7 @@ class CSmithCaseGenerator:
             case = self.generate_interesting_case(scenario)
             queue.put(json.dumps(case.to_jsonable_dict()))
 
-    def parallel_interesting_case(
+    def parallel_interesting_case_file(
         self,
         config: utils.NestedNamespace,
         scenario: utils.Scenario,
@@ -214,6 +214,26 @@ class CSmithCaseGenerator:
         output_dir: os.PathLike,
         start_stop: Optional[bool] = False,
     ) -> Generator[Path, None, None]:
+        gen = self.parallel_interesting_case(config, scenario, processes, start_stop)
+
+        counter = 0
+        while True:
+            case = next(gen)
+            h = hash(str(case))
+            h = max(h, -h)
+            path = Path(pjoin(output_dir, f"case_{counter:08}-{h:019}.tar"))
+            logging.debug("Writing case to {path}...")
+            case.to_file(path)
+            yield path
+            counter += 1
+
+    def parallel_interesting_case(
+        self,
+        config: utils.NestedNamespace,
+        scenario: utils.Scenario,
+        processes: int,
+        start_stop: Optional[bool] = False,
+    ) -> Generator[utils.Case, None, None]:
         """
         WARNING: If you use this method, you have to call `terminate_processes`"""
         queue = Queue()
@@ -233,19 +253,12 @@ class CSmithCaseGenerator:
             p.start()
 
         # read queue
-        counter = 0
         while True:
             # TODO: handle process failure
             case_str: str = queue.get()
 
-            h = hash(case_str)
-            h = max(h, -h)
-            path = Path(pjoin(output_dir, f"case_{counter:08}-{h:019}.tar"))
-            logging.debug("Writing case to {path}...")
             case = utils.Case.from_jsonable_dict(config, json.loads(case_str))
-            case.to_file(path)
 
-            counter += 1
             if start_stop:
                 # Send processes to "sleep"
                 logging.debug("Stopping workers...")
@@ -253,7 +266,7 @@ class CSmithCaseGenerator:
                     if p.pid is None:
                         continue
                     os.kill(p.pid, signal.SIGSTOP)
-            yield path
+            yield case
             if start_stop:
                 logging.debug("Restarting workers...")
                 # Awake processes again for further search
@@ -319,7 +332,7 @@ if __name__ == "__main__":
         if args.parallel is not None:
             amount_cases = args.amount if args.amount is not None else 0
             amount_processes = max(1, args.parallel)
-            gen = case_generator.parallel_interesting_case(
+            gen = case_generator.parallel_interesting_case_file(
                 config=config,
                 scenario=scenario,
                 processes=amount_processes,

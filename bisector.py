@@ -361,7 +361,7 @@ if __name__ == "__main__":
         if len(tmp.attacker_settings) > 0:
             scenario.attacker_settings = tmp.attacker_settings
 
-        gen = gnrtr.parallel_interesting_case(
+        gen = gnrtr.parallel_interesting_case_file(
             config, scenario, bldr.cores, output_dir, start_stop=True
         )
 
