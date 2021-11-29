@@ -184,6 +184,7 @@ if __name__ == "__main__":
         config["ccomp"] = "???"
 
     print("Saving config...")
+    os.makedirs(path.parent, exist_ok=True)
     with open(path, "w") as f:
         json.dump(config, f, indent=4)
 
