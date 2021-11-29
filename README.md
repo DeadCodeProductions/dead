@@ -4,7 +4,7 @@
 
 ## Installation
 
-### Prerequisites  
+### Prerequisites
 The following programs must be installed
 - `gcc`
 - `clang`
@@ -12,7 +12,9 @@ The following programs must be installed
 - `creduce`
 - `cmake`
 - `ccomp` (CompCert)
-- `llvm` (for the include files)
+- `llvm 12.X.X` (for the include files)
+
+We are running on Arch Linux and have not tested any other distribution.
 
 ### Setup
 Install the prerequisites.
@@ -34,7 +36,7 @@ This will gradually become faster as when the compiler cache is populated.
 # Do all the things with all threads for LLVM, 
 # put it into ./llvm_cases and tell me about it
 ./bisector.py -d ./llvm_cases\
-              --generate\ # Find new cases
+              --generate\ # Find new cases using generator.py, checker.py etc.
               --targets llvm trunk 1 2 3 s z \ # Target compiler + optimization levels
               -ac llvm llvmorg-13.0.0\ # Additional/Attacking compilers
                   llvm llvmorg-12.0.1\
@@ -44,8 +46,9 @@ This will gradually become faster as when the compiler cache is populated.
               --log-level info # Tell what is happening
               
               # Other helpful options
+              # --no-reducer     # Don't reduce case
               # --amount AMOUNT  # Stop after finding AMOUNT cases
-              # --cores CORES  # Only use CORES threads
+              # --cores CORES    # Only use CORES threads
 
 # No comment version to copy paste
 ./bisector.py -d ./llvm_cases\
@@ -79,26 +82,29 @@ Contents:
 - `marker.txt`: Which function is not elimiated in one compiler but the other.
 - `interesting_settings.json`: Contains which compilers elimiate the marker and which not.
 - `scenario.json`: What the settings were in which the case was found.
-- `reduced_code_X.c`: Reduced code from `code.c`.
-- `bisection_X.c`: Where the case bisects to.
+- `reduced_code_X.c`: Reduced code from `code.c`. Does not exist if case was not reduced.
+- `bisection_X.c`: Where the case bisects to. Does not exist if case was not bisected.
 
 
 ## Overview of important files
-- `bisector.py`: Bisects a given interesting case
-- `builder.py`: Builds the compiler
-- `checker.py`: Checks if a given case is interesting
-- `generator.py`: Finds new interesing cases
+- `bisector.py`: Bisects a given interesting case.
+- `builder.py`: Builds the compiler.
+- `checker.py`: Checks if a given case is interesting.
+- `generator.py`: Finds new interesting cases.
 - `patcher.py`: Automatically finds the region in the history where a patch needs to be applied.
-- `reducer.py`: Reduce the code of a given
+- `reducer.py`: Reduce the code of a given.
 
 ## FAQ
+### I want to do XYZ. How?
+Maybe there's already an option for it. Consult the program with `--help` for all the options.
+
 ### Why don't I see anything?
 Are you running with `-ll info`?
 
 ### The program got a commit that doesn't exist!
 If you are checking things manually: Are you sure you are looking in the right repository?
 
-If you are processing a case and `git` throws exeptions, try pulling `llvm-repository` and `gcc` so you are sure to have all the commits.
+If you are processing a case and `git` throws an exception, try pulling `llvm-project` and `gcc` so you are sure to have all the commits.
 
 ### Why does this case fail?
 Try checking it with `./debugtool.py -di -f $CASE`. If it says everything is ok but it is not, you have encountered a bug. Please drop us an e-mail.
