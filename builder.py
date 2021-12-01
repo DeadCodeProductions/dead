@@ -62,6 +62,8 @@ def build_context(
 
 
 class Builder:
+    """Class to build different compilers."""
+
     def __init__(
         self,
         config: utils.NestedNamespace,
@@ -69,6 +71,13 @@ class Builder:
         cores: Optional[int] = None,
         force: bool = False,
     ):
+        """
+        Args:
+            config (utils.NestedNamespace): THE config.
+            patchdb (PatchDB): The PatchDB instance to consult for which patches to use.
+            cores (Optional[int]): How many jobs the builder should use.
+            force (bool): Whether or not to force all builds.
+        """
         self.config = config
         # Do not set cores to 0. For gcc this means all available cores,
         # for llvm this means infinite! You'll only survive this with around 250GB of RAM.
@@ -88,6 +97,20 @@ class Builder:
         additional_patches: Optional[list] = None,
         force: bool = False,
     ) -> Path:
+        """Build the compiler specified.
+
+        Args:
+            compiler_config: What project to build (config.llvm/config.gcc).
+            rev (str): Which revision/commit to build.
+            cores (Optional[int]): How many cores to use.
+                Builder.cores is used when not defined.
+            additional_patches (Optional[list]): Which patches to apply *additionally*
+                to the ones reported by the PatchDB.
+            force (bool): Force to build a compiler, even if it is known to be bad.
+
+        Returns:
+            Path: Path to the compiler directory.
+        """
 
         # Always force
         force = self.force or force
@@ -262,6 +285,17 @@ class Builder:
 
 
 # =================== Helper ====================
+class CompileError(Exception):
+    """Exception raised when the compiler fails to compile something.
+
+    There are two common reasons for this to appear:
+    - Easy: The code file has is not present/disappeard.
+    - Hard: Internal compiler errors.
+    """
+
+    pass
+
+
 @contextmanager
 def compile_context(code: str):
     fd_code, code_file = tempfile.mkstemp(suffix=".c")
@@ -275,13 +309,25 @@ def compile_context(code: str):
     finally:
         os.remove(code_file)
         os.close(fd_code)
-        os.remove(asm_file)
+        # In case of a CompileError,
+        # the file itself might not exist.
+        if Path(asm_file).exists():
+            os.remove(asm_file)
         os.close(fd_asm)
 
 
 def get_compiler_executable(
     compiler_setting: utils.CompilerSetting, bldr: Builder
 ) -> Path:
+    """Get the path to the compiler *binary* i.e. [...]/bin/clang
+
+    Args:
+        compiler_setting (utils.CompilerSetting): Compiler to get the binary of
+        bldr (Builder): Builder to get/build the requested compiler.
+
+    Returns:
+        Path: Path to compiler binary
+    """
     compiler_path = bldr.build(compiler_setting.compiler_config, compiler_setting.rev)
     compiler_exe = pjoin(compiler_path, "bin", compiler_setting.compiler_config.name)
     return Path(compiler_exe)
@@ -290,6 +336,19 @@ def get_compiler_executable(
 def get_asm_str(
     code: str, compiler_setting: utils.CompilerSetting, bldr: Builder
 ) -> str:
+    """Get assembly of `code` compiled by `compiler_setting`.
+
+    Args:
+        code (str): Code to compile to assembly
+        compiler_setting (utils.CompilerSetting): Compiler to use
+        bldr (Builder): Builder to get the compiler
+
+    Returns:
+        str: Assembly of `code`
+
+    Raises:
+        CompileError: Is raised when compilation failes i.e. has a non-zero exit code.
+    """
     # Get the assembly output of `code` compiled with `compiler_setting` as str
 
     compiler_exe = get_compiler_executable(compiler_setting, bldr)
@@ -301,7 +360,10 @@ def get_asm_str(
             " "
         )
         cmd += compiler_setting.get_flag_cmd()
-        utils.run_cmd(cmd)
+        try:
+            utils.run_cmd(cmd)
+        except subprocess.CalledProcessError:
+            raise CompileError()
 
         with open(asm_file, "r") as f:
             return f.read()
@@ -313,6 +375,20 @@ def find_alive_markers(
     marker_prefix: str,
     bldr: Builder,
 ) -> set[str]:
+    """Return set of markers which are found in the assembly.
+
+    Args:
+        code (str): Code with markers
+        compiler_setting (utils.CompilerSetting): Compiler to use
+        marker_prefix (str): Prefix of markers (utils.get_marker_prefix)
+        bldr (Builder): Builder to get the compiler
+
+    Returns:
+        set[str]: Set of markers found in the assembly i.e. alive markers
+
+    Raises:
+        CompileError: Raised when code can't be compiled.
+    """
     alive_markers = set()
 
     # Extract alive markers

@@ -19,7 +19,15 @@ import patcher
 import utils
 
 
-def run_csmith(csmith):
+def run_csmith(csmith: str) -> str:
+    """Generate random code with csmith.
+
+    Args:
+        csmith (str): Path to executable or name in $PATH to csmith.
+
+    Returns:
+        str: csmith generated program.
+    """
     tries = 0
     while True:
         options = [
@@ -68,7 +76,17 @@ def run_csmith(csmith):
                 raise Exception("CSmith failed 10 times in a row!")
 
 
-def instrument_program(dcei: Path, file: Path, include_paths: list[str]):
+def instrument_program(dcei: Path, file: Path, include_paths: list[str]) -> str:
+    """Instrument a given file i.e. put markers in the file.
+
+    Args:
+        dcei (Path): Path to dcei executable.
+        file (Path): Path to code file to be instrumented.
+        include_paths (list[str]):
+
+    Returns:
+        str: Marker prefix. Here: 'DCEMarker'
+    """
     cmd = [str(dcei), str(file)]
     for path in include_paths:
         cmd.append(f"--extra-arg=-isystem{str(path)}")
@@ -76,7 +94,19 @@ def instrument_program(dcei: Path, file: Path, include_paths: list[str]):
     return "DCEMarker"
 
 
-def generate_file(config: utils.NestedNamespace, additional_flags: str):
+def generate_file(
+    config: utils.NestedNamespace, additional_flags: str
+) -> tuple[str, str]:
+    """Generate an instrumented csmith program.
+
+    Args:
+        config (utils.NestedNamespace): THE config
+        additional_flags (str): Additional flags to use when
+            compiling the program when checking.
+
+    Returns:
+        tuple[str, str]: Marker prefix and instrumented code.
+    """
     additional_flags += f" -I {config.csmith.include_path}"
     while True:
         try:
@@ -124,6 +154,16 @@ class CSmithCaseGenerator:
         self.procs = []
 
     def generate_interesting_case(self, scenario: utils.Scenario) -> utils.Case:
+        """Generate a case which is interesting i.e. has one compiler which does
+        not eliminate a marker (from the target settings) a and at least one from
+        the attacker settings.
+
+        Args:
+            scenario (utils.Scenario): Which compiler to compare.
+
+        Returns:
+            utils.Case: Intersting case.
+        """
         # Because the resulting code will be of csmith origin, we have to add
         # the csmith include path to all settings
         csmith_include_flag = f"-I{self.config.csmith.include_path}"
@@ -136,25 +176,28 @@ class CSmithCaseGenerator:
 
             # Find alive markers
             logging.debug("Getting alive markers...")
-            target_alive_marker_list = [
-                (
-                    tt,
-                    builder.find_alive_markers(
-                        candidate_code, tt, marker_prefix, self.builder
-                    ),
-                )
-                for tt in scenario.target_settings
-            ]
+            try:
+                target_alive_marker_list = [
+                    (
+                        tt,
+                        builder.find_alive_markers(
+                            candidate_code, tt, marker_prefix, self.builder
+                        ),
+                    )
+                    for tt in scenario.target_settings
+                ]
 
-            tester_alive_marker_list = [
-                (
-                    tt,
-                    builder.find_alive_markers(
-                        candidate_code, tt, marker_prefix, self.builder
-                    ),
-                )
-                for tt in scenario.attacker_settings
-            ]
+                tester_alive_marker_list = [
+                    (
+                        tt,
+                        builder.find_alive_markers(
+                            candidate_code, tt, marker_prefix, self.builder
+                        ),
+                    )
+                    for tt in scenario.attacker_settings
+                ]
+            except builder.CompileError:
+                continue
 
             target_alive_markers = set()
             for _, marker_set in target_alive_marker_list:
@@ -191,16 +234,26 @@ class CSmithCaseGenerator:
                                 path=None,
                             )
                             # TODO: Optimize interestingness test and document behaviour
-                            if self.chkr.is_interesting(case):
-                                logging.info(
-                                    f"Try {try_counter}: Found case! LENGTH: {len(candidate_code)}"
-                                )
-                                return case
+                            try:
+                                if self.chkr.is_interesting(case):
+                                    logging.info(
+                                        f"Try {try_counter}: Found case! LENGTH: {len(candidate_code)}"
+                                    )
+                                    return case
+                            except builder.CompileError:
+                                continue
             else:
                 logging.debug(f"Try {try_counter}: Found no case. Onto the next one!")
                 try_counter += 1
 
     def _wrapper_interesting(self, queue: Queue, scenario: utils.Scenario):
+        """Wrapper for generate_interesting_case for easier use
+        with python multiprocessing.
+
+        Args:
+            queue (Queue): The multiprocessing queue to do IPC with.
+            scenario (utils.Scenario): Scenario
+        """
         logging.info("Starting worker...")
         while True:
             case = self.generate_interesting_case(scenario)
@@ -214,6 +267,21 @@ class CSmithCaseGenerator:
         output_dir: os.PathLike,
         start_stop: Optional[bool] = False,
     ) -> Generator[Path, None, None]:
+        """Generate interesting cases in parallel
+        WARNING: If you use this method, you have to call `terminate_processes`
+
+        Args:
+            config (utils.NestedNamespace): THE config.
+            scenario (utils.Scenario): Scenario.
+            processes (int): Amount of jobs.
+            output_dir (os.PathLike): Directory where to output the found cases.
+            start_stop (Optional[bool]): Whether or not stop the processes when
+                finding a case. This is useful when running a pipeline and thus
+                the processing power is needed somewhere else.
+
+        Returns:
+            Generator[Path, None, None]: Interesting case generator giving paths.
+        """
         gen = self.parallel_interesting_case(config, scenario, processes, start_stop)
 
         counter = 0
@@ -234,8 +302,22 @@ class CSmithCaseGenerator:
         processes: int,
         start_stop: Optional[bool] = False,
     ) -> Generator[utils.Case, None, None]:
+        """Generate interesting cases in parallel
+        WARNING: If you use this method, you have to call `terminate_processes`
+
+        Args:
+            config (utils.NestedNamespace): THE config.
+            scenario (utils.Scenario): Scenario.
+            processes (int): Amount of jobs.
+            output_dir (os.PathLike): Directory where to output the found cases.
+            start_stop (Optional[bool]): Whether or not stop the processes when
+                finding a case. This is useful when running a pipeline and thus
+                the processing power is needed somewhere else.
+
+        Returns:
+            Generator[utils.Case, None, None]: Interesting case generator giving Cases.
         """
-        WARNING: If you use this method, you have to call `terminate_processes`"""
+
         queue = Queue()
 
         # Create processes

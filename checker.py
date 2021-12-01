@@ -42,12 +42,29 @@ def get_cc_output(cc, file, flags, cc_timeout):
         )
     except subprocess.TimeoutExpired:
         return 1, ""
+    except subprocess.CalledProcessError:
+        # Possibly a compilation failure
+        return 1, ""
     return result.returncode, result.stdout.decode("utf-8")
 
 
 def check_compiler_warnings(
     clang: str, gcc: str, file: Path, flags: str, cc_timeout: int
 ) -> bool:
+    """
+    Check if the compiler outputs any warnings that indicate
+    undefined behaviour.
+
+    Args:
+        clang (str): Normal executable of clang.
+        gcc (str): Normal executable of gcc.
+        file (Path): File to compile.
+        flags (str): (additional) flags to be used when compiling.
+        cc_timeout (int): Timeout for the compilation in seconds.
+
+    Returns:
+        bool: True if no warnings were found.
+    """
     clang_rc, clang_output = get_cc_output(clang, file, flags, cc_timeout)
     gcc_rc, gcc_output = get_cc_output(gcc, file, flags, cc_timeout)
 
@@ -114,6 +131,17 @@ def ccomp_env() -> Path:
 def verify_with_ccomp(
     ccomp: str, file: Path, flags: str, compcert_timeout: int
 ) -> bool:
+    """Check if CompCert is unhappy about something.
+
+    Args:
+        ccomp (str): Path to ccomp executable or name in $PATH.
+        file (Path): File to compile.
+        flags (str): Additional flags to use.
+        compcert_timeout (int): Timeout in seconds.
+
+    Returns:
+        bool: True if CompCert does not complain.
+    """
     with ccomp_env() as tmpdir:
         cmd = [
             ccomp,
@@ -140,7 +168,19 @@ def verify_with_ccomp(
 
 def use_ub_sanitizers(
     clang: str, file: Path, flags: str, cc_timeout: int, exe_timeout: int
-):
+) -> bool:
+    """Run clang undefined-behaviour tests
+
+    Args:
+        clang (str): Path to clang executable or name in $PATH.
+        file (Path): File to test.
+        flags (str): Additional flags to use.
+        cc_timeout (int): Timeout for compiling in seconds.
+        exe_timeout (int): Timeout for running the resulting exe in seconds.
+
+    Returns:
+        bool: True if no undefined was found.
+    """
     cmd = [clang, str(file), "-O1", "-fsanitize=undefined,address"]
     if flags:
         cmd.extend(flags.split())
@@ -178,10 +218,25 @@ def sanitize(
     ccomp: str,
     file: Path,
     flags: str,
-    cc_timeout=8,
-    exe_timeout=2,
-    compcert_timeout=16,
-):
+    cc_timeout: int = 8,
+    exe_timeout: int = 2,
+    compcert_timeout: int = 16,
+) -> bool:
+    """Check if there is anything that could indicate undefined behaviour.
+
+    Args:
+        gcc (str): Path to gcc executable or name in $PATH.
+        clang (str): Path to clang executable or name in $PATH.
+        ccomp (str): Path to ccomp executable or name in $PATH.
+        file (Path): File to check.
+        flags (str): Additional flags to use.
+        cc_timeout (int): Compiler timeout in seconds.
+        exe_timeout (int): Undef.-Behaviour. runtime timeout in seconds.
+        compcert_timeout (int): CompCert timeout in seconds.
+
+    Returns:
+        bool: True if nothing indicative of undefined behaviour is found.
+    """
     # Taking advantage of shortciruit logic...
     try:
         return (
@@ -196,7 +251,16 @@ def sanitize(
 # ==================== Checker ====================
 
 
-def annotate_program_with_static(annotator, file, include_paths):
+def annotate_program_with_static(
+    annotator: str, file: Path, include_paths: list[str]
+) -> None:
+    """Turn all global variables and functions into static ones.
+
+    Args:
+        annotator (str): Path to annotator executable or name in $PATH.
+        file (Path): Path to file to annotate.
+        include_paths (list[str]): Include paths to use when compiling.
+    """
     cmd = [annotator, file]
     for path in include_paths:
         cmd.append(f"--extra-arg=-isystem{path}")
@@ -213,6 +277,19 @@ class Checker:
         return
 
     def is_interesting_wrt_marker(self, case: utils.Case) -> bool:
+        """Checks if the marker is eliminated by all good compilers/setting
+        and not eliminated by the bad compiler/setting.
+
+        Args:
+            case (utils.Case): Case to check.
+
+        Returns:
+            bool: True if the maker is not eliminated by the bad setting and
+                eliminated by all good settings.
+
+        Raises:
+            builder.CompileError: Finding alive markers may fail.
+        """
         # Checks if the bad_setting does include the marker and
         # all the good settings do not.
 
@@ -233,7 +310,14 @@ class Checker:
         return not uninteresting
 
     def is_interesting_wrt_ccc(self, case: utils.Case) -> bool:
-        # Checks if there is a callchain between main and the marker
+        """Check if there is a call chain between main and the marker.
+
+        Args:
+            case (utils.Case): Case to check.
+
+        Returns:
+            bool: If there is a call chain between main and the marker
+        """
         with tempfile.NamedTemporaryFile(suffix=".c") as tf:
             with open(tf.name, "w") as f:
                 f.write(case.code)
@@ -260,7 +344,18 @@ class Checker:
                 return False
 
     def is_interesting_with_static_globals(self, case: utils.Case) -> bool:
-        # TODO: Why do we do this?
+        """Checks if the given case is still interesting, even when making all
+        variables and functions static.
+
+        Args:
+            case (utils.Case): The case to check
+
+        Returns:
+            bool: If the case is interesting when using static globals
+
+        Raises:
+            builder.CompileError: Getting the assembly may fail.
+        """
 
         with tempfile.NamedTemporaryFile(suffix=".c") as tf:
             with open(tf.name, "w") as new_cfile:
@@ -271,7 +366,7 @@ class Checker:
                 self.config.llvm.sane_version, tf.name, case.bad_setting.get_flag_str()
             )
             annotate_program_with_static(
-                self.config.static_annotator, tf.name, include_paths
+                self.config.static_annotator, Path(tf.name), include_paths
             )
 
             with open(tf.name, "r") as annotated_file:
@@ -302,6 +397,16 @@ class Checker:
         return empty_body_code
 
     def is_interesting_with_empty_marker_bodies(self, case: utils.Case) -> bool:
+        """Check if `case.code` does not exhibit undefined behaviour,
+        compile errors or makes CompCert unhappy.
+        To compile, all markers need to get an empty body, thus the name.
+
+        Args:
+            case (utils.Case): Case to check
+
+        Returns:
+            bool: True if the code passes the 'sanity-check'
+        """
 
         empty_body_code = self._emtpy_marker_code_str(case)
 
@@ -318,6 +423,21 @@ class Checker:
             )
 
     def is_interesting(self, case: utils.Case, preprocess: bool = True) -> bool:
+        """Check if a code passes all the 'interestingness'-checks.
+        Preprocesses code by default to prevent surprises when preprocessing
+        later.
+
+        Args:
+            self:
+            case (utils.Case): Case to check.
+            preprocess (bool): Whether or not to preprocess the code
+
+        Returns:
+            bool: True if the case passes all 'interestingness'-checks
+
+        Raises:
+            builder.CompileError
+        """
         # TODO: Optimization potential. Less calls to clang etc.
         # when tests are combined.
 

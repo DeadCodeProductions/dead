@@ -43,11 +43,25 @@ def find_cached_revisions(
 
 @dataclass
 class Bisector:
+    """Class to bisect a given case."""
+
     config: utils.NestedNamespace
     bldr: builder.Builder
     chkr: checker.Checker
 
     def _is_interesting(self, case: utils.Case, rev: str) -> bool:
+        """_is_interesting.
+
+        Args:
+            case (utils.Case): Case to check
+            rev (str): What revision to check the case against.
+
+        Returns:
+            bool: True if the case is interesting wrt `rev`.
+
+        Raises:
+            builder.CompileError:
+        """
         case_cpy = copy.deepcopy(case)
         case_cpy.bad_setting.rev = rev
         if case_cpy.reduced_code:
@@ -57,6 +71,16 @@ class Bisector:
             return self.chkr.is_interesting(case_cpy, preprocess=True)
 
     def bisect_file(self, file: Path, force: bool = False) -> bool:
+        """Bisect case found in `file`.
+
+        Args:
+            file (Path): Path to case file to bisect.
+            force (bool): Whether or not to force a bisection
+                if there's already one.
+
+        Returns:
+            bool: True if the bisection of the case in `file` succeeded.
+        """
         case = utils.Case.from_file(self.config, file)
         if self.bisect_case(case, force):
             case.to_file(file)
@@ -64,14 +88,27 @@ class Bisector:
         return False
 
     def bisect_case(self, case: utils.Case, force: bool = False) -> bool:
+        """Bisect a given case.
+
+        Args:
+            case (utils.Case): Case to bisect.
+            force (bool): Whether or not to force a bisection
+                if there's already one.
+
+        Returns:
+            bool: True if the bisection succeeded.
+        """
         if not force and case.bisections:
             logging.info(f"Ignoring case {file}: Already bisected")
             return True
-        if res := self.bisect_code(
-            case.code, case.marker, case.bad_setting, case.good_settings
-        ):
-            case.bisections.append(res)
-            return True
+        try:
+            if res := self.bisect_code(
+                case.code, case.marker, case.bad_setting, case.good_settings
+            ):
+                case.bisections.append(res)
+                return True
+        except BisectionException:
+            return False
         return False
 
     def bisect_code(
@@ -81,6 +118,22 @@ class Bisector:
         bad_setting: utils.CompilerSetting,
         good_settings: list[utils.CompilerSetting],
     ) -> Optional[str]:
+        """Bisect a given code wrt. marker, the bad setting and the good settings.
+
+        Args:
+            self:
+            code (str): code
+            marker (str): marker
+            bad_setting (utils.CompilerSetting): bad_setting
+            good_settings (list[utils.CompilerSetting]): good_settings
+
+        Returns:
+            Optional[str]: Revision the code bisects to, if it is successful.
+                None otherwise.
+
+        Raises:
+            BisectionException: Raised if the bisection failed somehow.
+        """
         case = utils.Case(
             code,
             marker,
@@ -152,30 +205,33 @@ class Bisector:
         #        case b2
         #        searching fixer
 
-        if repo.is_ancestor(good_commit, bad_commit):
-            res = self._bisection(good_commit, bad_commit, case, repo)
-            print(f"{res}")
-        else:
-            if not self._is_interesting(case, common_ancestor):
-                # b1 case
-                logging.info("B1 Case")
-                res = self._bisection(
-                    common_ancestor, bad_commit, case, repo, interesting_is_bad=True
-                )
+        try:
+            if repo.is_ancestor(good_commit, bad_commit):
+                res = self._bisection(good_commit, bad_commit, case, repo)
                 print(f"{res}")
-                self._check(case, res, repo)
             else:
-                # b2 case
-                logging.info("B2 Case")
-                # TODO: Figure out how to save and handle b2
-                logging.critical(f"Currently ignoring b2, sorry")
-                raise BisectionException("Currently ignoring Case type B2, sorry")
+                if not self._is_interesting(case, common_ancestor):
+                    # b1 case
+                    logging.info("B1 Case")
+                    res = self._bisection(
+                        common_ancestor, bad_commit, case, repo, interesting_is_bad=True
+                    )
+                    print(f"{res}")
+                    self._check(case, res, repo)
+                else:
+                    # b2 case
+                    logging.info("B2 Case")
+                    # TODO: Figure out how to save and handle b2
+                    logging.critical(f"Currently ignoring b2, sorry")
+                    raise BisectionException("Currently ignoring Case type B2, sorry")
 
-                # res = self._bisection(
-                #    common_ancestor, good_commit, case, repo, interesting_is_bad=False
-                # )
-                # self._check(case, res, repo, interesting_is_bad=False)
-                # print(f"First good commit {res}")
+                    # res = self._bisection(
+                    #    common_ancestor, good_commit, case, repo, interesting_is_bad=False
+                    # )
+                    # self._check(case, res, repo, interesting_is_bad=False)
+                    # print(f"First good commit {res}")
+        except builder.CompileError:
+            return None
 
         return res
 
@@ -186,6 +242,19 @@ class Bisector:
         repo: repository.Repo,
         interesting_is_bad: bool = True,
     ):
+        """Sanity check, that the bisected commit is actually
+        correct.
+
+        Args:
+            case (utils.Case): Case to check.
+            rev (str): Revision believed to the bisection commit.
+            repo (repository.Repo): Repository to get the previous commit from.
+            interesting_is_bad (bool): Whether or not to switch the expected result
+                of the interestingness-test.
+        Raises:
+            AssertionError: Raised when the check fails.
+        """
+        # TODO(Yann): Don't use assertion errors.
 
         prev_commit = repo.rev_to_commit(f"{rev}~")
         if interesting_is_bad:
@@ -206,6 +275,19 @@ class Bisector:
         interesting_is_bad: bool = True,
         max_build_fail: int = 2,
     ):
+        """Actual bisection part.
+        First bisects within the cache, then continues with a normal bisection.
+
+        Args:
+            good_rev (str): Revision that is ancestor of bad_rev.
+            bad_rev (str): Rev that comes later in the tree.
+            case (utils.Case): Case to bisect.
+            repo (repository.Repo): Repo to get the revisions from.
+            interesting_is_bad (bool): Whether or not to switch how to interpret
+                the outcome of the interestingness-test.
+            max_build_fail (int): How many times the builder can fail to build w/o
+                aborting the bisection.
+        """
 
         # check cache
         possible_revs = repo.direct_first_parent_path(good_rev, bad_rev)
@@ -223,7 +305,12 @@ class Bisector:
         logging.info(f"Bisecting in cache...")
         midpoint = ""
         old_midpoint = ""
+        failed_to_compile = False
         while True:
+            if failed_to_compile:
+                failed_to_compile = False
+                cached_revs.remove(midpoint)
+
             logging.info(f"{len(cached_revs): 4}, bad: {bad_rev}, good: {good_rev}")
             if len(cached_revs) == 0:
                 break
@@ -232,8 +319,17 @@ class Bisector:
             midpoint = cached_revs[midpoint_idx]
             if old_midpoint == midpoint:
                 break
+
             # There should be no build failure here, as we are working on cached builds
-            test: bool = self._is_interesting(case, midpoint)
+            # But there could be a CompileError
+            try:
+                test: bool = self._is_interesting(case, midpoint)
+            except builder.CompileError:
+                logging.warning(
+                    f"Failed to compile code with {case.bad_setting.compiler_config.name}-{midpoint}"
+                )
+                failed_to_compile = True
+                continue
 
             if test:
                 # bad is always "on top" in the history tree
@@ -263,12 +359,12 @@ class Bisector:
         logging.info(f"Bisecting for approx. {math.ceil(math.log2(len_region))} steps")
         midpoint = ""
         old_midpoint = ""
-        failed_to_build = False
+        failed_to_build_or_compile = False
         failed_to_build_counter = 0
 
         guaranteed_termination_counter = 0
         while True:
-            if not failed_to_build:
+            if not failed_to_build_or_compile:
                 old_midpoint = midpoint
                 midpoint = repo.next_bisection_commit(good_rev, bad_rev)
                 failed_to_build_counter = 0
@@ -293,7 +389,7 @@ class Bisector:
                     midpoint = repo.rev_to_commit(f"{midpoint}~{step}")
 
                 failed_to_build_counter += 1
-                failed_to_build = False
+                failed_to_build_or_compile = False
 
                 if guaranteed_termination_counter >= 20:
                     raise BisectionException(
@@ -309,7 +405,13 @@ class Bisector:
                 logging.warning(
                     f"Could not build {case.bad_setting.compiler_config.name} {midpoint}!"
                 )
-                failed_to_build = True
+                failed_to_build_or_compile = True
+                continue
+            except builder.CompileError:
+                logging.warning(
+                    f"Failed to compile code with {case.bad_setting.compiler_config.name}-{midpoint}"
+                )
+                failed_to_build_or_compile = True
                 continue
 
             if test:
