@@ -128,9 +128,8 @@ class Repo:
         else:
             git_cmd = f"git -C {self.path} apply".split(" ") + git_patches
 
-        sh_patches = [patch_cmd.split(" ") for patch_cmd in sh_patches]
         returncode = 0
-        for patch_cmd in sh_patches:
+        for patch_cmd in [patch_cmd.split(" ") for patch_cmd in sh_patches]:
             logging.debug(patch_cmd)
             returncode += subprocess.run(
                 patch_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL

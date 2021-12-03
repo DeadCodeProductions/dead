@@ -13,7 +13,7 @@ from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Hashable, Optional, TextIO, Tuple, Union
+from typing import Optional, TextIO, Union, Sequence, Any
 
 import parsers
 import repository
@@ -62,7 +62,7 @@ class NestedNamespace(SimpleNamespace):
     # https://stackoverflow.com/a/54332748
     # Class to make a dict into something that dot-notation
     # can be used on.
-    def __init__(self, dictionary, **kwargs):
+    def __init__(self, dictionary: dict[str, Any], **kwargs: Any):
         super().__init__(**kwargs)
         for key, value in dictionary.items():
             if isinstance(value, dict):
@@ -70,43 +70,41 @@ class NestedNamespace(SimpleNamespace):
             else:
                 self.__setattr__(key, value)
 
-    def __getitem__(self, key: Union[Hashable, list[Hashable], Tuple[Hashable]]):
-        if isinstance(key, tuple) or isinstance(key, list):
-            if len(key) > 1:
-                tmp = reduce(lambda x, y: x[y].__dict__, key[:-1], self.__dict__)
-                tmp = tmp[key[-1]]
-                return tmp
-            else:
-                return self.__dict__[key[0]]
-        else:
+    def __getitem__(self, key: Union[str, Sequence[str]]) -> Any:
+        if isinstance(key, str):
             return self.__dict__[key]
-
-    def __setitem__(self, key: Union[Hashable, list[Hashable], Tuple[Hashable]], value):
-        if isinstance(key, tuple) or isinstance(key, list):
-            if len(key) > 1:
-                tmp = reduce(lambda x, y: x[y].__dict__, key[:-1], self.__dict__)
-                tmp[key[-1]] = value
-            else:
-                self.__dict__[key[0]] = value
-
+        assert isinstance(key, Sequence)
+        if len(key) > 1:
+            tmp = reduce(lambda x, y: x[y].__dict__, key[:-1], self.__dict__)
+            return tmp[key[-1]]
         else:
+            return self.__dict__[key[0]]
+
+    def __setitem__(self, key: Union[str, Sequence[str]], value: Any) -> None:
+        if isinstance(key, str):
             self.__dict__[key] = value
-
-    def __contains__(self, key: Union[Hashable, list[Hashable], Tuple[Hashable]]):
-        if isinstance(key, tuple) or isinstance(key, list):
-            if len(key) > 1:
-                tmp = self.__dict__
-                for k in key[:-1]:
-                    if k not in tmp:
-                        return False
-                    else:
-                        tmp = tmp[k].__dict__
-
-                return key[-1] in tmp
-            else:
-                return key[0] in self.__dict__
+        assert isinstance(key, Sequence)
+        if len(key) > 1:
+            tmp = reduce(lambda x, y: x[y].__dict__, key[:-1], self.__dict__)
+            tmp[key[-1]] = value
         else:
+            self.__dict__[key[0]] = value
+
+    def __contains__(self, key: Union[str, Sequence[str]]) -> bool:
+        if isinstance(key, str):
             return key in self.__dict__
+        assert isinstance(key, Sequence)
+        if len(key) > 1:
+            tmp = self.__dict__
+            for k in key[:-1]:
+                if k not in tmp:
+                    return False
+                else:
+                    tmp = tmp[k].__dict__
+
+            return key[-1] in tmp
+        else:
+            return key[0] in self.__dict__
 
     def __asdict(self) -> dict:
         d = {}
@@ -122,7 +120,7 @@ class NestedNamespace(SimpleNamespace):
         return type(self)(self.__asdict())
 
 
-def validate_config(config: Union[dict, NestedNamespace]):
+def validate_config(config: Union[dict[str, Any], NestedNamespace]):
     # TODO: Also check if there are fields that are not supposed to be there
     key_problems = set()
     for exkeys in EXPECTED_ENTRIES:
@@ -150,7 +148,7 @@ def validate_config(config: Union[dict, NestedNamespace]):
                 elif not Path(tmpconfig).exists():
                     key_problems.add(f"Path {tmpconfig} at {s} doesn't exist.")
             elif key_type is Executable:
-                if shutil.which(tmpconfig) is None:
+                if shutil.which(tmpconfig) is None:  # type: ignore
                     key_problems.add(
                         f"Executable {tmpconfig} in {s} doesn't exist or is not executable."
                     )
@@ -161,7 +159,7 @@ def validate_config(config: Union[dict, NestedNamespace]):
                     )
 
                 if exkeys[1][-1] == "patches":
-                    for patch in tmpconfig:
+                    for patch in tmpconfig:  # type: ignore
                         if not Path(pjoin("patches", patch)).exists():
                             key_problems.add(f"Patch at {patch} in {s} doesn't exist")
 
@@ -188,7 +186,6 @@ def to_absolute_paths(config: NestedNamespace):
             exe = config[path_in_config]
             if "/" in exe and not Path(exe).is_absolute():
                 config[path_in_config] = str(project_dir / config[path_in_config])
-
 
 def import_config(
     config_path: Optional[Union[os.PathLike[str], Path]] = None, validate: bool = True
@@ -222,13 +219,8 @@ def import_config(
         shutil.chown(config.cachedir, group=config.cache_group)
         os.chmod(config.cachedir, 0o770 | stat.S_ISGID)
     elif cache_path.is_dir() or cache_path.is_symlink():
-        followed_links = []
         while cache_path.is_symlink():
             cache_path = Path(os.readlink(cache_path))
-            if cache_path in followed_links:
-                raise Exception(
-                    f"Symlink-cycle found for {config.cachedir}. (If you actually encountered this error, drop me an email)"
-                )
             if cache_path.group() != config.cache_group:
                 raise Exception(
                     f"Link {cache_path} in the symlink-chain to the cache directory is not owned by {config.cache_group}"
@@ -694,7 +686,7 @@ class Case:
                 tf.add(ntf.name, f"bisection_{i}.txt")
 
     def to_jsonable_dict(self) -> dict:
-        d = {}
+        d: dict[str, Any] = {}
         d["code"] = self.code
         d["marker"] = self.marker
         d["bad_setting"] = self.bad_setting.to_jsonable_dict()

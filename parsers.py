@@ -1,8 +1,9 @@
 import argparse
 import os
+from typing import Any, Sequence
 
 
-def config_parser(expected_entries: list[tuple]):
+def config_parser(expected_entries: Sequence[tuple[Any, ...]]):
     parser = argparse.ArgumentParser(add_help=False)
 
     for _, path, desc in expected_entries:
