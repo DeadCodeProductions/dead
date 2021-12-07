@@ -53,8 +53,14 @@ int makeGlobalsStatic(const CompilationDatabase &Compilations,
 }
 
 int main(int argc, const char **argv) {
-    llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
-    CommonOptionsParser OptionsParser(argc, argv, DCEInstrOptions);
+    auto ExpectedParser =
+        CommonOptionsParser::create(argc, argv, DCEInstrOptions);
+    if (!ExpectedParser) {
+        llvm::errs() << ExpectedParser.takeError();
+        return 1;
+    }
+    CommonOptionsParser &OptionsParser = ExpectedParser.get();
+
     const auto &Compilations = OptionsParser.getCompilations();
     const auto &Files = OptionsParser.getSourcePathList();
 

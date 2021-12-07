@@ -1,73 +1,19 @@
 cmake_minimum_required(VERSION 3.19)
 project(DCEInstrumenter LANGUAGES CXX)
 
+find_package(LLVM REQUIRED CONFIG)
 
-#===============================================================================
-# 1. VERIFY LLVM INSTALLATION DIR
-# This is just a bit of a sanity checking.
-#===============================================================================
-set(LT_LLVM_INSTALL_DIR "" CACHE PATH "LLVM installation directory")
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in ${LLVM_DIR}")
 
-# 1.1 Check the "include| directory
-set(LT_LLVM_INCLUDE_DIR "${LT_LLVM_INSTALL_DIR}/include/llvm")
-if(NOT EXISTS "${LT_LLVM_INCLUDE_DIR}")
-message(FATAL_ERROR
-  " LT_LLVM_INSTALL_DIR (${LT_LLVM_INCLUDE_DIR}) is invalid.")
-endif()
+find_package(Clang REQUIRED CONFIG)
+message(STATUS "Using ClangConfig.cmake in ${Clang_DIR}")
 
-# 1.2 Check that the LLVMConfig.cmake file exists (the location depends on the
-# OS)
-set(LT_VALID_INSTALLATION FALSE)
 
-# Ubuntu + Darwin
-if(EXISTS "${LT_LLVM_INSTALL_DIR}/lib/cmake/llvm/LLVMConfig.cmake")
-  set(LT_VALID_INSTALLATION TRUE)
-endif()
-
-# Fedora
-if(EXISTS "${LT_LLVM_INSTALL_DIR}/lib64/cmake/llvm/LLVMConfig.cmake")
-  set(LT_VALID_INSTALLATION TRUE)
-endif()
-
-if(NOT ${LT_VALID_INSTALLATION})
-  message(FATAL_ERROR
-    "LLVM installation directory, (${LT_LLVM_INSTALL_DIR}), is invalid. Couldn't
-    find LLVMConfig.cmake.")
-endif()
-
-#===============================================================================
-# 2. LOAD LLVM CONFIGURATION
-#    For more: http://llvm.org/docs/CMake.html#embedding-llvm-in-your-project
-#===============================================================================
-# Add the location of LLVMConfig.cmake to CMake search paths (so that
-# find_package can locate it)
-# Note: On Fedora, when using the pre-compiled binaries installed with `dnf`,
-# LLVMConfig.cmake is located in "/usr/lib64/cmake/llvm". But this path is
-# among other paths that will be checked by default when using
-# `find_package(llvm)`. So there's no need to add it here.
-list(APPEND CMAKE_PREFIX_PATH "${LT_LLVM_INSTALL_DIR}/lib/cmake/llvm/")
-
-find_package(LLVM 12.0.0 REQUIRED CONFIG)
-
-# Another sanity check
-if(NOT "12" VERSION_EQUAL "${LLVM_VERSION_MAJOR}")
+if(NOT "13" VERSION_EQUAL "${LLVM_VERSION_MAJOR}")
   message(FATAL_ERROR "Found LLVM ${LLVM_VERSION_MAJOR}, but need LLVM 12")
 endif()
 
-message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-message(STATUS "Using LLVMConfig.cmake in: ${LT_LLVM_INSTALL_DIR}")
-
-message("LLVM STATUS:
-  Definitions ${LLVM_DEFINITIONS}
-  Includes    ${LLVM_INCLUDE_DIRS}
-  Libraries   ${LLVM_LIBRARY_DIRS}
-  Targets     ${LLVM_TARGETS_TO_BUILD}"
-)
-
-# Set the LLVM header and library paths
-include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
-link_directories(${LLVM_LIBRARY_DIRS})
-add_definitions(${LLVM_DEFINITIONS})
 
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
