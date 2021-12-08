@@ -341,7 +341,7 @@ def bisector_parser():
     )
 
     parser.add_argument(
-        "-a", "--amount", help="How many cases to find and reduce.", type=str, default=0
+        "-a", "--amount", help="How many cases to find and reduce.", type=int, default=0
     )
 
     parser.add_argument(
@@ -458,6 +458,82 @@ def debugtool_parser():
         "--empty-marker-code",
         help="Get empty marker body code in empty_body.c",
         action="store_true",
+    )
+
+    return parser
+
+
+def main_parser():
+    parser = argparse.ArgumentParser(add_help=False)
+
+    subparser = parser.add_subparsers(title="run", dest="run")
+    run_parser = subparser.add_parser("run")
+
+    run_parser.add_argument(
+        "-d", "--output-directory", help="Where the cases should be saved to.", type=str
+    )
+
+    run_parser.add_argument(
+        "-a", "--amount", help="How many cases to find and reduce.", type=int, default=0
+    )
+
+    run_parser.add_argument(
+        "-s", "--scenario", help="Which scenario to work on.", type=str
+    )
+    run_parser.add_argument(
+        "-t",
+        "--targets",
+        help="Project name and revision of compiler to use.",
+        nargs="+",
+        type=str,
+    )
+
+    run_parser.add_argument(
+        "-tdol",
+        "--targets-default-opt-levels",
+        help="Default optimization levels for the target to be checked against.",
+        nargs="+",
+        default=[],
+        type=str,
+    )
+
+    run_parser.add_argument(
+        "-ac",
+        "--additional-compilers",
+        help="Additional compiler to compare the target against.",
+        nargs="*",
+        type=str,
+    )
+
+    run_parser.add_argument(
+        "-acdol",
+        "--additional-compilers-default-opt-levels",
+        help="Default optimization levels for the additional compilers to be checked against.",
+        nargs="+",
+        default=[],
+        type=str,
+    )
+
+    run_parser.add_argument(
+        "--reducer",
+        help="If the generated case should be reduced or not.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+
+    run_parser.add_argument(
+        "--bisector",
+        help="If the generated case should be bisected or not.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+
+    run_parser.add_argument(
+        "-only",
+        "--only-new-bisections",
+        help="Save only new cases.",
+        action=argparse.BooleanOptionalAction,
+        default=False,
     )
 
     return parser

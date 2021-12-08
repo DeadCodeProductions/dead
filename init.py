@@ -183,6 +183,11 @@ if __name__ == "__main__":
         )
         config["ccomp"] = "???"
 
+    config["casedb"] = "./casedb.sqlite3"
+    import sqlite3
+
+    sqlite3.Connection(config["casedb"])  # Creating db
+
     print("Saving config...")
     os.makedirs(path.parent, exist_ok=True)
     with open(path, "w") as f:

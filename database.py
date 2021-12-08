@@ -1,12 +1,14 @@
+import os
 import sqlite3
+import time
 import zlib
 from dataclasses import dataclass
-from itertools import chain
 from functools import reduce
+from itertools import chain
 from pathlib import Path
 from typing import ClassVar, Optional, Union
 
-from utils import Case, CompilerSetting, Scenario
+from utils import Case, CompilerSetting, NestedNamespace, Scenario
 
 
 @dataclass
@@ -74,6 +76,16 @@ class CaseDatabase:
             ColumnInfo("scenario_id", "INTEGER", "NOT NULL"),
             ColumnInfo("attacker_id", "INTEGER", "NOT NULL"),
         ],
+        "scenario_misc": [
+            ColumnInfo("scenario_id", "INTEGER", "NOT NULL"),
+            ColumnInfo("generator_version", "INTEGER", "NOT NULL"),
+            ColumnInfo("bisector_version", "INTEGER", "NOT NULL"),
+            ColumnInfo("reducer_version", "INTEGER", "NOT NULL"),
+            ColumnInfo("instrumenter_version", "INTEGER", "NOT NULL"),
+            ColumnInfo("csmith_min", "INTEGER", "NOT NULL"),
+            ColumnInfo("csmith_max", "INTEGER", "NOT NULL"),
+            ColumnInfo("reduce_program", "TEXT", "NOT NULL"),
+        ],
     }
 
     def __init__(self, db_path: Path) -> None:
@@ -107,14 +119,18 @@ class CaseDatabase:
                 ),
             )
 
-    def record_case(self, case: Case, timestamp: float) -> RowID:
+    def record_case(
+        self, config: NestedNamespace, case: Case, timestamp: Optional[float] = None
+    ) -> RowID:
+        if not timestamp:
+            timestamp = time.time()
         bad_setting_id = self.record_compiler_setting(case.bad_setting)
         with self.con:
             good_setting_ids = [
                 self.record_compiler_setting(good_setting)
                 for good_setting in case.good_settings
             ]
-        scenario_id = self.record_scenario(case.scenario)
+        scenario_id = self.record_scenario(config, case.scenario)
 
         with self.con:
             cur = self.con.cursor()
@@ -170,7 +186,7 @@ class CaseDatabase:
 
         return ns_id
 
-    def record_scenario(self, scenario: Scenario) -> RowID:
+    def record_scenario(self, config: NestedNamespace, scenario: Scenario) -> RowID:
         if s_id := self.get_scenario_id(scenario):
             return s_id
         target_ids = [
@@ -192,6 +208,20 @@ class CaseDatabase:
 
             insert_settings("scenario_targets", target_ids)
             insert_settings("scenario_attackers", attacker_ids)
+
+            self.con.execute(
+                "INSERT INTO scenario_misc VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    ns_id.val,
+                    scenario._generator_version,
+                    scenario._bisector_version,
+                    scenario._reducer_version,
+                    scenario._instrumenter_version,
+                    config.csmith.min_size,
+                    config.csmith.max_size,
+                    os.path.basename(config.creduce),
+                ),
+            )
         return ns_id
 
     def get_new_scenario_id(self, no_commit: bool) -> RowID:

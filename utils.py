@@ -13,10 +13,11 @@ from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional, TextIO, Union, Sequence, Any
+from typing import Any, Optional, Sequence, TextIO, Union
 
 import parsers
 import repository
+import VERSIONS
 
 
 class Executable(object):
@@ -54,6 +55,7 @@ EXPECTED_ENTRIES = [
     (str,       ("cache_group", ),          "Name of group owning the cache"),
     (Executable,("ccc",),                   "Path to executable or name in PATH for the callchain checker"),
     (Executable,("static_annotator",),      "Path to executable or name in PATH for the static annotator"),
+    (Path,      ("casedb", ),               "Path to the database holding the cases."),
 ]
 # fmt: on
 
@@ -186,6 +188,7 @@ def to_absolute_paths(config: NestedNamespace):
             exe = config[path_in_config]
             if "/" in exe and not Path(exe).is_absolute():
                 config[path_in_config] = str(project_dir / config[path_in_config])
+
 
 def import_config(
     config_path: Optional[Union[os.PathLike[str], Path]] = None, validate: bool = True
@@ -368,10 +371,19 @@ class CompilerSetting:
         return CompilerSetting(compiler_config, rev, opt_level, additional_flags)
 
 
-@dataclass
 class Scenario:
-    target_settings: list[CompilerSetting]
-    attacker_settings: list[CompilerSetting]
+    def __init__(
+        self,
+        target_settings: list[CompilerSetting],
+        attacker_settings: list[CompilerSetting],
+    ):
+        self.target_settings = target_settings
+        self.attacker_settings = attacker_settings
+
+        self._instrumenter_version = VERSIONS.instrumenter_version
+        self._generator_version = VERSIONS.generator_version
+        self._bisector_version = VERSIONS.bisector_version
+        self._reducer_version = VERSIONS.reducer_version
 
     def add_flags(self, new_flags: list[str]):
         for f in new_flags:
@@ -385,6 +397,10 @@ class Scenario:
         d["target_settings"] = [s.to_jsonable_dict() for s in self.target_settings]
         d["attacker_settings"] = [s.to_jsonable_dict() for s in self.attacker_settings]
 
+        d["instrumenter_version"] = self._instrumenter_version
+        d["generator_versio"] = self._generator_version
+        d["bisector_version"] = self._bisector_version
+        d["reducer_version"] = self._reducer_version
         return d
 
     @staticmethod
@@ -399,7 +415,26 @@ class Scenario:
             for cs in d["attacker_settings"]
         ]
 
-        return Scenario(target_settings, attacker_settings)
+        s = Scenario(target_settings, attacker_settings)
+
+        # TODO: Remove when we moved to the db.
+        if "instrumenter_version" in d:
+            s._instrumenter_version = d["instrumenter_version"]
+            s._generator_version = d["generator_versio"]
+            s._bisector_version = d["bisector_version"]
+            s._reducer_version = d["reducer_version"]
+        else:
+            s._instrumenter_version = 0
+            s._generator_version = 0
+            s._bisector_version = 0
+            s._reducer_version = 0
+
+        # s._instrumenter_version = d["instrumenter_version"]
+        # s._generator_version = d["generator_versio"]
+        # s._bisector_version = d["bisector_version"]
+        # s._reducer_version = d["reducer_version"]
+
+        return s
 
     @staticmethod
     def from_file(config: NestedNamespace, file: Path):
