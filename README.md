@@ -12,7 +12,7 @@ The following programs must be installed
 - `creduce`
 - `cmake`
 - `ccomp` (CompCert)
-- `llvm 12.X.X` (for the include files)
+- `llvm 13.0.0` (for the include files)
 
 We are running on Arch Linux and have not tested any other distribution.
 
