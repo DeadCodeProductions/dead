@@ -22,8 +22,14 @@ cl::opt<std::string> To("to", cl::desc("End of call chain."),
 } // namespace
 
 int main(int argc, const char **argv) {
-    sys::PrintStackTraceOnErrorSignal(argv[0]);
-    CommonOptionsParser OptionsParser(argc, argv, CCCOptions);
+    auto ExpectedParser =
+        CommonOptionsParser::create(argc, argv, CCCOptions);
+    if (!ExpectedParser) {
+        llvm::errs() << ExpectedParser.takeError();
+        return 1;
+    }
+    CommonOptionsParser &OptionsParser = ExpectedParser.get();
+
     ClangTool Tool(OptionsParser.getCompilations(),
                    OptionsParser.getSourcePathList());
 
