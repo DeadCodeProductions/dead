@@ -3,11 +3,12 @@ import sqlite3
 import time
 import zlib
 from dataclasses import dataclass
-from functools import reduce
+from functools import cache, reduce
 from itertools import chain
 from pathlib import Path
 from typing import ClassVar, Optional, Union
 
+import utils
 from utils import Case, CompilerSetting, NestedNamespace, Scenario
 
 
@@ -25,6 +26,7 @@ RowID = int
 
 
 class CaseDatabase:
+    config: NestedNamespace
     con: sqlite3.Connection
     tables: ClassVar[dict[str, list[ColumnInfo]]] = {
         "cases": [
@@ -48,7 +50,7 @@ class CaseDatabase:
             ColumnInfo("compiler", "TEXT", "NOT NULL"),
             ColumnInfo("rev", "TEXT", "NOT NULL"),
             ColumnInfo("opt_level", "TEXT"),
-            ColumnInfo("flag", "TEXT"),
+            ColumnInfo("additional_flags", "TEXT"),
         ],
         "good_settings": [
             ColumnInfo("case_id", "", "REFERENCES cases(case_id)"),
@@ -89,16 +91,15 @@ class CaseDatabase:
         ],
     }
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, config: NestedNamespace, db_path: Path) -> None:
+        self.config = config
         self.con = sqlite3.connect(db_path)
         self.create_tables()
 
     def create_tables(self) -> None:
         def make_query(table: str, columns: list[ColumnInfo]) -> str:
             column_decl = ",".join(str(column) for column in columns)
-            r = f"CREATE TABLE IF NOT EXISTS {table} (" + column_decl + ")"
-            print(r)
-            return r
+            return f"CREATE TABLE IF NOT EXISTS {table} (" + column_decl + ")"
 
         with self.con:
             for table, columns in CaseDatabase.tables.items():
@@ -122,9 +123,7 @@ class CaseDatabase:
                 ),
             )
 
-    def record_case(
-        self, config: NestedNamespace, case: Case, timestamp: Optional[float] = None
-    ) -> RowID:
+    def record_case(self, case: Case, timestamp: Optional[float] = None) -> RowID:
         if not timestamp:
             timestamp = time.time()
 
@@ -134,7 +133,7 @@ class CaseDatabase:
                 self.record_compiler_setting(good_setting)
                 for good_setting in case.good_settings
             ]
-        scenario_id = self.record_scenario(config, case.scenario)
+        scenario_id = self.record_scenario(case.scenario)
 
         with self.con:
             cur = self.con.cursor()
@@ -180,7 +179,7 @@ class CaseDatabase:
 
         return ns_id
 
-    def record_scenario(self, config: NestedNamespace, scenario: Scenario) -> RowID:
+    def record_scenario(self, scenario: Scenario) -> RowID:
         if s_id := self.get_scenario_id(scenario):
             return s_id
         target_ids = [
@@ -211,9 +210,9 @@ class CaseDatabase:
                     scenario._bisector_version,
                     scenario._reducer_version,
                     scenario._instrumenter_version,
-                    config.csmith.min_size,
-                    config.csmith.max_size,
-                    os.path.basename(config.creduce),
+                    self.config.csmith.min_size,
+                    self.config.csmith.max_size,
+                    os.path.basename(self.config.creduce),
                 ),
             )
         return ns_id
@@ -281,12 +280,12 @@ class CaseDatabase:
         result = self.con.execute(
             "SELECT compiler_setting_id "
             "FROM compiler_setting "
-            "WHERE compiler == ? AND rev == ? AND opt_level == ? AND flag == ?",
+            "WHERE compiler == ? AND rev == ? AND opt_level == ? AND additional_flags == ?",
             (
                 compiler_setting.compiler_config.name,
                 compiler_setting.rev,
                 compiler_setting.opt_level,
-                compiler_setting.get_flag_str(),
+                "|".join(compiler_setting.get_flag_cmd()),
             ),
         ).fetchone()
 
@@ -295,3 +294,96 @@ class CaseDatabase:
         s_id = RowID(result[0])
 
         return s_id
+
+    @cache
+    def get_compiler_setting_from_id(self, compiler_setting_id: int) -> CompilerSetting:
+
+        compiler, rev, opt_level, flags = self.con.execute(
+            "SELECT compiler, rev, opt_level, additional_flags FROM compiler_setting WHERE compiler_setting_id == ?",
+            (compiler_setting_id,),
+        ).fetchone()
+
+        return CompilerSetting(
+            utils.get_compiler_config(self.config, compiler),
+            rev,
+            opt_level,
+            flags.split("|"),
+        )
+
+    @cache
+    def get_scenario_from_id(self, scenario_id: int) -> Scenario:
+        def get_settings(self, table: str, s_id: int) -> list[CompilerSetting]:
+
+            ids = self.con.execute(
+                f"SELECT compiler_setting_id FROM {table} WHERE scenario_id == ?",
+                (s_id,),
+            ).fetchall()
+            settings: list[CompilerSetting] = [
+                self.get_compiler_setting_from_id(row[0]) for row in ids
+            ]
+
+            return settings
+
+        target_settings = get_settings(self, "scenario_target", scenario_id)
+        attacker_settings = get_settings(self, "scenario_attacker", scenario_id)
+        scenario = Scenario(target_settings, attacker_settings)
+
+        (
+            generator_version,
+            bisector_version,
+            reducer_version,
+            instrumenter_version,
+        ) = self.con.execute(
+            "SELECT generator_version, bisector_version, reducer_version, instrumenter_version FROM scenario WHERE scenario_id == ?",
+            (scenario_id,),
+        ).fetchone()
+
+        scenario._generator_version = generator_version
+        scenario._bisector_version = bisector_version
+        scenario._reducer_version = reducer_version
+        scenario._instrumenter_version = instrumenter_version
+
+        return scenario
+
+    def get_case_from_id(self, case_id: int) -> Case:
+
+        (
+            _,
+            compressed_code,
+            marker,
+            bad_setting_id,
+            scenario_id,
+            bisection,
+            reduced_code,
+            _,
+        ) = self.con.execute(
+            "SELECT * FROM cases WHERE case_id == ?", (case_id,)
+        ).fetchone()
+
+        good_settings_ids = self.con.execute(
+            "SELECT compiler_setting_id FROM good_settings WHERE case_id == ?",
+            (case_id,),
+        ).fetchall()
+
+        code = zlib.decompress(compressed_code).decode("utf-8")
+
+        scenario = self.get_scenario_from_id(scenario_id)
+
+        # Get Settings
+        bad_setting = self.get_compiler_setting_from_id(bad_setting_id)
+        good_settings = [
+            self.get_compiler_setting_from_id(row[0]) for row in good_settings_ids
+        ]
+
+        case = Case(
+            code,
+            marker,
+            bad_setting,
+            good_settings,
+            scenario,
+            reduced_code=[reduced_code],
+            bisections=[bisection],
+            path=None,
+        )
+
+        return case
