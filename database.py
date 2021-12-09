@@ -93,7 +93,7 @@ class CaseDatabase:
 
     def __init__(self, config: NestedNamespace, db_path: Path) -> None:
         self.config = config
-        self.con = sqlite3.connect(db_path)
+        self.con = sqlite3.connect(db_path, timeout=60)
         self.create_tables()
 
     def create_tables(self) -> None:
