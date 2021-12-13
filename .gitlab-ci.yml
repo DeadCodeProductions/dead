@@ -2,6 +2,7 @@ image: "python:latest"
 
 before_script:
   - python --version
+  - pip install mypy
 
 stages:
   - Static Analysis
