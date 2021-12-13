@@ -274,6 +274,14 @@ class CaseDatabase:
         return ns_id
 
     def get_new_scenario_id(self, no_commit: bool) -> RowID:
+        """Get a new scenario ID.
+
+        Args:
+            no_commit (bool): Don't commit the change.
+
+        Returns:
+            RowID: New scenario id
+        """
         cur = self.con.cursor()
         cur.execute("INSERT INTO scenario_ids VALUES (NULL)")
         if not no_commit:
@@ -281,6 +289,15 @@ class CaseDatabase:
         return RowID(cur.lastrowid)
 
     def get_scenario_id(self, scenario: Scenario) -> Optional[RowID]:
+        """See if there is already an ID for `scenario` in the database
+        and return it if it does.
+
+        Args:
+            scenario (Scenario): scenario to get an ID for
+
+        Returns:
+            Optional[RowID]: RowID if the scenario exists
+        """
         # TODO also check version etc.
         def get_scenario_ids(id_: RowID, table: str, id_str: str) -> set[int]:
             cursor = self.con.cursor()
@@ -292,19 +309,47 @@ class CaseDatabase:
                 ).fetchall()
             )
 
-        target_ids = []
+        # Get all scenario's which have the same versions
+        candidate_ids: set[RowID] = set(
+            [
+                r[0]
+                for r in self.con.execute(
+                    "SELECT scenario_id FROM scenario"
+                    " WHERE generator_version == ?"
+                    " AND bisector_version == ?"
+                    " AND reducer_version == ?"
+                    " AND instrumenter_version == ?"
+                    " AND csmith_min == ?"
+                    " AND csmith_max == ?"
+                    " AND reduce_program == ?",
+                    (
+                        scenario._generator_version,
+                        scenario._bisector_version,
+                        scenario._reducer_version,
+                        scenario._instrumenter_version,
+                        self.config.csmith.min_size,
+                        self.config.csmith.max_size,
+                        self.config.creduce,
+                    ),
+                ).fetchall()
+            ]
+        )
+
+        # Get compiler setting ids of scenario
+        target_ids: list[RowID] = []
         for setting in scenario.target_settings:
             if not (s_id := self.get_compiler_setting_id(setting)):
                 return None
             target_ids.append(s_id)
 
-        attacker_ids = []
+        attacker_ids: list[RowID] = []
         for setting in scenario.attacker_settings:
             if not (s_id := self.get_compiler_setting_id(setting)):
                 return None
             attacker_ids.append(s_id)
 
-        candidate_ids = reduce(
+        # Compare compiler setting IDs
+        candidate_ids = candidate_ids & reduce(
             lambda x, y: x & y,
             (
                 get_scenario_ids(target_id, "scenario_target", "compiler_setting_id")
