@@ -103,6 +103,14 @@ class CaseDatabase:
                 "REFERENCES compiler_setting(compiler_setting_id)",
             ),
         ],
+        "timing": [
+            ColumnInfo("case_id", "", "REFERENCES cases(case_id)"),
+            ColumnInfo("generator_time", "FLOAT"),
+            ColumnInfo("generator_try_count", "INTEGER"),
+            ColumnInfo("bisector_time", "FLOAT"),
+            ColumnInfo("bisector_steps", "INTEGER"),
+            ColumnInfo("reducer_time", "FLOAT"),
+        ],
     }
 
     def __init__(self, config: NestedNamespace, db_path: Path) -> None:
@@ -545,5 +553,28 @@ class CaseDatabase:
                     bisection,
                     reduced_code_sha1,
                     case.timestamp,
+                ),
+            )
+
+    def add_timing(
+        self,
+        case_id: RowID,
+        generator_time: Optional[float] = None,
+        generator_try_count: Optional[int] = None,
+        bisector_time: Optional[float] = None,
+        bisector_steps: Optional[int] = None,
+        reducer_time: Optional[float] = None,
+    ) -> None:
+
+        with self.con:
+            self.con.execute(
+                "INSERT OR REPLACE INTO timing VALUES(?,?,?,?,?,?,?)",
+                (
+                    case_id,
+                    generator_time,
+                    generator_try_count,
+                    bisector_time,
+                    bisector_steps,
+                    reducer_time,
                 ),
             )
