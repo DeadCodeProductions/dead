@@ -1,0 +1,14 @@
+image: "python:latest"
+
+before_script:
+  - python --version
+
+stages:
+  - Static Analysis
+
+mypy:
+  stage: Static Analysis
+  script:
+  - pwd
+  - ls -l
+  - python -m mypy *py
