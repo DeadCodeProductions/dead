@@ -8,6 +8,7 @@ import stat
 import subprocess
 import tarfile
 import tempfile
+import time
 from dataclasses import dataclass
 from functools import reduce
 from os.path import join as pjoin
@@ -602,9 +603,12 @@ def save_to_tmp_file(content: str):
 
 
 def check_and_get(tf: tarfile.TarFile, member: str) -> str:
-    f = tf.extractfile(member)
+    try:
+        f = tf.extractfile(member)
+    except KeyError:
+        raise FileExistsError(f"File does not include member {member}!")
     if not f:
-        raise Exception(f"File does not include member {member}!")
+        raise FileExistsError(f"File does not include member {member}!")
     res = f.read().decode("utf-8").strip()
 
     return res
@@ -633,8 +637,33 @@ class Case:
 
     reduced_code: list[str]
     bisections: list[str]
+    timestamp: float
 
     path: Optional[Path]
+
+    def __init__(
+        self,
+        code: str,
+        marker: str,
+        bad_setting: CompilerSetting,
+        good_settings: list[CompilerSetting],
+        scenario: Scenario,
+        reduced_code: list[str],
+        bisections: list[str],
+        path: Optional[Path] = None,
+        timestamp: Optional[float] = None,
+    ):
+
+        self.code = code
+        self.marker = marker
+        self.bad_setting = bad_setting
+        self.good_settings = good_settings
+        self.scenario = scenario
+        self.reduced_code = reduced_code
+        self.bisections = bisections
+        self.path = path
+
+        self.timestamp = timestamp if timestamp else time.time()
 
     def add_flags(self, flags: list[str]):
         for f in flags:
@@ -680,6 +709,12 @@ class Case:
                 counter += 1
                 bis_n = f"bisection_{counter}.txt"
 
+            # "Legacy support"
+            try:
+                timestamp = float(check_and_get(tf, "timestamp.txt"))
+            except FileExistsError:
+                timestamp = file.stat().st_mtime
+
             return Case(
                 code,
                 marker,
@@ -689,6 +724,7 @@ class Case:
                 reduced_code,
                 bisections,
                 file.absolute(),
+                timestamp,
             )
 
     def to_file(self, file: Path):
@@ -712,6 +748,9 @@ class Case:
             ntf = save_to_tmp_file(scenario_str)
             tf.add(ntf.name, "scenario.json")
 
+            ntf = save_to_tmp_file(str(self.timestamp))
+            tf.add(ntf.name, "timestamp.txt")
+
             for i, rcode in enumerate(self.reduced_code):
                 ntf = save_to_tmp_file(rcode)
                 tf.add(ntf.name, f"reduced_code_{i}.c")
@@ -730,6 +769,8 @@ class Case:
 
         d["reduced_code"] = self.reduced_code
         d["bisections"] = self.bisections
+
+        d["timestamp"] = self.timestamp
 
         d["path"] = self.path
         return d
@@ -755,4 +796,5 @@ class Case:
             d["reduced_code"],
             d["bisections"],
             path,
+            timestamp=d["timestamp"],
         )

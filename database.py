@@ -1,3 +1,4 @@
+import hashlib
 import os
 import sqlite3
 import time
@@ -10,6 +11,10 @@ from typing import ClassVar, Optional, Union
 
 import utils
 from utils import Case, CompilerSetting, NestedNamespace, Scenario
+
+
+class DatabaseError(Exception):
+    pass
 
 
 @dataclass
@@ -31,24 +36,33 @@ class CaseDatabase:
     tables: ClassVar[dict[str, list[ColumnInfo]]] = {
         "cases": [
             ColumnInfo("case_id", "INTEGER", "PRIMARY KEY AUTOINCREMENT"),
-            ColumnInfo("code", "TEXT", "NOT NULL"),
+            ColumnInfo("code_sha1", "", "REFERENCES code(code_sha1)"),
             ColumnInfo("marker", "TEXT", "NOT NULL"),
             ColumnInfo("bad_setting_id", "INTEGER", "NOT NULL"),
             ColumnInfo("scenario_id", "INTEGER", "NOT NULL"),
-            ColumnInfo("bisection", "TEXT"),
-            ColumnInfo("reduced_code", "TEXT"),
+            ColumnInfo("bisection", "CHAR(40)"),
+            ColumnInfo("reduced_code_sha1", "CHAR(40)"),
             ColumnInfo("timestamp", "FLOAT", "NOT NULL"),
+            ColumnInfo(
+                "UNIQUE(code_sha1, marker, bad_setting_id, scenario_id, bisection, reduced_code_sha1) "
+                "ON CONFLICT REPLACE",
+                "",
+            ),
+        ],
+        "code": [
+            ColumnInfo("code_sha1", "CHAR(40)", "PRIMARY KEY"),
+            ColumnInfo("compressed_code", "BLOB"),
         ],
         "reported_cases": [
             ColumnInfo("case_id", "", "REFERENCES cases(case_id)"),
-            ColumnInfo("massaged_code", "TEXT", "NOT NULL"),
+            ColumnInfo("massaged_code", "", "REFERENCES code(code_sha1)"),
             ColumnInfo("bug_report_link", "TEXT", "NOT NULL"),
-            ColumnInfo("fixed_by", "TEXT"),
+            ColumnInfo("fixed_by", "CHAR(40)"),
         ],
         "compiler_setting": [
             ColumnInfo("compiler_setting_id", "INTEGER", "PRIMARY KEY AUTOINCREMENT"),
             ColumnInfo("compiler", "TEXT", "NOT NULL"),
-            ColumnInfo("rev", "TEXT", "NOT NULL"),
+            ColumnInfo("rev", "CHAR(40)", "NOT NULL"),
             ColumnInfo("opt_level", "TEXT"),
             ColumnInfo("additional_flags", "TEXT"),
         ],
@@ -101,9 +115,48 @@ class CaseDatabase:
             column_decl = ",".join(str(column) for column in columns)
             return f"CREATE TABLE IF NOT EXISTS {table} (" + column_decl + ")"
 
-        with self.con:
-            for table, columns in CaseDatabase.tables.items():
-                self.con.execute(make_query(table, columns))
+        for table, columns in CaseDatabase.tables.items():
+            self.con.execute(make_query(table, columns))
+            self.con.execute(make_query(table, columns))
+
+    def record_code(self, code: str) -> str:
+        """Inserts `code` into the database's `code`-table and returns its
+        sha1-hash which serves as a key.
+
+        Args:
+            code (str): code to be inserted
+
+        Returns:
+            str: SHA1 of code which serves as the key.
+        """
+        # Take the hash before the compression to handle changes
+        # in the compression library.
+        code_sha1 = hashlib.sha1(code.encode("utf-8")).hexdigest()
+        compressed_code = zlib.compress(code.encode("utf-8"))
+
+        self.con.execute(
+            "INSERT OR IGNORE INTO code VALUES (?, ?)", (code_sha1, compressed_code)
+        )
+        return code_sha1
+
+    def get_code_from_id(self, code_id: str) -> Optional[str]:
+        """Get code from the database if it exists.
+
+        Args:
+            code_id (str): SHA1 of code
+
+        Returns:
+            Optional[str]: Saved code if it exists, else None
+        """
+
+        res = self.con.execute(
+            "SELECT compressed_code FROM code WHERE code_sha1 == ?", (code_id,)
+        ).fetchone()
+        if res:
+            code = zlib.decompress(res[0]).decode("utf-8")
+            return code
+        else:
+            return None
 
     def record_reported_case(
         self,
@@ -112,20 +165,19 @@ class CaseDatabase:
         bug_report_link: str,
         fixed_by: Optional[str],
     ) -> None:
+        code_sha1 = self.record_code(massaged_code)
         with self.con:
             self.con.execute(
                 "INSERT INTO reported_cases VALUES (?,?,?,?)",
                 (
                     case_id,
-                    massaged_code,
+                    code_sha1,
                     bug_report_link,
                     fixed_by,
                 ),
             )
 
-    def record_case(self, case: Case, timestamp: Optional[float] = None) -> RowID:
-        if not timestamp:
-            timestamp = time.time()
+    def record_case(self, case: Case) -> RowID:
 
         bad_setting_id = self.record_compiler_setting(case.bad_setting)
         with self.con:
@@ -139,18 +191,22 @@ class CaseDatabase:
             cur = self.con.cursor()
             # Can we use CaseDatabase.table_columnsHow to automate this and make it less error prone?
             bisection = case.bisections[-1] if case.bisections else None
-            reduced_code = case.reduced_code[-1] if case.reduced_code else None
+            reduced_code_sha1 = (
+                self.record_code(case.reduced_code[-1]) if case.reduced_code else None
+            )
+
+            code_sha1 = self.record_code(case.code)
 
             cur.execute(
                 "INSERT INTO cases VALUES (NULL,?,?,?,?,?,?,?)",
                 (
-                    zlib.compress(case.code.encode()),
+                    code_sha1,
                     case.marker,
                     bad_setting_id,
                     scenario_id,
                     bisection,
-                    reduced_code,
-                    timestamp,
+                    reduced_code_sha1,
+                    case.timestamp,
                 ),
             )
             case_id = RowID(cur.lastrowid)
@@ -225,12 +281,13 @@ class CaseDatabase:
         return RowID(cur.lastrowid)
 
     def get_scenario_id(self, scenario: Scenario) -> Optional[RowID]:
+        # TODO also check version etc.
         def get_scenario_ids(id_: RowID, table: str, id_str: str) -> set[int]:
             cursor = self.con.cursor()
             return set(
                 s_id[0]
                 for s_id in cursor.execute(
-                    f"SELECT scenario_id " f"FROM {table} " f"WHERE {id_str}== ? ",
+                    f"SELECT scenario_id FROM {table} WHERE {id_str}== ? ",
                     (id_,),
                 ).fetchall()
             )
@@ -299,7 +356,9 @@ class CaseDatabase:
     def get_compiler_setting_from_id(self, compiler_setting_id: int) -> CompilerSetting:
 
         compiler, rev, opt_level, flags = self.con.execute(
-            "SELECT compiler, rev, opt_level, additional_flags FROM compiler_setting WHERE compiler_setting_id == ?",
+            "SELECT compiler, rev, opt_level, additional_flags"
+            " FROM compiler_setting"
+            " WHERE compiler_setting_id == ?",
             (compiler_setting_id,),
         ).fetchone()
 
@@ -345,17 +404,24 @@ class CaseDatabase:
 
         return scenario
 
-    def get_case_from_id(self, case_id: int) -> Case:
+    def get_case_from_id(self, case_id: RowID) -> Optional[Case]:
+        """Get a case from the database based on its ID
 
+        Args:
+            case_id (int): ID of wanted case
+
+        Returns:
+            Optional[Case]: Returns case if it exists
+        """
         (
             _,
-            compressed_code,
+            code_sha1,
             marker,
             bad_setting_id,
             scenario_id,
             bisection,
-            reduced_code,
-            _,
+            reduced_code_sha1,
+            timestamp,
         ) = self.con.execute(
             "SELECT * FROM cases WHERE case_id == ?", (case_id,)
         ).fetchone()
@@ -365,7 +431,14 @@ class CaseDatabase:
             (case_id,),
         ).fetchall()
 
-        code = zlib.decompress(compressed_code).decode("utf-8")
+        code = self.get_code_from_id(code_sha1)
+        if not code:
+            raise DatabaseError("Missing original code")
+
+        reduced_code = self.get_code_from_id(reduced_code_sha1)
+        reduced_code = [reduced_code] if reduced_code else []
+
+        bisection = [bisection] if bisection else []
 
         scenario = self.get_scenario_from_id(scenario_id)
 
@@ -381,9 +454,51 @@ class CaseDatabase:
             bad_setting,
             good_settings,
             scenario,
-            reduced_code=[reduced_code],
-            bisections=[bisection],
+            reduced_code=reduced_code,
+            bisections=bisection,
             path=None,
+            timestamp=timestamp,
         )
 
         return case
+
+    def update_case(self, case_id: RowID, case: Case) -> None:
+        """Update case with ID `case_id` with the values of `case`
+
+        Args:
+            case_id (str): ID of case to update
+            case (Case): Case to get the info from
+
+        Returns:
+            None:
+        """
+        code_sha1 = self.record_code(case.code)
+
+        if case.reduced_code:
+            reduced_code_sha1 = self.record_code(case.reduced_code[-1])
+        else:
+            reduced_code_sha1 = None
+
+        if case.bisections:
+            bisection = case.bisections[-1]
+        else:
+            bisection = None
+
+        bad_setting_id = self.record_compiler_setting(case.bad_setting)
+        scenario_id = self.record_scenario(case.scenario)
+
+        with self.con:
+            # REPLACE is just an alias for INSERT OR RELACE
+            self.con.execute(
+                "INSERT OR REPLACE INTO cases VALUES (?, ?,?, ?, ?, ?, ?, ?)",
+                (
+                    case_id,
+                    code_sha1,
+                    case.marker,
+                    bad_setting_id,
+                    scenario_id,
+                    bisection,
+                    reduced_code_sha1,
+                    case.timestamp,
+                ),
+            )
