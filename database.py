@@ -262,10 +262,10 @@ class CaseDatabase:
                 "INSERT INTO scenario VALUES (?,?,?,?,?,?,?,?)",
                 (
                     ns_id,
-                    scenario._generator_version,
-                    scenario._bisector_version,
-                    scenario._reducer_version,
-                    scenario._instrumenter_version,
+                    scenario.generator_version,
+                    scenario.bisector_version,
+                    scenario.reducer_version,
+                    scenario.instrumenter_version,
                     self.config.csmith.min_size,
                     self.config.csmith.max_size,
                     os.path.basename(self.config.creduce),
@@ -323,10 +323,10 @@ class CaseDatabase:
                     " AND csmith_max == ?"
                     " AND reduce_program == ?",
                     (
-                        scenario._generator_version,
-                        scenario._bisector_version,
-                        scenario._reducer_version,
-                        scenario._instrumenter_version,
+                        scenario.generator_version,
+                        scenario.bisector_version,
+                        scenario.reducer_version,
+                        scenario.instrumenter_version,
                         self.config.csmith.min_size,
                         self.config.csmith.max_size,
                         self.config.creduce,
@@ -442,10 +442,10 @@ class CaseDatabase:
             (scenario_id,),
         ).fetchone()
 
-        scenario._generator_version = generator_version
-        scenario._bisector_version = bisector_version
-        scenario._reducer_version = reducer_version
-        scenario._instrumenter_version = instrumenter_version
+        scenario.generator_version = generator_version
+        scenario.bisector_version = bisector_version
+        scenario.reducer_version = reducer_version
+        scenario.instrumenter_version = instrumenter_version
 
         return scenario
 

@@ -381,10 +381,10 @@ class Scenario:
         self.target_settings = target_settings
         self.attacker_settings = attacker_settings
 
-        self._instrumenter_version = VERSIONS.instrumenter_version
-        self._generator_version = VERSIONS.generator_version
-        self._bisector_version = VERSIONS.bisector_version
-        self._reducer_version = VERSIONS.reducer_version
+        self.instrumenter_version = VERSIONS.instrumenter_version
+        self.generator_version = VERSIONS.generator_version
+        self.bisector_version = VERSIONS.bisector_version
+        self.reducer_version = VERSIONS.reducer_version
 
     def add_flags(self, new_flags: list[str]):
         for f in new_flags:
@@ -398,10 +398,10 @@ class Scenario:
         d["target_settings"] = [s.to_jsonable_dict() for s in self.target_settings]
         d["attacker_settings"] = [s.to_jsonable_dict() for s in self.attacker_settings]
 
-        d["instrumenter_version"] = self._instrumenter_version
-        d["generator_versio"] = self._generator_version
-        d["bisector_version"] = self._bisector_version
-        d["reducer_version"] = self._reducer_version
+        d["instrumenter_version"] = self.instrumenter_version
+        d["generator_versio"] = self.generator_version
+        d["bisector_version"] = self.bisector_version
+        d["reducer_version"] = self.reducer_version
         return d
 
     @staticmethod
@@ -418,22 +418,16 @@ class Scenario:
 
         s = Scenario(target_settings, attacker_settings)
 
-        # TODO: Remove when we moved to the db.
         if "instrumenter_version" in d:
-            s._instrumenter_version = d["instrumenter_version"]
-            s._generator_version = d["generator_versio"]
-            s._bisector_version = d["bisector_version"]
-            s._reducer_version = d["reducer_version"]
+            s.instrumenter_version = d["instrumenter_version"]
+            s.generator_version = d["generator_versio"]
+            s.bisector_version = d["bisector_version"]
+            s.reducer_version = d["reducer_version"]
         else:
-            s._instrumenter_version = 0
-            s._generator_version = 0
-            s._bisector_version = 0
-            s._reducer_version = 0
-
-        # s._instrumenter_version = d["instrumenter_version"]
-        # s._generator_version = d["generator_versio"]
-        # s._bisector_version = d["bisector_version"]
-        # s._reducer_version = d["reducer_version"]
+            s.instrumenter_version = 0
+            s.generator_version = 0
+            s.bisector_version = 0
+            s.reducer_version = 0
 
         return s
 
