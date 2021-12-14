@@ -63,7 +63,7 @@ class CaseDatabase:
             ColumnInfo("compiler_setting_id", "INTEGER", "PRIMARY KEY AUTOINCREMENT"),
             ColumnInfo("compiler", "TEXT", "NOT NULL"),
             ColumnInfo("rev", "CHAR(40)", "NOT NULL"),
-            ColumnInfo("opt_level", "TEXT"),
+            ColumnInfo("opt_level", "TEXT", "NOT NULL"),
             ColumnInfo("additional_flags", "TEXT"),
         ],
         "good_settings": [
