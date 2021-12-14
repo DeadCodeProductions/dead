@@ -6,6 +6,7 @@ import os
 import shutil
 import stat
 from pathlib import Path
+from typing import Any
 
 import utils
 
@@ -38,9 +39,9 @@ if __name__ == "__main__":
         print(f"{path} already exists! Aborting to prevent overriding data...")
         exit(1)
 
-    config = {}
+    config: dict[Any, Any] = {}
     # ====== GCC ======
-    gcc = {}
+    gcc: dict[str, Any] = {}
     gcc["name"] = "gcc"
     gcc["main_branch"] = "master"
 
@@ -81,7 +82,7 @@ if __name__ == "__main__":
     config["gcc"] = gcc
 
     # ====== LLVM ======
-    llvm = {}
+    llvm: dict[str, Any] = {}
     llvm["name"] = "clang"
     llvm["main_branch"] = "main"
 
@@ -119,7 +120,7 @@ if __name__ == "__main__":
 
     config["llvm"] = llvm
     # ====== CSmith ======
-    csmith = {}
+    csmith: dict[str, Any] = {}
     csmith["max_size"] = 50000
     csmith["min_size"] = 10000
     if shutil.which("csmith"):

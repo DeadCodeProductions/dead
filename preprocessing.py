@@ -82,7 +82,7 @@ def preprocess_csmith_file(
         marker_decls = lines[marker_range[0] : marker_range[1]]
 
         lines = lines[platform_main_end_line + 1 :]
-        lines = remove_print_hash_value(remove_platform_main_begin(lines))
+        lines = remove_print_hash_value([l for l in remove_platform_main_begin(lines)])
         lines = (
             marker_decls
             + [

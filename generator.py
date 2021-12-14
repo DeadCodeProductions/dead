@@ -148,10 +148,10 @@ class CSmithCaseGenerator:
     def __init__(
         self, config: utils.NestedNamespace, patchdb, cores: Optional[int] = None
     ):
-        self.config = config
-        self.builder = builder.Builder(config, patchdb, cores)
-        self.chkr = checker.Checker(config, self.builder)
-        self.procs = []
+        self.config: utils.NestedNamespace = config
+        self.builder: builder.Builder = builder.Builder(config, patchdb, cores)
+        self.chkr: checker.Checker = checker.Checker(config, self.builder)
+        self.procs: list[Process] = []
 
     def generate_interesting_case(self, scenario: utils.Scenario) -> utils.Case:
         """Generate a case which is interesting i.e. has one compiler which does
@@ -318,7 +318,7 @@ class CSmithCaseGenerator:
             Generator[utils.Case, None, None]: Interesting case generator giving Cases.
         """
 
-        queue = Queue()
+        queue: Queue = Queue()
 
         # Create processes
         self.procs = [

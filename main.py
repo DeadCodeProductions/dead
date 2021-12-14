@@ -24,7 +24,7 @@ if __name__ == "__main__":
     rdcr = reducer.Reducer(config, bldr)
     bsctr = bisector.Bisector(config, bldr, chkr)
 
-    ddb = database.CaseDatabase(config.casedb)
+    ddb = database.CaseDatabase(config, config.casedb)
 
     if args.run:
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
                     print(f"BuildException: {e}")
                     continue
 
-            ddb.record_case(config, case)
+            ddb.record_case(case)
             counter += 1
 
     gnrtr.terminate_processes()

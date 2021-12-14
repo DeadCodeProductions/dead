@@ -118,13 +118,16 @@ def check_compiler_warnings(
     return True
 
 
-@contextmanager
-def ccomp_env() -> Path:
-    td = tempfile.TemporaryDirectory()
-    tempfile.tempdir = td.name
-    try:
-        yield Path(td.name)
-    finally:
+class CCompEnv:
+    def __init__(self):
+        self.td = None
+
+    def __enter__(self) -> Path:
+        self.td = tempfile.TemporaryDirectory()
+        tempfile.tempdir = self.td
+        return Path(self.td.name)
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
         tempfile.tempdir = None
 
 
@@ -142,7 +145,7 @@ def verify_with_ccomp(
     Returns:
         bool: True if CompCert does not complain.
     """
-    with ccomp_env() as tmpdir:
+    with CCompEnv() as tmpdir:
         cmd = [
             ccomp,
             str(file),
@@ -185,7 +188,7 @@ def use_ub_sanitizers(
     if flags:
         cmd.extend(flags.split())
 
-    with ccomp_env():
+    with CCompEnv():
         with tempfile.NamedTemporaryFile(suffix=".exe", delete=False) as exe:
             exe.close()
             os.chmod(exe.name, 0o777)
@@ -590,8 +593,8 @@ if __name__ == "__main__":
         cases_to_test = [utils.Case.from_file(config, file)]
 
     if args.marker is not None:
-        for c in cases_to_test:
-            c.marker = args.marker
+        for cs in cases_to_test:
+            cs.marker = args.marker
     elif check_marker:
         raise Exception("You need to specify a marker")
 
@@ -600,10 +603,10 @@ if __name__ == "__main__":
         exit(2)
 
     if args.check_reduced:
-        for c in cases_to_test:
-            if not c.reduced_code:
+        for cs in cases_to_test:
+            if not cs.reduced_code:
                 raise Exception("Case does not include reduced code!")
-            c.code = c.reduced_code
+            cs.code = cs.reduced_code
 
     if all(
         chkr.is_interesting(

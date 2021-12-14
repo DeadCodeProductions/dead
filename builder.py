@@ -24,41 +24,53 @@ class BuildException(Exception):
     pass
 
 
-@contextmanager
-def build_context(
-    prefix: Path,
-    success_indicator: Path,
-    compiler_config,
-    rev,
-    logdir: os.PathLike,
-    cache_group: str,
-) -> tuple[Path, TextIO]:
-    build_dir = tempfile.mkdtemp()
-    os.makedirs(prefix, exist_ok=True)
+class BuildContext:
+    def __init__(
+        self,
+        prefix: Path,
+        success_indicator: Path,
+        compiler_config,
+        rev,
+        logdir: os.PathLike,
+        cache_group: str,
+    ):
 
-    starting_cwd = os.getcwd()
-    os.chdir(build_dir)
+        self.prefix = prefix
+        self.success_indicator = success_indicator
+        self.compiler_config = compiler_config
+        self.rev = rev
+        self.logdir = logdir
+        self.cache_group = cache_group
 
-    # Build log file
-    current_time = time.strftime("%Y%m%d-%H%M%S")
-    build_log_path = pjoin(logdir, f"{current_time}-{compiler_config.name}-{rev}.log")
-    build_log = open(build_log_path, "a")
-    # Set permissions of logfile
-    shutil.chown(build_log_path, group=cache_group)
-    os.chmod(build_log_path, 0o660)
-    logging.info(f"Build log at {build_log_path}")
+    def __enter__(self):
+        self.build_dir = tempfile.mkdtemp()
+        os.makedirs(self.prefix, exist_ok=True)
 
-    try:
-        yield (Path(build_dir), build_log)
-    finally:
-        build_log.close()
-        shutil.rmtree(build_dir)
-        os.chdir(starting_cwd)
+        self.starting_cwd = os.getcwd()
+        os.chdir(self.build_dir)
+
+        # Build log file
+        current_time = time.strftime("%Y%m%d-%H%M%S")
+        build_log_path = pjoin(
+            self.logdir, f"{current_time}-{self.compiler_config.name}-{self.rev}.log"
+        )
+        self.build_log = open(build_log_path, "a")
+        # Set permissions of logfile
+        shutil.chown(build_log_path, group=self.cache_group)
+        os.chmod(build_log_path, 0o660)
+        logging.info(f"Build log at {build_log_path}")
+
+        return (Path(self.build_dir), self.build_log)
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.build_log.close()
+        shutil.rmtree(self.build_dir)
+        os.chdir(self.starting_cwd)
 
         # Build was not successful
-        if not success_indicator.exists():
+        if not self.success_indicator.exists():
             # remove cache entry
-            shutil.rmtree(prefix)
+            shutil.rmtree(self.prefix)
 
 
 class Builder:
@@ -174,7 +186,7 @@ class Builder:
                 f"Known Bad combination {compiler_config.name} {rev} with patches {required_patches}"
             )
 
-        with build_context(
+        with BuildContext(
             prefix,
             success_indicator,
             compiler_config,

@@ -28,26 +28,25 @@ class PatchDB:
         return save_decorator
 
     @_save_db
-    def save(self, patch: os.PathLike[str], revs: list[str], repo: Repo):
+    def save(self, patch: Path, revs: list[str], repo: Repo):
         commits = []
         for rev in revs:
             commits.append(repo.rev_to_commit(rev))
         # To not be computer dependend, just work with the name of the patch
-        patch = os.path.basename(patch)
-        logging.debug(f"Saving entry for {patch}: {commits}")
+        patch
+        patch_basename = os.path.basename(patch)
+        logging.debug(f"Saving entry for {patch_basename}: {commits}")
 
         if patch not in self.data:
-            self.data[patch] = commits
+            self.data[patch_basename] = commits
         else:
-            self.data[patch].extend(commits)
+            self.data[patch_basename].extend(commits)
 
         # Make entries unique
-        self.data[patch] = list(set(self.data[patch]))
+        self.data[patch] = list(set(self.data[patch_basename]))
 
     @_save_db
-    def save_bad(
-        self, patches: list[os.PathLike], rev: str, repo: Repo, compiler_config
-    ):
+    def save_bad(self, patches: list[Path], rev: str, repo: Repo, compiler_config):
         logging.debug(f"Saving bad: {compiler_config.name} {rev} {patches}")
         patches_str = [str(os.path.basename(patch)) for patch in patches]
         rev = repo.rev_to_commit(rev)
@@ -64,9 +63,7 @@ class PatchDB:
         self.data["bad"][compiler_config.name][rev].append(patches_str)
 
     @_save_db
-    def clear_bad(
-        self, patches: list[os.PathLike], rev: str, repo: Repo, compiler_config
-    ):
+    def clear_bad(self, patches: list[Path], rev: str, repo: Repo, compiler_config):
         logging.debug(f"Clearing bad: {compiler_config.name} {rev} {patches}")
         patches_str = [str(os.path.basename(patch)) for patch in patches]
         rev = repo.rev_to_commit(rev)
@@ -84,9 +81,7 @@ class PatchDB:
 
         self.data["bad"][compiler_config.name][rev] = list_bad
 
-    def is_known_bad(
-        self, patches: list[os.PathLike], rev: str, repo: Repo, compiler_config
-    ):
+    def is_known_bad(self, patches: list[Path], rev: str, repo: Repo, compiler_config):
         patches_str = [str(os.path.basename(patch)) for patch in patches]
         rev = repo.rev_to_commit(rev)
 
@@ -106,21 +101,21 @@ class PatchDB:
 
         return False
 
-    def required_patches(self, rev: str, repo: Repo) -> list[os.PathLike]:
+    def required_patches(self, rev: str, repo: Repo) -> list[Path]:
         commit = repo.rev_to_commit(rev)
         required_patches = []
         for patch, patch_commits in self.data.items():
             if commit in patch_commits:
-                required_patches.append(os.path.abspath(pjoin("patches", patch)))
+                required_patches.append(Path(os.path.abspath(pjoin("patches", patch))))
         return required_patches
 
-    def requires_this_patch(self, rev, patch, repo: Repo) -> bool:
+    def requires_this_patch(self, rev, patch: Path, repo: Repo) -> bool:
         rev = repo.rev_to_commit(rev)
-        patch = os.path.basename(patch)
-        if patch not in self.data:
+        patch_basename = os.path.basename(patch)
+        if patch_basename not in self.data:
             return False
         else:
-            return rev in self.data[patch]
+            return rev in self.data[patch_basename]
 
     @_save_db
     def manual_intervention_required(self, compiler_config, rev: str):

@@ -115,7 +115,7 @@ def viz(case: utils.Case):
         return bis_ancestor_found
 
     if case.bisection:
-        rev_bis = case.bisection
+        rev_bis: Optional[str] = case.bisection
         print(f"Bisection commit {rev_bis}")
     else:
         rev_bis = None

@@ -99,7 +99,7 @@ class Bisector:
             bool: True if the bisection succeeded.
         """
         if not force and case.bisection:
-            logging.info(f"Ignoring case {file}: Already bisected")
+            logging.info(f"Ignoring case: Already bisected")
             return True
         try:
             if res := self.bisect_code(
@@ -162,7 +162,7 @@ class Bisector:
 
         if len(possible_good_commits) == 0:
             logging.info(f"No matching optimization level found. Aborting...")
-            return
+            return None
         # Sort commits based on branch point wrt to the bad commit
         # Why? Look at the following commit graph
         # Bad
@@ -174,14 +174,21 @@ class Bisector:
         #  B
         #  |
         # We want to bisect between Bad and Good_1 because it's less bisection work.
+        # reveal_type(possible_good_commits)
         possible_good_commits = [
             (rev, repo.get_best_common_ancestor(bad_commit, rev))
             for rev in possible_good_commits
         ]
 
+        good_commit: str
+        common_ancestor: str
+
+        def cmp_func(x: tuple[str, str], y: tuple[str, str]) -> bool:
+            return repo.is_ancestor(x[1], y[1])
+
         good_commit, common_ancestor = min(
             possible_good_commits,
-            key=functools.cmp_to_key(lambda x, y: repo.is_ancestor(x[1], y[1])),
+            key=functools.cmp_to_key(cmp_func),
         )
 
         # ====== Figure out in which part the introducer or fixer lies
@@ -400,7 +407,7 @@ class Bisector:
             logging.info(f"Midpoint: {midpoint}")
 
             try:
-                test: bool = self._is_interesting(case, midpoint)
+                test = self._is_interesting(case, midpoint)
             except builder.BuildException:
                 logging.warning(
                     f"Could not build {case.bad_setting.compiler_config.name} {midpoint}!"

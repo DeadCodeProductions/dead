@@ -191,9 +191,7 @@ def to_absolute_paths(config: NestedNamespace):
                 config[path_in_config] = str(project_dir / config[path_in_config])
 
 
-def import_config(
-    config_path: Optional[Union[os.PathLike[str], Path]] = None, validate: bool = True
-):
+def import_config(config_path: Optional[Path] = None, validate: bool = True):
     if config_path is None:
         p = Path.home() / ".config/dce/config.json"
         if p.exists():
@@ -394,7 +392,7 @@ class Scenario:
                 s.add_flag(f)
 
     def to_jsonable_dict(self) -> dict:
-        d = {}
+        d: dict[str, Any] = {}
         d["target_settings"] = [s.to_jsonable_dict() for s in self.target_settings]
         d["attacker_settings"] = [s.to_jsonable_dict() for s in self.attacker_settings]
 
@@ -463,8 +461,8 @@ def run_cmd(
 
 def run_cmd_to_logfile(
     cmd: Union[str, list[str]],
-    log_file: TextIO = None,
-    working_dir: Optional[os.PathLike[str]] = None,
+    log_file: Optional[TextIO] = None,
+    working_dir: Optional[Path] = None,
     additional_env: dict = {},
 ) -> None:
 

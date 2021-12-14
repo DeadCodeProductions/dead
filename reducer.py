@@ -21,13 +21,16 @@ import utils
 
 
 # ==================== Reducer ====================
-@contextmanager
-def temp_dir_env() -> Path:
-    td = tempfile.TemporaryDirectory()
-    tempfile.tempdir = td.name
-    try:
-        yield Path(td.name)
-    finally:
+class TempDirEnv:
+    def __init__(self):
+        self.td = None
+
+    def __enter__(self):
+        self.td = tempfile.TemporaryDirectory()
+        tempfile.tempdir = self.td
+        return Path(self.td.name)
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
         tempfile.tempdir = None
 
 
@@ -65,7 +68,7 @@ class Reducer:
         # so they can't clean up after themselves.
         # Setting a temporary temporary directory for creduce to be able to clean
         # up everthing
-        with temp_dir_env() as tmpdir:
+        with TempDirEnv() as tmpdir:
             # preprocess file
             if preprocess:
                 pp_code = preprocessing.preprocess_csmith_code(

@@ -22,7 +22,7 @@ class Patcher:
         self.builder = builder.Builder(config, self.patchdb, cores=cores)
 
     def _check_building_patch(
-        self, compiler_config, rev: str, patch: os.PathLike, repo: Repo
+        self, compiler_config, rev: str, patch: Path, repo: Repo
     ) -> tuple[bool, Optional[bool]]:
 
         if not self.patchdb.requires_this_patch(rev, patch, repo):
@@ -54,7 +54,7 @@ class Patcher:
         good_rev: str,
         bad_rev: str,
         compiler_config,
-        patch: os.PathLike,
+        patch: Path,
         repo: Repo,
         failure_is_good: bool = False,
         max_double_fail: int = 2,
@@ -227,7 +227,7 @@ class Patcher:
             )
 
     def find_fixer_from_introducer_to_releases(
-        self, introducer: str, compiler_config, patch: os.PathLike, repo: Repo
+        self, introducer: str, compiler_config, patch: Path, repo: Repo
     ) -> None:
         logging.info(f"Starting bisection of fixer commits from {introducer}...")
 
@@ -256,9 +256,7 @@ class Patcher:
                 and no_patch_release
                 and any([repo.is_ancestor(fixer, release) for fixer in fixer_list])
             ):
-                logging.info(
-                    f"Already known fixer {fixer} is ancestor of {release}. No additional searching required"
-                )
+                logging.info(f"Already known fixer. No additional searching required")
                 continue
 
             if not no_patch_release and not w_patch_release:

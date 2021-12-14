@@ -80,7 +80,7 @@ class Repo:
         # TODO: maybe merge with rev_to_commit...
         return utils.run_cmd(f"git -C {self.path} log --format=%H {rev}").split("\n")
 
-    def is_ancestor(self, rev_old, rev_young) -> bool:
+    def is_ancestor(self, rev_old: str, rev_young: str) -> bool:
         rev_old = self.rev_to_commit(rev_old)
         rev_young = self.rev_to_commit(rev_young)
 
