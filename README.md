@@ -13,6 +13,7 @@ The following programs must be installed
 - `cmake`
 - `ccomp` (CompCert)
 - `llvm 13.0.0` (for the include files)
+- `compiler-rt` (for the sanitization libraries. It's also part of LLVM)
 
 We are running on Arch Linux and have not tested any other distribution.
 

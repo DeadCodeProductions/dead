@@ -11,7 +11,7 @@ import utils
 
 if __name__ == "__main__":
     print(
-        "Have you installed the following programs/projects: llvm, clang, gcc, cmake, ccomp, csmith and creduce?"
+        "Have you installed the following programs/projects: llvm, clang, compiler-rt, gcc, cmake, ccomp, csmith and creduce?"
     )
     print("Press enter to continue if you believe you have")
     input()
