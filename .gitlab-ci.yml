@@ -1,15 +1,15 @@
-image: "python:latest"
+image: "python:3.9"
 
 before_script:
   - python --version
-  - pip install mypy
+  - pip3 install pytype
 
 stages:
   - Static Analysis
 
-mypy:
+pytype:
   stage: Static Analysis
   script:
   - pwd
   - ls -l
-  - python -m mypy *py
+  - python3 -m pytype *.py
