@@ -198,9 +198,9 @@ class CaseDatabase:
         with self.con:
             cur = self.con.cursor()
             # Can we use CaseDatabase.table_columnsHow to automate this and make it less error prone?
-            bisection = case.bisections[-1] if case.bisections else None
+            bisection = case.bisection
             reduced_code_sha1 = (
-                self.record_code(case.reduced_code[-1]) if case.reduced_code else None
+                self.record_code(case.reduced_code) if case.reduced_code else None
             )
 
             code_sha1 = self.record_code(case.code)
@@ -489,9 +489,6 @@ class CaseDatabase:
             raise DatabaseError("Missing original code")
 
         reduced_code = self.get_code_from_id(reduced_code_sha1)
-        reduced_code = [reduced_code] if reduced_code else []
-
-        bisection = [bisection] if bisection else []
 
         scenario = self.get_scenario_from_id(scenario_id)
 
@@ -508,7 +505,7 @@ class CaseDatabase:
             good_settings,
             scenario,
             reduced_code=reduced_code,
-            bisections=bisection,
+            bisection=bisection,
             path=None,
             timestamp=timestamp,
         )
@@ -528,14 +525,9 @@ class CaseDatabase:
         code_sha1 = self.record_code(case.code)
 
         if case.reduced_code:
-            reduced_code_sha1 = self.record_code(case.reduced_code[-1])
+            reduced_code_sha1 = self.record_code(case.reduced_code)
         else:
             reduced_code_sha1 = None
-
-        if case.bisections:
-            bisection = case.bisections[-1]
-        else:
-            bisection = None
 
         bad_setting_id = self.record_compiler_setting(case.bad_setting)
         scenario_id = self.record_scenario(case.scenario)
@@ -550,7 +542,7 @@ class CaseDatabase:
                     case.marker,
                     bad_setting_id,
                     scenario_id,
-                    bisection,
+                    case.bisection,
                     reduced_code_sha1,
                     case.timestamp,
                 ),

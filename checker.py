@@ -570,7 +570,7 @@ if __name__ == "__main__":
             check_marker = True
 
         cases_to_test = [
-            utils.Case(code, args.marker, bs, good_settings, scenario, [], [], None)
+            utils.Case(code, args.marker, bs, good_settings, scenario, None, None, None)
             for bs in bad_settings
         ]
 
@@ -603,7 +603,7 @@ if __name__ == "__main__":
         for c in cases_to_test:
             if not c.reduced_code:
                 raise Exception("Case does not include reduced code!")
-            c.code = c.reduced_code[-1]
+            c.code = c.reduced_code
 
     if all(
         chkr.is_interesting(

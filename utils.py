@@ -302,7 +302,7 @@ def create_symlink(src: Path, dst: Path):
 class CompilerSetting:
     compiler_config: NestedNamespace
     rev: str
-    opt_level: Optional[str] = None
+    opt_level: str
     additional_flags: Optional[list[str]] = None
 
     def __str__(self):
@@ -629,8 +629,8 @@ class Case:
     good_settings: list[CompilerSetting]
     scenario: Scenario
 
-    reduced_code: list[str]
-    bisections: list[str]
+    reduced_code: Optional[str]
+    bisection: Optional[str]
     timestamp: float
 
     path: Optional[Path]
@@ -642,8 +642,8 @@ class Case:
         bad_setting: CompilerSetting,
         good_settings: list[CompilerSetting],
         scenario: Scenario,
-        reduced_code: list[str],
-        bisections: list[str],
+        reduced_code: Optional[str],
+        bisection: Optional[str],
         path: Optional[Path] = None,
         timestamp: Optional[float] = None,
     ):
@@ -654,7 +654,7 @@ class Case:
         self.good_settings = good_settings
         self.scenario = scenario
         self.reduced_code = reduced_code
-        self.bisections = bisections
+        self.bisection = bisection
         self.path = path
 
         self.timestamp = timestamp if timestamp else time.time()
@@ -687,21 +687,15 @@ class Case:
             scenario = Scenario.from_jsonable_dict(
                 config, json.loads(check_and_get(tf, "scenario.json"))
             )
-            reduced_code = []
-            counter = 0
-            red_n = f"reduced_code_{counter}.c"
-            while red_n in names:
-                reduced_code.append(check_and_get(tf, red_n))
-                counter += 1
-                red_n = f"reduced_code_{counter}.c"
+            red_n = f"reduced_code_0.c"
+            reduced_code = None
+            if red_n in names:
+                reduced_code = check_and_get(tf, red_n)
 
-            bisections = []
-            counter = 0
-            bis_n = f"bisection_{counter}.txt"
-            while bis_n in names:
-                bisections.append(check_and_get(tf, bis_n))
-                counter += 1
-                bis_n = f"bisection_{counter}.txt"
+            bisection = None
+            bis_n = f"bisection_0.txt"
+            if bis_n in names:
+                bisection = check_and_get(tf, bis_n)
 
             # "Legacy support"
             try:
@@ -716,7 +710,7 @@ class Case:
                 good_settings,
                 scenario,
                 reduced_code,
-                bisections,
+                bisection,
                 file.absolute(),
                 timestamp,
             )
@@ -745,13 +739,13 @@ class Case:
             ntf = save_to_tmp_file(str(self.timestamp))
             tf.add(ntf.name, "timestamp.txt")
 
-            for i, rcode in enumerate(self.reduced_code):
-                ntf = save_to_tmp_file(rcode)
-                tf.add(ntf.name, f"reduced_code_{i}.c")
+            if self.reduced_code:
+                ntf = save_to_tmp_file(self.reduced_code)
+                tf.add(ntf.name, "reduced_code_0.c")
 
-            for i, bisection_rev in enumerate(self.bisections):
-                ntf = save_to_tmp_file(bisection_rev)
-                tf.add(ntf.name, f"bisection_{i}.txt")
+            if self.bisection:
+                ntf = save_to_tmp_file(self.bisection)
+                tf.add(ntf.name, f"bisection_0.txt")
 
     def to_jsonable_dict(self) -> dict:
         d: dict[str, Any] = {}
@@ -762,7 +756,7 @@ class Case:
         d["scenario"] = self.scenario.to_jsonable_dict()
 
         d["reduced_code"] = self.reduced_code
-        d["bisections"] = self.bisections
+        d["bisection"] = self.bisection
 
         d["timestamp"] = self.timestamp
 
@@ -788,7 +782,7 @@ class Case:
             good_settings,
             scenario,
             d["reduced_code"],
-            d["bisections"],
+            d["bisection"],
             path,
             timestamp=d["timestamp"],
         )

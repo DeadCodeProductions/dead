@@ -65,7 +65,7 @@ class Bisector:
         case_cpy = copy.deepcopy(case)
         case_cpy.bad_setting.rev = rev
         if case_cpy.reduced_code:
-            case_cpy.code = case_cpy.reduced_code[-1]
+            case_cpy.code = case_cpy.reduced_code
             return self.chkr.is_interesting(case_cpy, preprocess=False)
         else:
             return self.chkr.is_interesting(case_cpy, preprocess=True)
@@ -98,14 +98,14 @@ class Bisector:
         Returns:
             bool: True if the bisection succeeded.
         """
-        if not force and case.bisections:
+        if not force and case.bisection:
             logging.info(f"Ignoring case {file}: Already bisected")
             return True
         try:
             if res := self.bisect_code(
                 case.code, case.marker, case.bad_setting, case.good_settings
             ):
-                case.bisections.append(res)
+                case.bisection = res
                 return True
         except BisectionException:
             return False
@@ -140,8 +140,8 @@ class Bisector:
             bad_setting,
             good_settings,
             utils.Scenario([bad_setting], good_settings),
-            [],
-            [],
+            None,
+            None,
             None,
         )
 

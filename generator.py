@@ -229,8 +229,8 @@ class CSmithCaseGenerator:
                                 bad_setting=bad_setting,
                                 good_settings=good,
                                 scenario=scenario,
-                                reduced_code=[],
-                                bisections=[],
+                                reduced_code=None,
+                                bisection=None,
                                 path=None,
                             )
                             # TODO: Optimize interestingness test and document behaviour

@@ -114,8 +114,8 @@ def viz(case: utils.Case):
                 return True
         return bis_ancestor_found
 
-    if case.bisections:
-        rev_bis = case.bisections[0]
+    if case.bisection:
+        rev_bis = case.bisection
         print(f"Bisection commit {rev_bis}")
     else:
         rev_bis = None
@@ -127,7 +127,8 @@ def viz(case: utils.Case):
     rev_main = repo.rev_to_commit(case.bad_setting.compiler_config.main_branch)
     # Test bad_setting
     cpy = copy.deepcopy(case)
-    cpy.code = cpy.reduced_code[0]
+    if cpy.reduced_code:
+        cpy.code = cpy.reduced_code
     res_bs = "bad" if chkr.is_interesting(cpy, preprocess=False) else "good"
     # TODO: Fix this
     print("NOTE: This graphic assumes the 'Start' commit to be from somewhere in trunk")
@@ -203,13 +204,15 @@ if __name__ == "__main__":
     case = utils.Case.from_file(config, file)
 
     if args.clean_reduced_bisections:
-        case.reduced_code = []
-        case.bisections = []
+        case.reduced_code = None
+        case.bisection = None
         case.to_file(file)
     elif args.asm:
         code = case.code
-        if args.reduced:
-            code = case.reduced_code[0]
+        if args.reduced and case.reduced_code:
+            code = case.reduced_code
+        else:
+            print("Found no static code. Working with normal code...")
 
         with open("asmbad.s", "w") as f:
             f.write("//====== Bad ASM =====\n")
@@ -224,8 +227,10 @@ if __name__ == "__main__":
         print("Created files asmgood.s and asmbad.s")
     elif args.static:
         code = case.code
-        if args.reduced:
-            code = case.reduced_code[0]
+        if args.reduced and case.reduced_code:
+            code = case.reduced_code
+        else:
+            print("Found no static code. Working with normal code...")
 
         with open("static.c", "w") as f:
             f.write(code)
@@ -240,7 +245,7 @@ if __name__ == "__main__":
             flags,
         )
         checker.annotate_program_with_static(
-            config.static_annotator, "static.c", include_paths
+            config.static_annotator, Path("static.c"), include_paths
         )
         print("Created static.c")
     elif args.viz:
@@ -260,8 +265,8 @@ if __name__ == "__main__":
             cpy.code = preprocessing.preprocess_csmith_code(
                 case.code, utils.get_marker_prefix(case.marker), case.bad_setting, bldr
             )
-        if args.reduced:
-            cpy.code = cpy.reduced_code[-1]
+        if args.reduced and cpy.reduced_code:
+            cpy.code = cpy.reduced_code
 
         empty_marker_code = chkr._emtpy_marker_code_str(cpy)
         with open("empty_body.c", "w") as f:
@@ -320,12 +325,9 @@ if __name__ == "__main__":
         if not res_empty:
             sanitize_values(config, cpy, "PP: ", chkr)
 
-        print(
-            ("{:.<" f"{width}}}").format("Amount reduced code"), len(case.reduced_code)
-        )
         if case.reduced_code:
             cpy = copy.deepcopy(case)
-            cpy.code = cpy.reduced_code[-1]
+            cpy.code = case.reduced_code
             print(
                 ("{:.<" f"{width}}}").format("Reduced: Check marker"),
                 _ok_fail(chkr.is_interesting_wrt_marker(cpy)),
@@ -348,15 +350,16 @@ if __name__ == "__main__":
 
         print(
             ("{:.<" f"{width}}}").format("Amount Bisections"),
-            len(case.bisections) if case.bisections is not None else 0,
+            len(case.bisection) if case.bisection is not None else 0,
         )
 
-        if case.bisections:
-            print(("{:.<" f"{width}}}").format("Last Bisection"), case.bisections[-1])
-            prev_rev = repo.rev_to_commit(case.bisections[-1] + "~")
+        if case.bisection:
+            print(("{:.<" f"{width}}}").format("Last Bisection"), case.bisection)
+            prev_rev = repo.rev_to_commit(case.bisection + "~")
             print(("{:.<" f"{width}}}").format("Bisection prev commit"), prev_rev)
             cpy = copy.deepcopy(case)
-            cpy.code = cpy.reduced_code[-1]
+            if cpy.reduced_code:
+                cpy.code = cpy.reduced_code
             bis_res = chkr.is_interesting(cpy, preprocess=False)
             cpy.bad_setting.rev = prev_rev
             bis_prev_res = chkr.is_interesting(cpy, preprocess=False)
@@ -366,4 +369,4 @@ if __name__ == "__main__":
             )
         if case.reduced_code:
             print(("{:=^" f"{width}}}").format(" Last Reduced Code "))
-            print(case.reduced_code[-1])
+            print(case.reduced_code)

@@ -47,14 +47,10 @@ class Reducer:
         if not force and case.reduced_code:
             return True
 
-        if not case.reduced_code:
-            case.reduced_code = []
-        if reduce_code := self.reduce_code(
+        case.reduced_code = self.reduce_code(
             case.code, case.marker, case.bad_setting, case.good_settings
-        ):
-            case.reduced_code.append(reduce_code)
-            return True
-        return False
+        )
+        return bool(case.reduced_code)
 
     def reduce_code(
         self,
@@ -222,16 +218,19 @@ if __name__ == "__main__":
         file = Path(args.file).absolute()
         if args.re_reduce:
             case = utils.Case.from_file(config, file)
-            print(f"BEFORE\n{case.reduced_code[-1]}")
+            if not case.reduced_code:
+                print("No reduced code available...")
+                exit(1)
+            print(f"BEFORE\n{case.reduced_code}")
             if reduce_code := rdcr.reduce_code(
-                case.reduced_code[-1],
+                case.reduced_code,
                 case.marker,
                 case.bad_setting,
                 case.good_settings,
                 preprocess=False,
             ):
-                case.reduced_code[-1] = reduce_code
-                print(f"AFTER\n{case.reduced_code[-1]}")
+                case.reduced_code = reduce_code
+                print(f"AFTER\n{case.reduced_code}")
                 case.to_file(file)
         else:
             if rdcr.reduce_file(file, args.force):
