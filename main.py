@@ -2,7 +2,9 @@
 
 import logging
 import os
+import time
 from pathlib import Path
+from typing import Optional
 
 import bisector
 import builder
@@ -29,20 +31,33 @@ if __name__ == "__main__":
     if args.run:
 
         scenario = utils.get_scenario(config, args)
-        gen = gnrtr.parallel_interesting_case(
-            config, scenario, bldr.cores, start_stop=True
-        )
 
         counter = 0
         while True:
             if args.amount and args.amount != 0:
                 if counter >= args.amount:
                     break
-            case = next(gen)
+            # Time db values
+            generator_time: Optional[float] = None
+            generator_try_count: Optional[int] = None
+            bisector_time: Optional[float] = None
+            bisector_steps: Optional[int] = None
+            reducer_time: Optional[float] = None
+
+            time_start_gen = time.perf_counter()
+            case = gnrtr.generate_interesting_case(scenario)
+            time_end_gen = time.perf_counter()
+            generator_time = time_end_gen - time_start_gen
+            generator_try_count = gnrtr.try_counter
 
             if args.bisector:
                 try:
-                    if not bsctr.bisect_case(case):
+                    time_start_bisector = time.perf_counter()
+                    bisect_worked = bsctr.bisect_case(case)
+                    time_end_bisector = time.perf_counter()
+                    bisector_time = time_end_bisector - time_start_bisector
+                    bisector_steps = bsctr.steps
+                    if not bisect_worked:
                         continue
                 except bisector.BisectionException as e:
                     print(f"BisectionException: '{e}'")
@@ -56,12 +71,24 @@ if __name__ == "__main__":
 
             if args.reducer:
                 try:
+                    time_start_reducer = time.perf_counter()
                     worked = rdcr.reduce_case(case)
+                    time_end_reducer = time.perf_counter()
+                    reducer_time = time_end_reducer - time_start_reducer
                 except builder.BuildException as e:
                     print(f"BuildException: {e}")
                     continue
 
-            ddb.record_case(case)
+            case_id = ddb.record_case(case)
+            ddb.add_timing(
+                case_id,
+                generator_time,
+                generator_try_count,
+                bisector_time,
+                bisector_steps,
+                reducer_time,
+            )
+
             counter += 1
 
     gnrtr.terminate_processes()

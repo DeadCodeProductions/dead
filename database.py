@@ -562,7 +562,7 @@ class CaseDatabase:
 
         with self.con:
             self.con.execute(
-                "INSERT OR REPLACE INTO timing VALUES(?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO timing VALUES(?,?,?,?,?,?)",
                 (
                     case_id,
                     generator_time,

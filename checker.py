@@ -166,7 +166,7 @@ def verify_with_ccomp(
             utils.run_cmd(
                 cmd,
                 additional_env={"TMPDIR": str(tmpdir)},
-                kwargs={"timeout": compcert_timeout},
+                timeout=compcert_timeout,
             )
             res = True
         except subprocess.CalledProcessError:
@@ -343,7 +343,7 @@ class Checker:
             for path in include_paths:
                 cmd.append(f"--extra-arg=-isystem{path}")
             try:
-                result = utils.run_cmd(cmd, kwargs={"timeout": 8})
+                result = utils.run_cmd(cmd, timeout=8)
                 return (
                     f"call chain exists between main -> {case.marker}".strip()
                     == result.strip()

@@ -41,13 +41,19 @@ def find_cached_revisions(
     return compilers
 
 
-@dataclass
 class Bisector:
     """Class to bisect a given case."""
 
-    config: utils.NestedNamespace
-    bldr: builder.Builder
-    chkr: checker.Checker
+    def __init__(
+        self,
+        config: utils.NestedNamespace,
+        bldr: builder.Builder,
+        chkr: checker.Checker,
+    ) -> None:
+        self.config = config
+        self.bldr = bldr
+        self.chkr = chkr
+        self.steps = 0
 
     def _is_interesting(self, case: utils.Case, rev: str) -> bool:
         """_is_interesting.
@@ -295,6 +301,7 @@ class Bisector:
                 aborting the bisection.
         """
 
+        self.steps = 0
         # check cache
         possible_revs = repo.direct_first_parent_path(good_rev, bad_rev)
         cached_revs = find_cached_revisions(
@@ -328,6 +335,7 @@ class Bisector:
 
             # There should be no build failure here, as we are working on cached builds
             # But there could be a CompileError
+            self.steps += 1
             try:
                 test: bool = self._is_interesting(case, midpoint)
             except builder.CompileError:

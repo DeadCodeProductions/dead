@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -158,6 +160,7 @@ class CSmithCaseGenerator:
         self.builder: builder.Builder = builder.Builder(config, patchdb, cores)
         self.chkr: checker.Checker = checker.Checker(config, self.builder)
         self.procs: list[Process] = []
+        self.try_counter: int = 0
 
     def generate_interesting_case(self, scenario: utils.Scenario) -> utils.Case:
         """Generate a case which is interesting i.e. has one compiler which does
@@ -175,8 +178,9 @@ class CSmithCaseGenerator:
         csmith_include_flag = f"-I{self.config.csmith.include_path}"
         scenario.add_flags([csmith_include_flag])
 
-        try_counter = 0
+        self.try_counter = 0
         while True:
+            self.try_counter += 1
             logging.debug("Generating new candidate...")
             marker_prefix, candidate_code = generate_file(self.config, "")
 
@@ -243,14 +247,15 @@ class CSmithCaseGenerator:
                             try:
                                 if self.chkr.is_interesting(case):
                                     logging.info(
-                                        f"Try {try_counter}: Found case! LENGTH: {len(candidate_code)}"
+                                        f"Try {self.try_counter}: Found case! LENGTH: {len(candidate_code)}"
                                     )
                                     return case
                             except builder.CompileError:
                                 continue
             else:
-                logging.debug(f"Try {try_counter}: Found no case. Onto the next one!")
-                try_counter += 1
+                logging.debug(
+                    f"Try {self.try_counter}: Found no case. Onto the next one!"
+                )
 
     def _wrapper_interesting(self, queue: Queue[str], scenario: utils.Scenario) -> None:
         """Wrapper for generate_interesting_case for easier use

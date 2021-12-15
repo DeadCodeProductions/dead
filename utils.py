@@ -16,7 +16,7 @@ from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
-from typing import IO, Any, Optional, Sequence, TextIO, Union, cast
+from typing import IO, Any, Dict, Optional, Sequence, TextIO, Union, cast
 
 import parsers
 import repository
@@ -448,7 +448,7 @@ def run_cmd(
     cmd: Union[str, list[str]],
     working_dir: Optional[Path] = None,
     additional_env: dict[str, str] = {},
-    **kwargs: dict[Any, Any],
+    **kwargs: Any,  # https://github.com/python/mypy/issues/8772
 ) -> str:
 
     if working_dir is None:
@@ -460,7 +460,7 @@ def run_cmd(
         cmd = cmd.strip().split(" ")
     output = subprocess.run(
         cmd, cwd=str(working_dir), check=True, env=env, capture_output=True, **kwargs
-    )  # type: ignore
+    )
 
     logging.debug(output.stdout.decode("utf-8").strip())
     logging.debug(output.stderr.decode("utf-8").strip())
