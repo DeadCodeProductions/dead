@@ -243,7 +243,7 @@ class Patcher:
             if repo.is_ancestor(introducer, release)
         ]
 
-        fixer_list = []
+        fixer_list: list[str] = []
         for release in reachable_releases:
             logging.info(f"Searching fixer for release {release}")
 
@@ -399,7 +399,6 @@ if __name__ == "__main__":
     p = Patcher(config, patchdb, cores=cores)
 
     if args.find_range:
-        problems = []
         if args.patch is None:
             print("Missing argument for `patch` when using --find-range.")
             exit(1)
@@ -418,7 +417,6 @@ if __name__ == "__main__":
 
     # ====================
     elif args.find_introducer:
-        problems = []
 
         if args.broken_revision is None:
             print(

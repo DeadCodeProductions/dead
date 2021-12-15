@@ -527,7 +527,7 @@ class CaseDatabase:
         code_sha1 = self.record_code(case.code)
 
         if case.reduced_code:
-            reduced_code_sha1 = self.record_code(case.reduced_code)
+            reduced_code_sha1: Optional[str] = self.record_code(case.reduced_code)
         else:
             reduced_code_sha1 = None
 

@@ -3,7 +3,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Generator, Iterable, Optional
 
 import builder
 import utils
@@ -31,29 +31,26 @@ def find_marker_decl_range(lines: list[str], marker_prefix: str) -> tuple[int, i
     return first, last
 
 
-def find_platform_main_end(lines: list[str]) -> Optional[int]:
+def find_platform_main_end(lines: Iterable[str]) -> Optional[int]:
     p = re.compile(".*platform_main_end.*")
     for i, line in enumerate(lines):
         if p.match(line):
             return i
+    return None
 
 
-def remove_platform_main_begin(lines: list[str]) -> Generator[str, None, None]:
+def remove_platform_main_begin(lines: Iterable[str]) -> list[str]:
     p = re.compile(".*platform_main_begin.*")
-    for line in lines:
-        if not p.match(line):
-            yield line
+    return [line for line in lines if not p.match(line)]
 
 
-def remove_print_hash_value(lines: list[str]) -> Generator[str, None, None]:
+def remove_print_hash_value(lines: Iterable[str]) -> list[str]:
     p = re.compile(".*print_hash_value = 1.*")
-    for line in lines:
-        if not p.match(line):
-            yield line
+    return [line for line in lines if not p.match(line)]
 
 
 def preprocess_csmith_file(
-    path: os.PathLike,
+    path: os.PathLike[str],
     marker_prefix: str,
     compiler_setting: utils.CompilerSetting,
     bldr: builder.Builder,
@@ -70,7 +67,7 @@ def preprocess_csmith_file(
             else compiler_setting.additional_flags
         )
         cmd = [
-            builder.get_compiler_executable(compiler_setting, bldr),
+            str(builder.get_compiler_executable(compiler_setting, bldr)),
             tf.name,
             "-P",
             "-E",
@@ -83,7 +80,7 @@ def preprocess_csmith_file(
         marker_decls = lines[marker_range[0] : marker_range[1]]
 
         lines = lines[platform_main_end_line + 1 :]
-        lines = remove_print_hash_value([l for l in remove_platform_main_begin(lines)])
+        lines = remove_print_hash_value(remove_platform_main_begin(lines))
         lines = (
             marker_decls
             + [

@@ -2,14 +2,26 @@ image: "python:3.9"
 
 before_script:
   - python --version
-  - pip3 install pytype
+  - pip3 install pytype mypy
 
 stages:
+  - Printing Environment
+  - Static Type Checking
   - Static Analysis
+
+print_env:
+  stage: Printing Environment
+  script:
+  - pwd
+  - ls -l
+
+mypy:
+  stage: Static Type Checking
+  script:
+  - python3 -m mypy --strict *.py
 
 pytype:
   stage: Static Analysis
   script:
-  - pwd
-  - ls -l
   - python3 -m pytype *.py
+

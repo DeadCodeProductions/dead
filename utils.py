@@ -16,7 +16,7 @@ from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Optional, Sequence, TextIO, Union
+from typing import IO, Any, Optional, Sequence, TextIO, Union, cast
 
 import parsers
 import repository
@@ -80,7 +80,7 @@ class NestedNamespace(SimpleNamespace):
             return self.__dict__[key]
         assert isinstance(key, Sequence)
         if len(key) > 1:
-            tmp = reduce(lambda x, y: x[y].__dict__, key[:-1], self.__dict__)
+            tmp = reduce(lambda x, y: x[y].__dict__, key[:-1], cast(Any, self.__dict__))
             return tmp[key[-1]]
         else:
             return self.__dict__[key[0]]
@@ -90,7 +90,7 @@ class NestedNamespace(SimpleNamespace):
             self.__dict__[key] = value
         assert isinstance(key, Sequence)
         if len(key) > 1:
-            tmp = reduce(lambda x, y: x[y].__dict__, key[:-1], self.__dict__)
+            tmp = reduce(lambda x, y: x[y].__dict__, key[:-1], cast(Any, self.__dict__))
             tmp[key[-1]] = value
         else:
             self.__dict__[key[0]] = value
@@ -111,7 +111,7 @@ class NestedNamespace(SimpleNamespace):
         else:
             return key[0] in self.__dict__
 
-    def __asdict(self) -> dict:
+    def __asdict(self) -> dict[Any, Any]:
         d = {}
         for key, value in self.__dict__.items():
             if isinstance(value, NestedNamespace):
@@ -145,7 +145,7 @@ def validate_config(config: Union[dict[str, Any], NestedNamespace]) -> None:
             # At this point, tmpconfig should be the value in the config
             s = ".".join(pos)
             if key_type is str:
-                if tmpconfig == "":
+                if tmpconfig == "":  # type: ignore
                     key_problems.add(f"{s} should be a non-empty string, but is empty.")
             elif key_type is Path:
                 if not isinstance(tmpconfig, str) or tmpconfig == "":
@@ -158,7 +158,7 @@ def validate_config(config: Union[dict[str, Any], NestedNamespace]) -> None:
                         f"Executable {tmpconfig} in {s} doesn't exist or is not executable."
                     )
             elif key_type is list:
-                if type(tmpconfig) is not list:
+                if type(tmpconfig) is not list:  # type: ignore
                     key_problems.add(
                         f"{s} should be a list but is not. It contains {tmpconfig} instead."
                     )
@@ -208,11 +208,11 @@ def import_config(
             raise Exception("Found no config.json file at {p}!")
 
     with open(config_path, "r") as f:
-        config = json.load(f)
+        config_dict = json.load(f)
 
-    config["config_path"] = str(Path(config_path).absolute())
+    config_dict["config_path"] = str(Path(config_path).absolute())
 
-    config = NestedNamespace(config)
+    config = NestedNamespace(config_dict)
     to_absolute_paths(config)
 
     if validate:
@@ -330,7 +330,9 @@ class CompilerSetting:
         return d
 
     @staticmethod
-    def from_jsonable_dict(config: NestedNamespace, d: dict) -> CompilerSetting:
+    def from_jsonable_dict(
+        config: NestedNamespace, d: dict[str, Any]
+    ) -> CompilerSetting:
         return CompilerSetting(
             get_compiler_config(config, d["compiler_config"]),
             d["rev"],
@@ -409,7 +411,7 @@ class Scenario:
         return d
 
     @staticmethod
-    def from_jsonable_dict(config: NestedNamespace, d: dict) -> Scenario:
+    def from_jsonable_dict(config: NestedNamespace, d: dict[str, Any]) -> Scenario:
 
         target_settings = [
             CompilerSetting.from_jsonable_dict(config, cs)
@@ -444,7 +446,7 @@ class Scenario:
 
 def run_cmd(
     cmd: Union[str, list[str]],
-    working_dir: Optional[os.PathLike] = None,
+    working_dir: Optional[Path] = None,
     additional_env: dict[str, str] = {},
     **kwargs: dict[Any, Any],
 ) -> str:
@@ -457,19 +459,20 @@ def run_cmd(
     if isinstance(cmd, str):
         cmd = cmd.strip().split(" ")
     output = subprocess.run(
-        cmd, cwd=working_dir, check=True, env=env, capture_output=True, **kwargs
-    )
+        cmd, cwd=str(working_dir), check=True, env=env, capture_output=True, **kwargs
+    )  # type: ignore
 
     logging.debug(output.stdout.decode("utf-8").strip())
     logging.debug(output.stderr.decode("utf-8").strip())
-    return output.stdout.decode("utf-8").strip()
+    res: str = output.stdout.decode("utf-8").strip()
+    return res
 
 
 def run_cmd_to_logfile(
     cmd: Union[str, list[str]],
     log_file: Optional[TextIO] = None,
     working_dir: Optional[Path] = None,
-    additional_env: dict = {},
+    additional_env: dict[str, str] = {},
 ) -> None:
 
     if working_dir is None:
@@ -519,7 +522,7 @@ def get_compiler_config(
         compiler = arg
 
     if compiler == "gcc":
-        compiler_config = config.gcc
+        compiler_config: NestedNamespace = config.gcc
     elif compiler == "llvm" or compiler == "clang":
         compiler_config = config.llvm
     else:
@@ -594,7 +597,7 @@ def get_compiler_settings(
     return settings
 
 
-def save_to_tmp_file(content: str) -> tempfile._TemporaryFileWrapper:
+def save_to_tmp_file(content: str) -> IO[bytes]:
     ntf = tempfile.NamedTemporaryFile()
     with open(ntf.name, "w") as f:
         f.write(content)
@@ -730,7 +733,7 @@ class Case:
             ntf = save_to_tmp_file(self.marker)
             tf.add(ntf.name, "marker.txt")
 
-            int_settings = {}
+            int_settings: dict[str, Any] = {}
             int_settings["bad_setting"] = self.bad_setting.to_jsonable_dict()
             int_settings["good_settings"] = [
                 gs.to_jsonable_dict() for gs in self.good_settings
@@ -770,7 +773,7 @@ class Case:
         return d
 
     @staticmethod
-    def from_jsonable_dict(config: NestedNamespace, d: dict) -> Case:
+    def from_jsonable_dict(config: NestedNamespace, d: dict[str, Any]) -> Case:
         bad_setting = CompilerSetting.from_jsonable_dict(config, d["bad_setting"])
         good_settings = [
             CompilerSetting.from_jsonable_dict(config, dgs)

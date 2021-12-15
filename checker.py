@@ -126,7 +126,7 @@ class CCompEnv:
 
     def __enter__(self) -> Path:
         self.td = tempfile.TemporaryDirectory()
-        tempfile.tempdir = self.td
+        tempfile.tempdir = self.td.name
         return Path(self.td.name)
 
     def __exit__(
@@ -273,7 +273,7 @@ def annotate_program_with_static(
         file (Path): Path to file to annotate.
         include_paths (list[str]): Include paths to use when compiling.
     """
-    cmd = [annotator, file]
+    cmd = [annotator, str(file)]
     for path in include_paths:
         cmd.append(f"--extra-arg=-isystem{path}")
     try:

@@ -35,7 +35,7 @@ class BuildContext:
         success_indicator: Path,
         compiler_config: NestedNamespace,
         rev: str,
-        logdir: os.PathLike,
+        logdir: os.PathLike[str],
         cache_group: str,
     ):
 
@@ -115,7 +115,7 @@ class Builder:
         compiler_config: NestedNamespace,
         rev: str,
         cores: Optional[int] = None,
-        additional_patches: Optional[list] = None,
+        additional_patches: Optional[list[Path]] = None,
         force: bool = False,
     ) -> Path:
         """Build the compiler specified.
@@ -285,7 +285,7 @@ class Builder:
     def _apply_patches(
         self,
         repo: Repo,
-        patches: list[os.PathLike],
+        patches: list[Path],
         compiler_config: NestedNamespace,
         rev: str,
     ) -> None:

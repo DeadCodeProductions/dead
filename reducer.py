@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import Optional
+from typing import Any, Optional
 
 import builder
 import generator
@@ -24,11 +24,11 @@ import utils
 # ==================== Reducer ====================
 class TempDirEnv:
     def __init__(self) -> None:
-        self.td = None
+        self.td: tempfile.TemporaryDirectory[str]
 
     def __enter__(self) -> Path:
         self.td = tempfile.TemporaryDirectory()
-        tempfile.tempdir = self.td
+        tempfile.tempdir = self.td.name
         return Path(self.td.name)
 
     def __exit__(
@@ -93,7 +93,7 @@ class Reducer:
             # save interesting_settings
             settings_path = tmpdir / "interesting_settings.json"
 
-            int_settings = {}
+            int_settings: dict[str, Any] = {}
             int_settings["bad_setting"] = bad_setting.to_jsonable_dict()
             int_settings["good_settings"] = [
                 gs.to_jsonable_dict() for gs in good_settings

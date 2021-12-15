@@ -4,6 +4,8 @@ __pycache__
 *.s
 *.o
 *.log
+*.sqlite3
+*.bak
 platform.info
 callchain_checker/build/
 dce_instrumenter/build/

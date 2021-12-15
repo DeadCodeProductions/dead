@@ -116,8 +116,8 @@ class Repo:
         rev = self.rev_to_commit(rev)
         return int(utils.run_cmd(f"git -C {self.path} log -1 --format=%at {rev}"))
 
-    def apply(self, patches: list[os.PathLike[str]], check: bool = False) -> bool:
-        patches = [Path(os.path.abspath(patch)) for patch in patches]
+    def apply(self, patches: list[Path], check: bool = False) -> bool:
+        patches = [patch.absolute() for patch in patches]
         git_patches = [
             str(patch) for patch in patches if not str(patch).endswith(".sh")
         ]

@@ -174,7 +174,7 @@ class Bisector:
         #  B
         #  |
         # We want to bisect between Bad and Good_1 because it's less bisection work.
-        possible_good_commits = [
+        possible_good_commits_t = [
             (rev, repo.get_best_common_ancestor(bad_commit, rev))
             for rev in possible_good_commits
         ]
@@ -186,7 +186,7 @@ class Bisector:
             return repo.is_ancestor(x[1], y[1])
 
         good_commit, common_ancestor = min(
-            possible_good_commits,
+            possible_good_commits_t,
             key=functools.cmp_to_key(cmp_func),
         )
 

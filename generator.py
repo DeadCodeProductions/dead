@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Generator, Optional, Union
 import builder
 import checker
 import parsers
-import patcher
+import patchdatabase
 import utils
 
 if TYPE_CHECKING:
@@ -270,7 +270,7 @@ class CSmithCaseGenerator:
         config: utils.NestedNamespace,
         scenario: utils.Scenario,
         processes: int,
-        output_dir: os.PathLike,
+        output_dir: os.PathLike[str],
         start_stop: Optional[bool] = False,
     ) -> Generator[Path, None, None]:
         """Generate interesting cases in parallel
@@ -324,7 +324,7 @@ class CSmithCaseGenerator:
             Generator[utils.Case, None, None]: Interesting case generator giving Cases.
         """
 
-        queue: Queue = Queue()
+        queue: Queue[str] = Queue()
 
         # Create processes
         self.procs = [
@@ -377,7 +377,7 @@ if __name__ == "__main__":
 
     cores = args.cores
 
-    patchdb = patcher.PatchDB(config.patchdb)
+    patchdb = patchdatabase.PatchDB(config.patchdb)
     case_generator = CSmithCaseGenerator(config, patchdb, cores)
 
     if args.interesting:

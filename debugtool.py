@@ -84,13 +84,12 @@ def viz(case: utils.Case) -> None:
         case: utils.Case, revs: list[str], rev_bis: Optional[str]
     ) -> bool:
         revs.reverse()
-        search_bis = isinstance(rev_bis, str)
         bis_ancestor_found = False
         for i, rev in enumerate(revs):
             i += 1
             res = _res(case, rev)
             insert_bis = False
-            if search_bis and not bis_ancestor_found:
+            if isinstance(rev_bis, str) and not bis_ancestor_found:
                 if bis_ancestor_found := repo.is_ancestor(rev, rev_bis):
                     insert_bis = True
 
@@ -107,7 +106,7 @@ def viz(case: utils.Case) -> None:
         res_CA = _res(cpy, rev_CA)
         print(f"CA_{revs[0].split('-')[-1]}: {res_CA}")
         print(" |")
-        if search_bis and not bis_ancestor_found:
+        if isinstance(rev_bis, str) and not bis_ancestor_found:
             if bis_ancestor_found := repo.is_ancestor(rev_CA, rev_bis):
                 print(f" | bisect: {rev_bis}")
                 print(" |")
@@ -137,7 +136,7 @@ def viz(case: utils.Case) -> None:
 
     if case.bad_setting.compiler_config.name == "clang":
         first_CA = repo.get_best_common_ancestor(rev_main, "llvmorg-13.0.0")
-        if repo.is_ancestor(first_CA, rev_bis):
+        if rev_bis and repo.is_ancestor(first_CA, rev_bis):
             print(f" | bisect: {rev_bis}")
             print(" |")
             rev_bis = None
@@ -154,7 +153,7 @@ def viz(case: utils.Case) -> None:
             rev_bis = None
     else:
         first_CA = repo.get_best_common_ancestor(rev_main, "releases/gcc-11.2.0")
-        if repo.is_ancestor(first_CA, rev_bis):
+        if rev_bis and repo.is_ancestor(first_CA, rev_bis):
             print(f" | bisect: {rev_bis}")
             print(" |")
             rev_bis = None
@@ -242,7 +241,7 @@ if __name__ == "__main__":
         include_paths = utils.find_include_paths(
             config.llvm.sane_version,
             "static.c",
-            flags,
+            flags if flags else "",
         )
         checker.annotate_program_with_static(
             config.static_annotator, Path("static.c"), include_paths
