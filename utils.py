@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import copy
 import json
@@ -119,11 +121,11 @@ class NestedNamespace(SimpleNamespace):
             d[key] = dvalue
         return d
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo: dict[Any, Any]) -> NestedNamespace:
         return type(self)(self.__asdict())
 
 
-def validate_config(config: Union[dict[str, Any], NestedNamespace]):
+def validate_config(config: Union[dict[str, Any], NestedNamespace]) -> None:
     # TODO: Also check if there are fields that are not supposed to be there
     key_problems = set()
     for exkeys in EXPECTED_ENTRIES:
@@ -173,7 +175,7 @@ def validate_config(config: Union[dict[str, Any], NestedNamespace]):
         exit(1)
 
 
-def to_absolute_paths(config: NestedNamespace):
+def to_absolute_paths(config: NestedNamespace) -> None:
     """
     Convert relative paths for `Path`, `Executable` and `patches` found in config
     into absolute paths with prefix dirname __file__.
@@ -191,7 +193,9 @@ def to_absolute_paths(config: NestedNamespace):
                 config[path_in_config] = str(project_dir / config[path_in_config])
 
 
-def import_config(config_path: Optional[Path] = None, validate: bool = True):
+def import_config(
+    config_path: Optional[Path] = None, validate: bool = True
+) -> NestedNamespace:
     if config_path is None:
         p = Path.home() / ".config/dce/config.json"
         if p.exists():
@@ -246,7 +250,9 @@ def import_config(config_path: Optional[Path] = None, validate: bool = True):
     return config
 
 
-def get_config_and_parser(own_parser: Optional[argparse.ArgumentParser] = None):
+def get_config_and_parser(
+    own_parser: Optional[argparse.ArgumentParser] = None,
+) -> tuple[NestedNamespace, argparse.Namespace]:
     if own_parser is not None:
         parser_list = [own_parser, parsers.config_parser(EXPECTED_ENTRIES)]
     else:
@@ -278,7 +284,7 @@ def get_config_and_parser(own_parser: Optional[argparse.ArgumentParser] = None):
     return config, args_parser
 
 
-def create_symlink(src: Path, dst: Path):
+def create_symlink(src: Path, dst: Path) -> None:
     if dst.exists():
         if dst.is_symlink():
             dst.unlink()
@@ -303,7 +309,7 @@ class CompilerSetting:
     opt_level: str
     additional_flags: Optional[list[str]] = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.additional_flags is None:
             return f"{self.compiler_config.name} {self.rev} {self.opt_level}"
         else:
@@ -312,7 +318,7 @@ class CompilerSetting:
                 + " ".join(self.additional_flags)
             )
 
-    def to_jsonable_dict(self):
+    def to_jsonable_dict(self) -> dict[str, Any]:
         d = {}
         d["compiler_config"] = self.compiler_config.name
         d["rev"] = self.rev
@@ -324,7 +330,7 @@ class CompilerSetting:
         return d
 
     @staticmethod
-    def from_jsonable_dict(config: NestedNamespace, d: dict):
+    def from_jsonable_dict(config: NestedNamespace, d: dict) -> CompilerSetting:
         return CompilerSetting(
             get_compiler_config(config, d["compiler_config"]),
             d["rev"],
@@ -332,7 +338,7 @@ class CompilerSetting:
             d["additional_flags"],
         )
 
-    def add_flag(self, flag: str):
+    def add_flag(self, flag: str) -> None:
         if not self.additional_flags:
             self.additional_flags = [flag]
         elif flag not in self.additional_flags:
@@ -352,7 +358,7 @@ class CompilerSetting:
             return s.split(" ")
 
     @staticmethod
-    def from_str(s: str, config: NestedNamespace):
+    def from_str(s: str, config: NestedNamespace) -> CompilerSetting:
         s = s.strip()
         parts = s.split(" ")
 
@@ -384,14 +390,14 @@ class Scenario:
         self.bisector_version = VERSIONS.bisector_version
         self.reducer_version = VERSIONS.reducer_version
 
-    def add_flags(self, new_flags: list[str]):
+    def add_flags(self, new_flags: list[str]) -> None:
         for f in new_flags:
             for s in self.target_settings:
                 s.add_flag(f)
             for s in self.attacker_settings:
                 s.add_flag(f)
 
-    def to_jsonable_dict(self) -> dict:
+    def to_jsonable_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {}
         d["target_settings"] = [s.to_jsonable_dict() for s in self.target_settings]
         d["attacker_settings"] = [s.to_jsonable_dict() for s in self.attacker_settings]
@@ -403,7 +409,7 @@ class Scenario:
         return d
 
     @staticmethod
-    def from_jsonable_dict(config: NestedNamespace, d: dict):
+    def from_jsonable_dict(config: NestedNamespace, d: dict) -> Scenario:
 
         target_settings = [
             CompilerSetting.from_jsonable_dict(config, cs)
@@ -430,7 +436,7 @@ class Scenario:
         return s
 
     @staticmethod
-    def from_file(config: NestedNamespace, file: Path):
+    def from_file(config: NestedNamespace, file: Path) -> Scenario:
         with open(file, "r") as f:
             js = json.load(f)
             return Scenario.from_jsonable_dict(config, js)
@@ -439,8 +445,8 @@ class Scenario:
 def run_cmd(
     cmd: Union[str, list[str]],
     working_dir: Optional[os.PathLike] = None,
-    additional_env: dict = {},
-    **kwargs,
+    additional_env: dict[str, str] = {},
+    **kwargs: dict[Any, Any],
 ) -> str:
 
     if working_dir is None:
@@ -485,7 +491,7 @@ def run_cmd_to_logfile(
     )
 
 
-def find_include_paths(clang, file, flags):
+def find_include_paths(clang: str, file: str, flags: str) -> list[str]:
     cmd = [clang, file, "-c", "-o/dev/null", "-v"]
     if flags:
         cmd.extend(flags.split())
@@ -504,7 +510,9 @@ def find_include_paths(clang, file, flags):
     return [output[i].strip() for i in range(start, end)]
 
 
-def get_compiler_config(config: NestedNamespace, arg: Union[list[str], str]):
+def get_compiler_config(
+    config: NestedNamespace, arg: Union[list[str], str]
+) -> NestedNamespace:
     if isinstance(arg, list):
         compiler = arg[0]
     else:
@@ -586,7 +594,7 @@ def get_compiler_settings(
     return settings
 
 
-def save_to_tmp_file(content: str):
+def save_to_tmp_file(content: str) -> tempfile._TemporaryFileWrapper:
     ntf = tempfile.NamedTemporaryFile()
     with open(ntf.name, "w") as f:
         f.write(content)
@@ -657,7 +665,7 @@ class Case:
 
         self.timestamp = timestamp if timestamp else time.time()
 
-    def add_flags(self, flags: list[str]):
+    def add_flags(self, flags: list[str]) -> None:
         for f in flags:
             self.bad_setting.add_flag(f)
             for gs in self.good_settings:
@@ -666,7 +674,7 @@ class Case:
         self.scenario.add_flags(flags)
 
     @staticmethod
-    def from_file(config: NestedNamespace, file: Path):
+    def from_file(config: NestedNamespace, file: Path) -> Case:
         with tarfile.open(file, "r") as tf:
 
             names = tf.getnames()
@@ -713,7 +721,7 @@ class Case:
                 timestamp,
             )
 
-    def to_file(self, file: Path):
+    def to_file(self, file: Path) -> None:
         with tarfile.open(file, "w") as tf:
             ntf = save_to_tmp_file(self.code)
 
@@ -745,7 +753,7 @@ class Case:
                 ntf = save_to_tmp_file(self.bisection)
                 tf.add(ntf.name, f"bisection_0.txt")
 
-    def to_jsonable_dict(self) -> dict:
+    def to_jsonable_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {}
         d["code"] = self.code
         d["marker"] = self.marker
@@ -762,7 +770,7 @@ class Case:
         return d
 
     @staticmethod
-    def from_jsonable_dict(config: NestedNamespace, d: dict):
+    def from_jsonable_dict(config: NestedNamespace, d: dict) -> Case:
         bad_setting = CompilerSetting.from_jsonable_dict(config, d["bad_setting"])
         good_settings = [
             CompilerSetting.from_jsonable_dict(config, dgs)

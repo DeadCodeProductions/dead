@@ -11,7 +11,11 @@ import time
 from contextlib import contextmanager
 from os.path import join as pjoin
 from pathlib import Path
-from typing import Optional, TextIO, Union
+from types import TracebackType
+from typing import TYPE_CHECKING, Optional, TextIO, Union
+
+if TYPE_CHECKING:
+    from utils import NestedNamespace
 
 import parsers
 import utils
@@ -29,8 +33,8 @@ class BuildContext:
         self,
         prefix: Path,
         success_indicator: Path,
-        compiler_config,
-        rev,
+        compiler_config: NestedNamespace,
+        rev: str,
         logdir: os.PathLike,
         cache_group: str,
     ):
@@ -42,7 +46,7 @@ class BuildContext:
         self.logdir = logdir
         self.cache_group = cache_group
 
-    def __enter__(self):
+    def __enter__(self) -> tuple[Path, TextIO]:
         self.build_dir = tempfile.mkdtemp()
         os.makedirs(self.prefix, exist_ok=True)
 
@@ -62,7 +66,12 @@ class BuildContext:
 
         return (Path(self.build_dir), self.build_log)
 
-    def __exit__(self, exc_type, exc_value, exc_traceback):
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        exc_traceback: Optional[TracebackType],
+    ) -> None:
         self.build_log.close()
         shutil.rmtree(self.build_dir)
         os.chdir(self.starting_cwd)
@@ -79,7 +88,7 @@ class Builder:
     def __init__(
         self,
         config: utils.NestedNamespace,
-        patchdb,
+        patchdb: PatchDB,
         cores: Optional[int] = None,
         force: bool = False,
     ):
@@ -103,7 +112,7 @@ class Builder:
 
     def build(
         self,
-        compiler_config,
+        compiler_config: NestedNamespace,
         rev: str,
         cores: Optional[int] = None,
         additional_patches: Optional[list] = None,
@@ -274,8 +283,12 @@ class Builder:
         return prefix.exists() and success_indicator.exists()
 
     def _apply_patches(
-        self, repo, patches: list[os.PathLike], compiler_config, rev: str
-    ):
+        self,
+        repo: Repo,
+        patches: list[os.PathLike],
+        compiler_config: NestedNamespace,
+        rev: str,
+    ) -> None:
         logging.debug("Checking patches...")
         for patch in patches:
             if not repo.apply([patch], check=True):
@@ -287,7 +300,7 @@ class Builder:
                 self.patchdb.save_bad(patches, rev, repo, compiler_config)
                 raise BuildException(f"All patches not applicable to {rev}: {patches}")
 
-    def build_releases(self):
+    def build_releases(self) -> None:
         for ver in self.llvm_versions:
             print(self.build(self.config.llvm, ver, cores=cores))
 
@@ -308,24 +321,59 @@ class CompileError(Exception):
     pass
 
 
-@contextmanager
-def compile_context(code: str):
-    fd_code, code_file = tempfile.mkstemp(suffix=".c")
-    fd_asm, asm_file = tempfile.mkstemp(suffix=".s")
+# @contextmanager
+# def compile_context(code: str) -> tuple[str, str]:
+#    fd_code, code_file = tempfile.mkstemp(suffix=".c")
+#    fd_asm, asm_file = tempfile.mkstemp(suffix=".s")
+#
+#    with open(code_file, "w") as f:
+#        f.write(code)
+#
+#    try:
+#        yield (code_file, asm_file)
+#    finally:
+#        os.remove(code_file)
+#        os.close(fd_code)
+#        # In case of a CompileError,
+#        # the file itself might not exist.
+#        if Path(asm_file).exists():
+#            os.remove(asm_file)
+#        os.close(fd_asm)
 
-    with open(code_file, "w") as f:
-        f.write(code)
 
-    try:
-        yield (code_file, asm_file)
-    finally:
-        os.remove(code_file)
-        os.close(fd_code)
-        # In case of a CompileError,
-        # the file itself might not exist.
-        if Path(asm_file).exists():
-            os.remove(asm_file)
-        os.close(fd_asm)
+class CompileContext:
+    def __init__(self, code: str):
+        self.code = code
+        self.fd_code: Optional[int] = None
+        self.fd_asm: Optional[int] = None
+        self.code_file: Optional[str] = None
+        self.asm_file: Optional[str] = None
+
+    def __enter__(self) -> tuple[str, str]:
+        self.fd_code, self.code_file = tempfile.mkstemp(suffix=".c")
+        self.fd_asm, self.asm_file = tempfile.mkstemp(suffix=".s")
+
+        with open(self.code_file, "w") as f:
+            f.write(self.code)
+
+        return (self.code_file, self.asm_file)
+
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        exc_traceback: Optional[TracebackType],
+    ) -> None:
+        if self.code_file and self.fd_code and self.asm_file and self.fd_asm:
+            os.remove(self.code_file)
+            os.close(self.fd_code)
+            # In case of a CompileError,
+            # the file itself might not exist.
+            if Path(self.asm_file).exists():
+                os.remove(self.asm_file)
+            os.close(self.fd_asm)
+        else:
+            raise BuildException("Compier context exited but was not entered")
 
 
 def get_compiler_executable(
@@ -365,7 +413,7 @@ def get_asm_str(
 
     compiler_exe = get_compiler_executable(compiler_setting, bldr)
 
-    with compile_context(code) as context_res:
+    with CompileContext(code) as context_res:
         code_file, asm_file = context_res
 
         cmd = f"{compiler_exe} -S {code_file} -o{asm_file} -O{compiler_setting.opt_level}".split(

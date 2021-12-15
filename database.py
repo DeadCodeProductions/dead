@@ -424,7 +424,9 @@ class CaseDatabase:
 
     @cache
     def get_scenario_from_id(self, scenario_id: int) -> Scenario:
-        def get_settings(self, table: str, s_id: int) -> list[CompilerSetting]:
+        def get_settings(
+            self: CaseDatabase, table: str, s_id: int
+        ) -> list[CompilerSetting]:
 
             ids = self.con.execute(
                 f"SELECT compiler_setting_id FROM {table} WHERE scenario_id == ?",

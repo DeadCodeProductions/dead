@@ -9,7 +9,7 @@ import copy
 import re
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import bisector
 import builder
@@ -32,7 +32,7 @@ def _ok_fail(b: bool) -> str:
 
 def sanitize_values(
     config: utils.NestedNamespace, case: utils.Case, prefix: str, chkr: checker.Checker
-):
+) -> None:
     empty_body_code = chkr._emtpy_marker_code_str(case)
     with tempfile.NamedTemporaryFile(suffix=".c") as tf:
         with open(tf.name, "w") as f:
@@ -71,8 +71,8 @@ def sanitize_values(
             )
 
 
-def viz(case: utils.Case):
-    def _res(case, rev):
+def viz(case: utils.Case) -> None:
+    def _res(case: utils.Case, rev: str) -> str:
         lerev = repo.rev_to_commit(rev)
         case.bad_setting.rev = lerev
         if chkr.is_interesting(case, preprocess=False):

@@ -8,17 +8,17 @@ import utils
 
 
 class Repo:
-    def __init__(self, path: os.PathLike, main_branch: str):
+    def __init__(self, path: Path, main_branch: str):
         self.path = os.path.abspath(path)
         self._showed_stale_warning = False
         self.main_branch = main_branch
 
-    def get_best_common_ancestor(self, rev_a, rev_b):
+    def get_best_common_ancestor(self, rev_a: str, rev_b: str) -> str:
         a = self.rev_to_commit(rev_a)
         b = self.rev_to_commit(rev_b)
         return utils.run_cmd(f"git -C {self.path} merge-base {a} {b}")
 
-    def rev_to_commit(self, rev):
+    def rev_to_commit(self, rev: str) -> str:
         # Could support list of revs...
         if rev == "trunk" or rev == "master" or rev == "main":
             if not self._showed_stale_warning:
@@ -76,7 +76,7 @@ class Repo:
         ]
         return res
 
-    def rev_to_commit_list(self, rev):
+    def rev_to_commit_list(self, rev: str) -> list[str]:
         # TODO: maybe merge with rev_to_commit...
         return utils.run_cmd(f"git -C {self.path} log --format=%H {rev}").split("\n")
 
@@ -93,7 +93,7 @@ class Repo:
         )
         return process.returncode == 0
 
-    def is_branch_point_ancestor_wrt_master(self, rev_old, rev_young):
+    def is_branch_point_ancestor_wrt_master(self, rev_old: str, rev_young: str) -> bool:
         rev_old = self.rev_to_commit(rev_old)
         rev_young = self.rev_to_commit(rev_young)
         rev_master = self.rev_to_commit("master")
@@ -102,7 +102,7 @@ class Repo:
 
         return self.is_ancestor(ca_old, ca_young)
 
-    def on_same_branch_wrt_master(self, rev_a, rev_b):
+    def on_same_branch_wrt_master(self, rev_a: str, rev_b: str) -> bool:
         rev_a = self.rev_to_commit(rev_a)
         rev_b = self.rev_to_commit(rev_b)
         rev_master = self.rev_to_commit("master")
@@ -112,11 +112,11 @@ class Repo:
 
         return ca_b == ca_a
 
-    def get_unix_timestamp(self, rev):
+    def get_unix_timestamp(self, rev: str) -> int:
         rev = self.rev_to_commit(rev)
         return int(utils.run_cmd(f"git -C {self.path} log -1 --format=%at {rev}"))
 
-    def apply(self, patches: list[os.PathLike[str]], check: bool = False):
+    def apply(self, patches: list[os.PathLike[str]], check: bool = False) -> bool:
         patches = [Path(os.path.abspath(patch)) for patch in patches]
         git_patches = [
             str(patch) for patch in patches if not str(patch).endswith(".sh")
@@ -143,7 +143,7 @@ class Repo:
 
         return returncode == 0
 
-    def next_bisection_commit(self, good: str, bad: str):
+    def next_bisection_commit(self, good: str, bad: str) -> str:
         request_str = f"git -C {self.path} rev-list --bisect {bad} ^{good}"
         logging.debug(request_str)
         return utils.run_cmd(request_str)

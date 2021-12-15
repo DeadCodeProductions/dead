@@ -10,6 +10,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from types import TracebackType
 from typing import Optional
 
 import builder
@@ -22,15 +23,20 @@ import utils
 
 # ==================== Reducer ====================
 class TempDirEnv:
-    def __init__(self):
+    def __init__(self) -> None:
         self.td = None
 
-    def __enter__(self):
+    def __enter__(self) -> Path:
         self.td = tempfile.TemporaryDirectory()
         tempfile.tempdir = self.td
         return Path(self.td.name)
 
-    def __exit__(self, exc_type, exc_value, exc_traceback):
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        exc_traceback: Optional[TracebackType],
+    ) -> None:
         tempfile.tempdir = None
 
 

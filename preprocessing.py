@@ -3,6 +3,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
+from typing import Generator, Optional
 
 import builder
 import utils
@@ -13,8 +14,8 @@ See creduce --help to see what it wants.
 """
 
 
-def find_marker_decl_range(lines, markers):
-    p = re.compile(f"void {markers}(.*)\(void\);")
+def find_marker_decl_range(lines: list[str], marker_prefix: str) -> tuple[int, int]:
+    p = re.compile(f"void {marker_prefix}(.*)\(void\);")
     first = 0
     for i, line in enumerate(lines):
         if p.match(line):
@@ -30,21 +31,21 @@ def find_marker_decl_range(lines, markers):
     return first, last
 
 
-def find_platform_main_end(lines: list[str]):
+def find_platform_main_end(lines: list[str]) -> Optional[int]:
     p = re.compile(".*platform_main_end.*")
     for i, line in enumerate(lines):
         if p.match(line):
             return i
 
 
-def remove_platform_main_begin(lines: list[str]):
+def remove_platform_main_begin(lines: list[str]) -> Generator[str, None, None]:
     p = re.compile(".*platform_main_begin.*")
     for line in lines:
         if not p.match(line):
             yield line
 
 
-def remove_print_hash_value(lines: list[str]):
+def remove_print_hash_value(lines: list[str]) -> Generator[str, None, None]:
     p = re.compile(".*print_hash_value = 1.*")
     for line in lines:
         if not p.match(line):

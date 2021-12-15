@@ -174,7 +174,6 @@ class Bisector:
         #  B
         #  |
         # We want to bisect between Bad and Good_1 because it's less bisection work.
-        # reveal_type(possible_good_commits)
         possible_good_commits = [
             (rev, repo.get_best_common_ancestor(bad_commit, rev))
             for rev in possible_good_commits
@@ -248,7 +247,7 @@ class Bisector:
         rev: str,
         repo: repository.Repo,
         interesting_is_bad: bool = True,
-    ):
+    ) -> None:
         """Sanity check, that the bisected commit is actually
         correct.
 
@@ -281,7 +280,7 @@ class Bisector:
         repo: repository.Repo,
         interesting_is_bad: bool = True,
         max_build_fail: int = 2,
-    ):
+    ) -> str:
         """Actual bisection part.
         First bisects within the cache, then continues with a normal bisection.
 

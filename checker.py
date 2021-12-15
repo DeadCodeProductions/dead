@@ -12,6 +12,8 @@ import tarfile
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+from types import TracebackType
+from typing import Optional
 
 import builder
 import parsers
@@ -21,10 +23,10 @@ import utils
 
 
 # ==================== Sanitize ====================
-def get_cc_output(cc, file, flags, cc_timeout):
+def get_cc_output(cc: str, file: Path, flags: str, cc_timeout: int) -> tuple[int, str]:
     cmd = [
         cc,
-        file,
+        str(file),
         "-c",
         "-o/dev/null",
         "-Wall",
@@ -119,15 +121,20 @@ def check_compiler_warnings(
 
 
 class CCompEnv:
-    def __init__(self):
-        self.td = None
+    def __init__(self) -> None:
+        self.td: tempfile.TemporaryDirectory[str]
 
     def __enter__(self) -> Path:
         self.td = tempfile.TemporaryDirectory()
         tempfile.tempdir = self.td
         return Path(self.td.name)
 
-    def __exit__(self, exc_type, exc_value, exc_traceback):
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        exc_traceback: Optional[TracebackType],
+    ) -> None:
         tempfile.tempdir = None
 
 
@@ -157,7 +164,9 @@ def verify_with_ccomp(
         res = True
         try:
             utils.run_cmd(
-                cmd, additional_env={"TMPDIR": str(tmpdir)}, timeout=compcert_timeout
+                cmd,
+                additional_env={"TMPDIR": str(tmpdir)},
+                kwargs={"timeout": compcert_timeout},
             )
             res = True
         except subprocess.CalledProcessError:
@@ -334,7 +343,7 @@ class Checker:
             for path in include_paths:
                 cmd.append(f"--extra-arg=-isystem{path}")
             try:
-                result = utils.run_cmd(cmd, timeout=8)
+                result = utils.run_cmd(cmd, kwargs={"timeout": 8})
                 return (
                     f"call chain exists between main -> {case.marker}".strip()
                     == result.strip()

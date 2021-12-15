@@ -6,7 +6,7 @@ import math
 import os
 from os.path import join as pjoin
 from pathlib import Path
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import builder
 import parsers
@@ -14,15 +14,20 @@ import utils
 from patchdatabase import PatchDB
 from repository import Repo
 
+if TYPE_CHECKING:
+    from utils import NestedNamespace
+
 
 class Patcher:
-    def __init__(self, config, patchdb: PatchDB, cores: Optional[int] = None):
+    def __init__(
+        self, config: NestedNamespace, patchdb: PatchDB, cores: Optional[int] = None
+    ):
         self.config = config
         self.patchdb = patchdb
         self.builder = builder.Builder(config, self.patchdb, cores=cores)
 
     def _check_building_patch(
-        self, compiler_config, rev: str, patch: Path, repo: Repo
+        self, compiler_config: NestedNamespace, rev: str, patch: Path, repo: Repo
     ) -> tuple[bool, Optional[bool]]:
 
         if not self.patchdb.requires_this_patch(rev, patch, repo):
@@ -53,7 +58,7 @@ class Patcher:
         self,
         good_rev: str,
         bad_rev: str,
-        compiler_config,
+        compiler_config: NestedNamespace,
         patch: Path,
         repo: Repo,
         failure_is_good: bool = False,
@@ -123,15 +128,15 @@ class Patcher:
         return good[-1], bad[-1]
 
     def find_ranges(
-        self, compiler_config: utils.NestedNamespace, patchable_commit, patch
-    ):
+        self, compiler_config: utils.NestedNamespace, patchable_commit: str, patch: Path
+    ) -> None:
         introducer = ""
         found_introducer = False
         repo = Repo(compiler_config.repo, compiler_config.main_branch)
 
         potentially_human_readable_name = patchable_commit
         patchable_commit = repo.rev_to_commit(patchable_commit)
-        patch = os.path.abspath(patch)
+        patch = patch.absolute()
         if not Path(patch).exists():
             logging.critical(f"Patch {patch} doesn't exist. Aborting...")
             raise Exception(f"Patch {patch} doesn't exist. Aborting...")
@@ -227,7 +232,7 @@ class Patcher:
             )
 
     def find_fixer_from_introducer_to_releases(
-        self, introducer: str, compiler_config, patch: Path, repo: Repo
+        self, introducer: str, compiler_config: NestedNamespace, patch: Path, repo: Repo
     ) -> None:
         logging.info(f"Starting bisection of fixer commits from {introducer}...")
 
@@ -294,7 +299,7 @@ class Patcher:
         self,
         good: str,
         bad: str,
-        compiler_config,
+        compiler_config: NestedNamespace,
         repo: Repo,
         failure_is_good: bool = False,
     ) -> tuple[str, str]:
@@ -327,7 +332,7 @@ class Patcher:
 
         return (good, bad)
 
-    def find_introducer(self, compiler_config, broken_rev: str):
+    def find_introducer(self, compiler_config: NestedNamespace, broken_rev: str) -> str:
         logging.info(f"Looking for introducer commit starting at {broken_rev}")
 
         repo = Repo(compiler_config.repo, compiler_config.main_branch)

@@ -10,13 +10,16 @@ from os.path import join as pjoin
 from pathlib import Path
 from random import randint
 from tempfile import NamedTemporaryFile
-from typing import Generator, Optional, Union
+from typing import TYPE_CHECKING, Generator, Optional, Union
 
 import builder
 import checker
 import parsers
 import patcher
 import utils
+
+if TYPE_CHECKING:
+    from patchdatabase import PatchDB
 
 
 def run_csmith(csmith: str) -> str:
@@ -146,7 +149,10 @@ def generate_file(
 
 class CSmithCaseGenerator:
     def __init__(
-        self, config: utils.NestedNamespace, patchdb, cores: Optional[int] = None
+        self,
+        config: utils.NestedNamespace,
+        patchdb: PatchDB,
+        cores: Optional[int] = None,
     ):
         self.config: utils.NestedNamespace = config
         self.builder: builder.Builder = builder.Builder(config, patchdb, cores)
@@ -246,7 +252,7 @@ class CSmithCaseGenerator:
                 logging.debug(f"Try {try_counter}: Found no case. Onto the next one!")
                 try_counter += 1
 
-    def _wrapper_interesting(self, queue: Queue, scenario: utils.Scenario):
+    def _wrapper_interesting(self, queue: Queue[str], scenario: utils.Scenario) -> None:
         """Wrapper for generate_interesting_case for easier use
         with python multiprocessing.
 
@@ -357,7 +363,7 @@ class CSmithCaseGenerator:
                         continue
                     os.kill(p.pid, signal.SIGCONT)
 
-    def terminate_processes(self):
+    def terminate_processes(self) -> None:
         for p in self.procs:
             if p.pid is None:
                 continue

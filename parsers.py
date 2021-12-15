@@ -3,7 +3,9 @@ import os
 from typing import Any, Sequence
 
 
-def config_parser(expected_entries: Sequence[tuple[Any, ...]]):
+def config_parser(
+    expected_entries: Sequence[tuple[Any, ...]]
+) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
     for _, path, desc in expected_entries:
@@ -25,7 +27,7 @@ def config_parser(expected_entries: Sequence[tuple[Any, ...]]):
     return parser
 
 
-def builder_parser():
+def builder_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
     parser.add_argument(
@@ -60,7 +62,7 @@ def builder_parser():
     return parser
 
 
-def patcher_parser():
+def patcher_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
     mut_excl_group = parser.add_mutually_exclusive_group(required=True)
@@ -108,7 +110,7 @@ def patcher_parser():
     return parser
 
 
-def generator_parser():
+def generator_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
     parser.add_argument(
@@ -172,7 +174,7 @@ def generator_parser():
     return parser
 
 
-def checker_parser():
+def checker_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
     group = parser.add_mutually_exclusive_group()
@@ -253,7 +255,7 @@ def checker_parser():
     return parser
 
 
-def reducer_parser():
+def reducer_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
     parser.add_argument("-f", "--file", help="Which file to work on.", type=str)
@@ -331,7 +333,7 @@ def reducer_parser():
     return parser
 
 
-def bisector_parser():
+def bisector_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
     parser.add_argument("-f", "--file", help="Which file to work on.", type=str)
@@ -409,7 +411,7 @@ def bisector_parser():
     return parser
 
 
-def debugtool_parser():
+def debugtool_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
     parser.add_argument("-f", "--file", help="Which file to work on.", type=str)
@@ -463,7 +465,7 @@ def debugtool_parser():
     return parser
 
 
-def main_parser():
+def main_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
     subparser = parser.add_subparsers(title="run", dest="run")

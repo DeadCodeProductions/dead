@@ -1,14 +1,33 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
 from os.path import join as pjoin
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
 
 from repository import Repo
 
+if TYPE_CHECKING:
+    from utils import NestedNamespace
+
+T = TypeVar("T")
+
+
+def _save_db(func: Callable[..., T]) -> Callable[..., T]:
+    def save_decorator(db: PatchDB, *args: list[Any], **kwargs: dict[Any, Any]) -> T:
+
+        res = func(db, *args, **kwargs)
+        with open(db.path, "w") as f:
+            json.dump(db.data, f, indent=4)
+        return res
+
+    return save_decorator
+
 
 class PatchDB:
-    def __init__(self, path_to_db):
+    def __init__(self, path_to_db: Path):
         # TODO: maybe enforce this somehow...
         logging.debug(
             "Creating an instance of PatchDB. If you see this message twice, you may have a problem. Only one instance of PatchDB should exist."
@@ -17,18 +36,8 @@ class PatchDB:
         with open(self.path, "r") as f:
             self.data = json.load(f)
 
-    def _save_db(func):
-        def save_decorator(*args, **kwargs):
-
-            res = func(*args, **kwargs)
-            with open(args[0].path, "w") as f:
-                json.dump(args[0].data, f, indent=4)
-            return res
-
-        return save_decorator
-
     @_save_db
-    def save(self, patch: Path, revs: list[str], repo: Repo):
+    def save(self, patch: Path, revs: list[str], repo: Repo) -> None:
         commits = []
         for rev in revs:
             commits.append(repo.rev_to_commit(rev))
@@ -46,7 +55,13 @@ class PatchDB:
         self.data[patch] = list(set(self.data[patch_basename]))
 
     @_save_db
-    def save_bad(self, patches: list[Path], rev: str, repo: Repo, compiler_config):
+    def save_bad(
+        self,
+        patches: list[Path],
+        rev: str,
+        repo: Repo,
+        compiler_config: NestedNamespace,
+    ) -> None:
         logging.debug(f"Saving bad: {compiler_config.name} {rev} {patches}")
         patches_str = [str(os.path.basename(patch)) for patch in patches]
         rev = repo.rev_to_commit(rev)
@@ -63,7 +78,13 @@ class PatchDB:
         self.data["bad"][compiler_config.name][rev].append(patches_str)
 
     @_save_db
-    def clear_bad(self, patches: list[Path], rev: str, repo: Repo, compiler_config):
+    def clear_bad(
+        self,
+        patches: list[Path],
+        rev: str,
+        repo: Repo,
+        compiler_config: NestedNamespace,
+    ) -> None:
         logging.debug(f"Clearing bad: {compiler_config.name} {rev} {patches}")
         patches_str = [str(os.path.basename(patch)) for patch in patches]
         rev = repo.rev_to_commit(rev)
@@ -81,7 +102,13 @@ class PatchDB:
 
         self.data["bad"][compiler_config.name][rev] = list_bad
 
-    def is_known_bad(self, patches: list[Path], rev: str, repo: Repo, compiler_config):
+    def is_known_bad(
+        self,
+        patches: list[Path],
+        rev: str,
+        repo: Repo,
+        compiler_config: NestedNamespace,
+    ) -> bool:
         patches_str = [str(os.path.basename(patch)) for patch in patches]
         rev = repo.rev_to_commit(rev)
 
@@ -109,7 +136,7 @@ class PatchDB:
                 required_patches.append(Path(os.path.abspath(pjoin("patches", patch))))
         return required_patches
 
-    def requires_this_patch(self, rev, patch: Path, repo: Repo) -> bool:
+    def requires_this_patch(self, rev: str, patch: Path, repo: Repo) -> bool:
         rev = repo.rev_to_commit(rev)
         patch_basename = os.path.basename(patch)
         if patch_basename not in self.data:
@@ -118,14 +145,16 @@ class PatchDB:
             return rev in self.data[patch_basename]
 
     @_save_db
-    def manual_intervention_required(self, compiler_config, rev: str):
+    def manual_intervention_required(
+        self, compiler_config: NestedNamespace, rev: str
+    ) -> None:
         if "manual" not in self.data:
             self.data["manual"] = []
 
         self.data["manual"].append(f"{compiler_config.name} {rev}")
         self.data["manual"] = list(set(self.data["manual"]))
 
-    def in_manual(self, compiler_config, rev: str) -> bool:
+    def in_manual(self, compiler_config: NestedNamespace, rev: str) -> bool:
         if "manual" not in self.data:
             return False
         else:
