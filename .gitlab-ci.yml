@@ -2,10 +2,11 @@ image: "python:3.9"
 
 before_script:
   - python --version
-  - pip3 install pytype mypy
+  - pip3 install pytype mypy black
 
 stages:
   - Printing Environment
+  - Format Checking
   - Static Type Checking
   - Static Analysis
 
@@ -14,6 +15,11 @@ print_env:
   script:
   - pwd
   - ls -l
+
+black:
+  stage: Format Checking
+  script:
+  - python3 -m black --check *.py
 
 mypy:
   stage: Static Type Checking
@@ -24,4 +30,3 @@ pytype:
   stage: Static Analysis
   script:
   - python3 -m pytype *.py
-
