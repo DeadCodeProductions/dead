@@ -3,6 +3,7 @@
 import logging
 import os
 import time
+from multiprocessing import Pool
 from pathlib import Path
 from typing import Optional
 
@@ -28,7 +29,7 @@ if __name__ == "__main__":
 
     ddb = database.CaseDatabase(config, config.casedb)
 
-    if args.run:
+    if args.sub == "run":
 
         scenario = utils.get_scenario(config, args)
 
@@ -90,5 +91,41 @@ if __name__ == "__main__":
             )
 
             counter += 1
+
+    elif args.sub == "absorb":
+
+        def read_into_db(file: Path) -> None:
+            # Why another db here?
+            # https://docs.python.org/3/library/sqlite3.html#sqlite3.threadsafety
+            # “Threads may share the module, but not connections.”
+            # Of course we are using multiple processes here, but the processes
+            # are a copy of eachother and who knows how things are implemented,
+            # so better be safe than sorry and create a new connection,
+            # especially when the next sentence is:
+            # "However, this may not always be true."
+            # (They may just refer to the option of having sqlite compiled with
+            # SQLITE_THREADSAFE=0)
+            db = database.CaseDatabase(config, config.casedb)
+            case = utils.Case.from_file(config, file)
+            db.record_case(case)
+
+        pool = Pool(10)
+        absorb_directory = Path(args.absorb_directory).absolute()
+        paths = [p for p in absorb_directory.iterdir() if p.match("*.tar")]
+        len_paths = len(paths)
+        len_len_paths = len(str(len_paths))
+        print("Absorbing... ", end="", flush=True)
+        status_str = ""
+        counter = 0
+        start_time = time.perf_counter()
+        for _ in pool.imap_unordered(read_into_db, paths):
+            counter += 1
+            print("\b" * len(status_str), end="", flush=True)
+            delta_t = time.perf_counter() - start_time
+            status_str = f"{{: >{len_len_paths}}}/{len_paths} {delta_t:.2f}s".format(
+                counter
+            )
+            print(status_str, end="", flush=True)
+        print("")
 
     gnrtr.terminate_processes()

@@ -140,7 +140,7 @@ class CaseDatabase:
         # Take the hash before the compression to handle changes
         # in the compression library.
         code_sha1 = hashlib.sha1(code.encode("utf-8")).hexdigest()
-        compressed_code = zlib.compress(code.encode("utf-8"))
+        compressed_code = zlib.compress(code.encode("utf-8"), level=9)
 
         self.con.execute(
             "INSERT OR IGNORE INTO code VALUES (?, ?)", (code_sha1, compressed_code)

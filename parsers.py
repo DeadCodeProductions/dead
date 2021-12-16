@@ -468,7 +468,7 @@ def debugtool_parser() -> argparse.ArgumentParser:
 def main_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
-    subparser = parser.add_subparsers(title="run", dest="run")
+    subparser = parser.add_subparsers(title="sub", dest="sub")
     run_parser = subparser.add_parser("run")
 
     run_parser.add_argument(
@@ -536,6 +536,14 @@ def main_parser() -> argparse.ArgumentParser:
         help="Save only new cases.",
         action=argparse.BooleanOptionalAction,
         default=False,
+    )
+
+    absorb_parser = subparser.add_parser("absorb")
+
+    absorb_parser.add_argument(
+        "absorb_directory",
+        metavar="DIR",
+        help="Directory to read .tar cases from into the database",
     )
 
     return parser
