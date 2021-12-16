@@ -16,7 +16,7 @@ from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
-from typing import IO, Any, Dict, Optional, Sequence, TextIO, Union, cast
+from typing import IO, Any, Optional, Sequence, TextIO, Union, cast
 
 import parsers
 import repository
@@ -696,15 +696,13 @@ class Case:
             scenario = Scenario.from_jsonable_dict(
                 config, json.loads(check_and_get(tf, "scenario.json"))
             )
-            red_n = f"reduced_code_0.c"
             reduced_code = None
-            if red_n in names:
-                reduced_code = check_and_get(tf, red_n)
+            if "reduced_code_0.c" in names:
+                reduced_code = check_and_get(tf, "reduced_code_0.c")
 
             bisection = None
-            bis_n = f"bisection_0.txt"
-            if bis_n in names:
-                bisection = check_and_get(tf, bis_n)
+            if "bisection_0.txt" in names:
+                bisection = check_and_get(tf, "bisection_0.txt")
 
             # "Legacy support"
             try:
@@ -754,7 +752,7 @@ class Case:
 
             if self.bisection:
                 ntf = save_to_tmp_file(self.bisection)
-                tf.add(ntf.name, f"bisection_0.txt")
+                tf.add(ntf.name, "bisection_0.txt")
 
     def to_jsonable_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {}

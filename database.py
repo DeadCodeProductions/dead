@@ -1,13 +1,12 @@
 import hashlib
 import os
 import sqlite3
-import time
 import zlib
 from dataclasses import dataclass
 from functools import cache, reduce
 from itertools import chain
 from pathlib import Path
-from typing import ClassVar, Optional, Union
+from typing import ClassVar, Optional
 
 import utils
 from utils import Case, CompilerSetting, NestedNamespace, Scenario
@@ -125,7 +124,6 @@ class CaseDatabase:
 
         for table, columns in CaseDatabase.tables.items():
             self.con.execute(make_query(table, columns))
-            self.con.execute(make_query(table, columns))
 
     def record_code(self, code: str) -> str:
         """Inserts `code` into the database's `code`-table and returns its
@@ -173,6 +171,17 @@ class CaseDatabase:
         bug_report_link: str,
         fixed_by: Optional[str],
     ) -> None:
+        """Save additional information for an already saved case.
+
+        Args:
+            case_id (RowID): case_id
+            massaged_code (str): adapted reduced code for better reduction.
+            bug_report_link (str): Link to the bug report.
+            fixed_by (Optional[str]): If the case is already fixed.
+
+        Returns:
+            None:
+        """
         code_sha1 = self.record_code(massaged_code)
         with self.con:
             self.con.execute(
@@ -186,6 +195,14 @@ class CaseDatabase:
             )
 
     def record_case(self, case: Case) -> RowID:
+        """Save a case to the DB and get its ID.
+
+        Args:
+            case (Case): Case to save.
+
+        Returns:
+            RowID: ID of case.
+        """
 
         bad_setting_id = self.record_compiler_setting(case.bad_setting)
         with self.con:
@@ -197,7 +214,6 @@ class CaseDatabase:
 
         with self.con:
             cur = self.con.cursor()
-            # Can we use CaseDatabase.table_columnsHow to automate this and make it less error prone?
             bisection = case.bisection
             reduced_code_sha1 = (
                 self.record_code(case.reduced_code) if case.reduced_code else None
@@ -226,6 +242,15 @@ class CaseDatabase:
         return case_id
 
     def record_compiler_setting(self, compiler_setting: CompilerSetting) -> RowID:
+        """Save a compiler setting to the DB and get its ID.
+
+        Args:
+            self:
+            compiler_setting (CompilerSetting): compiler setting to save.
+
+        Returns:
+            RowID: ID of saved compiler setting.
+        """
         if s_id := self.get_compiler_setting_id(compiler_setting):
             return s_id
         with self.con:
@@ -244,6 +269,14 @@ class CaseDatabase:
         return ns_id
 
     def record_scenario(self, scenario: Scenario) -> RowID:
+        """Save a scenario to the DB and get its ID.
+
+        Args:
+            scenario (Scenario): Scenario to save.
+
+        Returns:
+            RowID: ID of `scenario`
+        """
         if s_id := self.get_scenario_id(scenario):
             return s_id
         target_ids = [
@@ -306,7 +339,7 @@ class CaseDatabase:
         Returns:
             Optional[RowID]: RowID if the scenario exists
         """
-        # TODO also check version etc.
+
         def get_scenario_ids(id_: RowID, table: str, id_str: str) -> set[int]:
             cursor = self.con.cursor()
             return set(
@@ -387,6 +420,14 @@ class CaseDatabase:
     def get_compiler_setting_id(
         self, compiler_setting: CompilerSetting
     ) -> Optional[RowID]:
+        """Get the ID of a given CompilerSetting, if it is in the DB.
+
+        Args:
+            compiler_setting (CompilerSetting): CompilerSetting to get the id of.
+
+        Returns:
+            Optional[RowID]: The ID, if found.
+        """
         result = self.con.execute(
             "SELECT compiler_setting_id "
             "FROM compiler_setting "
@@ -406,15 +447,30 @@ class CaseDatabase:
         return s_id
 
     @cache
-    def get_compiler_setting_from_id(self, compiler_setting_id: int) -> CompilerSetting:
+    def get_compiler_setting_from_id(
+        self, compiler_setting_id: int
+    ) -> Optional[CompilerSetting]:
+        """Get a compiler setting from a compiler_setting_id, if the ID exists.
 
-        compiler, rev, opt_level, flags = self.con.execute(
+        Args:
+            self:
+            compiler_setting_id (int): Compiler setting ID to get the compiler setting of
+
+        Returns:
+            Optional[CompilerSetting]: Compiler setting with ID `compiler_setting_id`
+        """
+
+        res = self.con.execute(
             "SELECT compiler, rev, opt_level, additional_flags"
             " FROM compiler_setting"
             " WHERE compiler_setting_id == ?",
             (compiler_setting_id,),
         ).fetchone()
 
+        if not res:
+            return None
+
+        compiler, rev, opt_level, flags = res
         return CompilerSetting(
             utils.get_compiler_config(self.config, compiler),
             rev,
@@ -423,7 +479,16 @@ class CaseDatabase:
         )
 
     @cache
-    def get_scenario_from_id(self, scenario_id: int) -> Scenario:
+    def get_scenario_from_id(self, scenario_id: RowID) -> Optional[Scenario]:
+        """Get a scenario from a specified ID.
+
+        Args:
+            scenario_id (RowID): ID of scenario to get
+
+        Returns:
+            Optional[Scenario]: Scenario corresponding to RowID
+        """
+
         def get_settings(
             self: CaseDatabase, table: str, s_id: int
         ) -> list[CompilerSetting]:
@@ -432,9 +497,11 @@ class CaseDatabase:
                 f"SELECT compiler_setting_id FROM {table} WHERE scenario_id == ?",
                 (s_id,),
             ).fetchall()
-            settings: list[CompilerSetting] = [
-                self.get_compiler_setting_from_id(row[0]) for row in ids
-            ]
+            pre = [self.get_compiler_setting_from_id(row[0]) for row in ids]
+
+            # For the type checker. It can't possibly know about the constraints
+            # in the DB.
+            settings = [c for c in pre if c]
 
             return settings
 
@@ -442,15 +509,15 @@ class CaseDatabase:
         attacker_settings = get_settings(self, "scenario_attacker", scenario_id)
         scenario = Scenario(target_settings, attacker_settings)
 
-        (
-            generator_version,
-            bisector_version,
-            reducer_version,
-            instrumenter_version,
-        ) = self.con.execute(
+        res = self.con.execute(
             "SELECT generator_version, bisector_version, reducer_version, instrumenter_version FROM scenario WHERE scenario_id == ?",
             (scenario_id,),
         ).fetchone()
+
+        if not res:
+            return None
+
+        generator_version, bisector_version, reducer_version, instrumenter_version = res
 
         scenario.generator_version = generator_version
         scenario.bisector_version = bisector_version
@@ -496,9 +563,17 @@ class CaseDatabase:
 
         # Get Settings
         bad_setting = self.get_compiler_setting_from_id(bad_setting_id)
-        good_settings = [
+        pre_good_settings = [
             self.get_compiler_setting_from_id(row[0]) for row in good_settings_ids
         ]
+
+        # There should never be a problem here (TM) because of the the DB
+        # FOREIGN KEY constraints.
+        good_settings = [gs for gs in pre_good_settings if gs]
+        if not bad_setting:
+            raise DatabaseError("Bad setting id was not found")
+        if not scenario:
+            raise DatabaseError("Scenario id was not found")
 
         case = Case(
             code,
@@ -537,7 +612,7 @@ class CaseDatabase:
         with self.con:
             # REPLACE is just an alias for INSERT OR RELACE
             self.con.execute(
-                "INSERT OR REPLACE INTO cases VALUES (?, ?,?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO cases VALUES (?,?,?,?,?,?,?,?)",
                 (
                     case_id,
                     code_sha1,
@@ -550,7 +625,7 @@ class CaseDatabase:
                 ),
             )
 
-    def add_timing(
+    def record_timing(
         self,
         case_id: RowID,
         generator_time: Optional[float] = None,
@@ -559,6 +634,19 @@ class CaseDatabase:
         bisector_steps: Optional[int] = None,
         reducer_time: Optional[float] = None,
     ) -> None:
+        """Record timing metric for `case_id`
+
+        Args:
+            case_id (RowID):
+            generator_time (Optional[float]): Time the generator took
+            generator_try_count (Optional[int]): How often the generator tried
+            bisector_time (Optional[float]): How long the bisector took
+            bisector_steps (Optional[int]): How many steps the bisector made
+            reducer_time (Optional[float]): How long the reducer took
+
+        Returns:
+            None:
+        """
 
         with self.con:
             self.con.execute(

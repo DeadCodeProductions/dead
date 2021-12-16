@@ -42,7 +42,6 @@ class PatchDB:
         for rev in revs:
             commits.append(repo.rev_to_commit(rev))
         # To not be computer dependend, just work with the name of the patch
-        patch
         patch_basename = os.path.basename(patch)
         logging.debug(f"Saving entry for {patch_basename}: {commits}")
 

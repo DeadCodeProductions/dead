@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import logging
-import os
 import time
 from multiprocessing import Pool
 from pathlib import Path
@@ -81,7 +79,7 @@ if __name__ == "__main__":
                     continue
 
             case_id = ddb.record_case(case)
-            ddb.add_timing(
+            ddb.record_timing(
                 case_id,
                 generator_time,
                 generator_try_count,

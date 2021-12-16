@@ -10,11 +10,10 @@ import shutil
 import subprocess
 import tempfile
 import time
-from contextlib import contextmanager
 from os.path import join as pjoin
 from pathlib import Path
 from types import TracebackType
-from typing import TYPE_CHECKING, Optional, TextIO, Union
+from typing import TYPE_CHECKING, Optional, TextIO
 
 if TYPE_CHECKING:
     from utils import NestedNamespace
@@ -33,7 +32,7 @@ class BuildException(Exception):
 class BuildContext:
     def __init__(
         self,
-        prefix: Path,
+        cache_prefix: Path,
         success_indicator: Path,
         compiler_config: NestedNamespace,
         rev: str,
@@ -41,7 +40,7 @@ class BuildContext:
         cache_group: str,
     ):
 
-        self.prefix = prefix
+        self.cache_prefix = cache_prefix
         self.success_indicator = success_indicator
         self.compiler_config = compiler_config
         self.rev = rev
@@ -50,7 +49,7 @@ class BuildContext:
 
     def __enter__(self) -> tuple[Path, TextIO]:
         self.build_dir = tempfile.mkdtemp()
-        os.makedirs(self.prefix, exist_ok=True)
+        os.makedirs(self.cache_prefix, exist_ok=True)
 
         self.starting_cwd = os.getcwd()
         os.chdir(self.build_dir)
@@ -81,7 +80,7 @@ class BuildContext:
         # Build was not successful
         if not self.success_indicator.exists():
             # remove cache entry
-            shutil.rmtree(self.prefix)
+            shutil.rmtree(self.cache_prefix)
 
 
 class Builder:
@@ -321,26 +320,6 @@ class CompileError(Exception):
     """
 
     pass
-
-
-# @contextmanager
-# def compile_context(code: str) -> tuple[str, str]:
-#    fd_code, code_file = tempfile.mkstemp(suffix=".c")
-#    fd_asm, asm_file = tempfile.mkstemp(suffix=".s")
-#
-#    with open(code_file, "w") as f:
-#        f.write(code)
-#
-#    try:
-#        yield (code_file, asm_file)
-#    finally:
-#        os.remove(code_file)
-#        os.close(fd_code)
-#        # In case of a CompileError,
-#        # the file itself might not exist.
-#        if Path(asm_file).exists():
-#            os.remove(asm_file)
-#        os.close(fd_asm)
 
 
 class CompileContext:

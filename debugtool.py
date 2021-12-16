@@ -6,10 +6,9 @@ Grows with arising needs.
 """
 
 import copy
-import re
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import bisector
 import builder
