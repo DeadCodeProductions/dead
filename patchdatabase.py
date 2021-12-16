@@ -34,7 +34,7 @@ class PatchDB:
         )
         self.path = os.path.abspath(path_to_db)
         with open(self.path, "r") as f:
-            self.data = json.load(f)
+            self.data: dict[str, Any] = json.load(f)
 
     @_save_db
     def save(self, patch: Path, revs: list[str], repo: Repo) -> None:
@@ -46,13 +46,13 @@ class PatchDB:
         patch_basename = os.path.basename(patch)
         logging.debug(f"Saving entry for {patch_basename}: {commits}")
 
-        if patch not in self.data:
+        if patch_basename not in self.data:
             self.data[patch_basename] = commits
         else:
             self.data[patch_basename].extend(commits)
 
         # Make entries unique
-        self.data[patch] = list(set(self.data[patch_basename]))
+        self.data[patch_basename] = list(set(self.data[patch_basename]))
 
     @_save_db
     def save_bad(
