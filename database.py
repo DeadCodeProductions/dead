@@ -35,7 +35,7 @@ class CaseDatabase:
     tables: ClassVar[dict[str, list[ColumnInfo]]] = {
         "cases": [
             ColumnInfo("case_id", "INTEGER", "PRIMARY KEY AUTOINCREMENT"),
-            ColumnInfo("code_sha1", "", "REFERENCES code(code_sha1)"),
+            ColumnInfo("code_sha1", "", "REFERENCES code(code_sha1) NOT NULL"),
             ColumnInfo("marker", "TEXT", "NOT NULL"),
             ColumnInfo("bad_setting_id", "INTEGER", "NOT NULL"),
             ColumnInfo("scenario_id", "INTEGER", "NOT NULL"),
@@ -53,9 +53,9 @@ class CaseDatabase:
             ColumnInfo("compressed_code", "BLOB"),
         ],
         "reported_cases": [
-            ColumnInfo("case_id", "", "REFERENCES cases(case_id)"),
-            ColumnInfo("massaged_code", "", "REFERENCES code(code_sha1)"),
-            ColumnInfo("bug_report_link", "TEXT", "NOT NULL"),
+            ColumnInfo("case_id", "", "REFERENCES cases(case_id) PRIMARY KEY"),
+            ColumnInfo("massaged_code", "", "REFERENCES code(code_sha1) NOT NULL"),
+            ColumnInfo("bug_report_link", "TEXT"),
             ColumnInfo("fixed_by", "CHAR(40)"),
         ],
         "compiler_setting": [
@@ -66,18 +66,20 @@ class CaseDatabase:
             ColumnInfo("additional_flags", "TEXT"),
         ],
         "good_settings": [
-            ColumnInfo("case_id", "", "REFERENCES cases(case_id)"),
+            ColumnInfo("case_id", "", "REFERENCES cases(case_id) NOT NULL"),
             ColumnInfo(
                 "compiler_setting_id",
                 "",
-                "REFERENCES compiler_setting(compiler_setting_id)",
+                "REFERENCES compiler_setting(compiler_setting_id) NOT NULL",
             ),
         ],
         "scenario_ids": [
             ColumnInfo("scenario_id", "INTEGER", "PRIMARY KEY AUTOINCREMENT"),
         ],
         "scenario": [
-            ColumnInfo("scenario_id", "", "REFERENCES scenario_ids(scenario_id)"),
+            ColumnInfo(
+                "scenario_id", "", "REFERENCES scenario_ids(scenario_id) PRIMARY KEY"
+            ),
             ColumnInfo("generator_version", "INTEGER", "NOT NULL"),
             ColumnInfo("bisector_version", "INTEGER", "NOT NULL"),
             ColumnInfo("reducer_version", "INTEGER", "NOT NULL"),
@@ -87,23 +89,27 @@ class CaseDatabase:
             ColumnInfo("reduce_program", "TEXT", "NOT NULL"),
         ],
         "scenario_attacker": [
-            ColumnInfo("scenario_id", "", "REFERENCES scenario_ids(scenario_id)"),
+            ColumnInfo(
+                "scenario_id", "", "REFERENCES scenario_ids(scenario_id) NOT NULL"
+            ),
             ColumnInfo(
                 "compiler_setting_id",
                 "",
-                "REFERENCES compiler_setting(compiler_setting_id)",
+                "REFERENCES compiler_setting(compiler_setting_id) NOT NULL",
             ),
         ],
         "scenario_target": [
-            ColumnInfo("scenario_id", "", "REFERENCES scenario_ids(scenario_id)"),
+            ColumnInfo(
+                "scenario_id", "", "REFERENCES scenario_ids(scenario_id) NOT NULL"
+            ),
             ColumnInfo(
                 "compiler_setting_id",
                 "",
-                "REFERENCES compiler_setting(compiler_setting_id)",
+                "REFERENCES compiler_setting(compiler_setting_id) NOT NULL",
             ),
         ],
         "timing": [
-            ColumnInfo("case_id", "", "REFERENCES cases(case_id)"),
+            ColumnInfo("case_id", "", "REFERENCES cases(case_id) PRIMARY KEY"),
             ColumnInfo("generator_time", "FLOAT"),
             ColumnInfo("generator_try_count", "INTEGER"),
             ColumnInfo("bisector_time", "FLOAT"),
@@ -185,7 +191,7 @@ class CaseDatabase:
         code_sha1 = self.record_code(massaged_code)
         with self.con:
             self.con.execute(
-                "INSERT INTO reported_cases VALUES (?,?,?,?)",
+                "INSERT OR REPLACE INTO reported_cases VALUES (?,?,?,?)",
                 (
                     case_id,
                     code_sha1,
@@ -660,3 +666,30 @@ class CaseDatabase:
                     reducer_time,
                 ),
             )
+
+    def get_timing_from_id(
+        self, case_id: RowID
+    ) -> tuple[
+        Optional[float], Optional[int], Optional[float], Optional[int], Optional[float]
+    ]:
+
+        res = self.con.execute(
+            "SELECT * FROM timing WHERE case_id == ?", (case_id,)
+        ).fetchone()
+        if not res:
+            return (None, None, None, None, None)
+        g_time, gtc, b_time, b_steps, r_time = res
+        return g_time, gtc, b_time, b_steps, r_time
+
+    def get_report_info_from_id(
+        self, case_id: RowID
+    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
+
+        res = self.con.execute(
+            "SELECT * FROM reported_cases WHERE case_id == ?", (case_id,)
+        ).fetchone()
+        if not res:
+            return (None, None, None)
+
+        massaged_code, link, fixed_by = res
+        return massaged_code, link, fixed_by
