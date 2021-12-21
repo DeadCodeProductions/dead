@@ -1,8 +1,9 @@
 import logging
 import os
 import subprocess
-from contextlib import contextmanager
+from functools import cache
 from pathlib import Path
+from typing import Optional
 
 import utils
 
@@ -13,11 +14,13 @@ class Repo:
         self._showed_stale_warning = False
         self.main_branch = main_branch
 
+    @cache
     def get_best_common_ancestor(self, rev_a: str, rev_b: str) -> str:
         a = self.rev_to_commit(rev_a)
         b = self.rev_to_commit(rev_b)
         return utils.run_cmd(f"git -C {self.path} merge-base {a} {b}")
 
+    @cache
     def rev_to_commit(self, rev: str) -> str:
         # Could support list of revs...
         if rev == "trunk" or rev == "master" or rev == "main":
@@ -147,3 +150,23 @@ class Repo:
         request_str = f"git -C {self.path} rev-list --bisect {bad} ^{good}"
         logging.debug(request_str)
         return utils.run_cmd(request_str)
+
+    def pull(self) -> None:
+        # Just in case...
+        cmd = f"git -C {self.path} switch {self.main_branch}"
+        utils.run_cmd(cmd)
+        cmd = f"git -C {self.path} pull"
+        utils.run_cmd(cmd)
+
+    def rev_to_tag(self, rev: str) -> Optional[str]:
+        request_str = f"git -C {self.path} describe --exact-match {rev}"
+        logging.debug(request_str)
+        output = subprocess.run(
+            request_str.split(),
+            capture_output=True,
+        )
+        stdout = output.stdout.decode("utf-8").strip()
+        stderr = output.stderr.decode("utf-8").strip()
+        if stderr.startswith("fatal:"):
+            return None
+        return stdout

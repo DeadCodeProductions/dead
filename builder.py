@@ -374,6 +374,22 @@ def get_compiler_executable(
     return Path(compiler_exe)
 
 
+def get_verbose_compiler_info(
+    compiler_setting: utils.CompilerSetting, bldr: Builder
+) -> str:
+    cpath = get_compiler_executable(compiler_setting, bldr)
+
+    return (
+        subprocess.run(
+            f"{cpath} -v".split(),
+            stderr=subprocess.STDOUT,
+            stdout=subprocess.PIPE,
+        )
+        .stdout.decode("utf-8")
+        .strip()
+    )
+
+
 def get_asm_str(
     code: str, compiler_setting: utils.CompilerSetting, bldr: Builder
 ) -> str:

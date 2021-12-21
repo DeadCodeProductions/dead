@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import functools
 import json
 import logging
 import os
@@ -16,11 +17,15 @@ from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
-from typing import IO, Any, Optional, Sequence, TextIO, Union, cast
+from typing import (IO, TYPE_CHECKING, Any, Optional, Sequence, TextIO, Union,
+                    cast)
 
 import parsers
 import repository
 import VERSIONS
+
+if TYPE_CHECKING:
+    import builder
 
 
 class Executable(object):
@@ -317,6 +322,17 @@ class CompilerSetting:
                 f"{self.compiler_config.name} {self.rev} {self.opt_level} "
                 + " ".join(self.additional_flags)
             )
+
+    def report_string(self) -> str:
+        """String to use in the report generation
+
+        Args:
+
+        Returns:
+            str: String to use in the report
+        """
+
+        return f"{self.compiler_config.name}-{self.rev} -O{self.opt_level}"
 
     def to_jsonable_dict(self) -> dict[str, Any]:
         d = {}
@@ -793,3 +809,28 @@ class Case:
             path,
             timestamp=d["timestamp"],
         )
+
+
+def get_latest_compiler_setting_from_list(
+    repo: repository.Repo, l: list[CompilerSetting]
+) -> CompilerSetting:
+    """Finds and returns newest compiler setting wrt main branch
+    in the list. Assumes all compilers to be of the same 'type' i.e. gcc, clang,...
+
+    Args:
+        repo (repository.Repo): Repositiory of compiler type
+        l (list[CompilerSetting]): List of compilers to sort
+
+    Returns:
+        CompilerSetting: Compiler closest to main
+    """
+
+    def cmp_func(a: CompilerSetting, b: CompilerSetting) -> int:
+        if a.rev == b.rev:
+            return 0
+        if repo.is_branch_point_ancestor_wrt_master(a.rev, b.rev):
+            return -1
+        else:
+            return 1
+
+    return max(l, key=functools.cmp_to_key(cmp_func))

@@ -542,7 +542,41 @@ def main_parser() -> argparse.ArgumentParser:
     absorb_parser.add_argument(
         "absorb_directory",
         metavar="DIR",
-        help="Directory to read .tar cases from into the database",
+        help="Directory to read .tar cases from into the database.",
+    )
+
+    report_parser = subparser.add_parser("report")
+
+    report_parser.add_argument(
+        "case_id",
+        metavar="CASE_ID",
+        type=int,
+        help="Generate a bug report for the given id.",
+    )
+
+    tofile_parser = subparser.add_parser("tofile")
+
+    tofile_parser.add_argument(
+        "case_id",
+        metavar="CASE_ID",
+        type=int,
+        help="Case to get a .tar from ",
+    )
+
+    massage_parser = subparser.add_parser("massage")
+
+    massage_parser.add_argument(
+        "case_id",
+        metavar="CASE_ID",
+        type=int,
+        help="Case to work with.",
+    )
+
+    massage_parser.add_argument(
+        "case_id",
+        metavar="CASE_ID",
+        type=int,
+        help="Case to work with.",
     )
 
     return parser
