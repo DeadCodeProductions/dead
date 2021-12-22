@@ -173,8 +173,8 @@ class CaseDatabase:
     def record_reported_case(
         self,
         case_id: RowID,
-        massaged_code: str,
-        bug_report_link: str,
+        massaged_code: Optional[str],
+        bug_report_link: Optional[str],
         fixed_by: Optional[str],
     ) -> None:
         """Save additional information for an already saved case.
@@ -188,7 +188,10 @@ class CaseDatabase:
         Returns:
             None:
         """
-        code_sha1 = self.record_code(massaged_code)
+        code_sha1 = None
+        if massaged_code:
+            code_sha1 = self.record_code(massaged_code)
+
         with self.con:
             self.con.execute(
                 "INSERT OR REPLACE INTO reported_cases VALUES (?,?,?,?)",
@@ -691,5 +694,7 @@ class CaseDatabase:
         if not res:
             return (None, None, None)
 
-        massaged_code, link, fixed_by = res
+        _, massaged_code_sha1, link, fixed_by = res
+
+        massaged_code = self.get_code_from_id(massaged_code_sha1)
         return massaged_code, link, fixed_by

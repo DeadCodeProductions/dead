@@ -282,7 +282,15 @@ if __name__ == "__main__":
         print(("{:.<" f"{width}}}").format("Marker"), case.marker)
         print(("{:.<" f"{width}}}").format("Code lenght"), len(case.code))
         print(("{:.<" f"{width}}}").format("Bad Setting"), case.bad_setting)
-        print(("{:.<" f"{width}}}").format("One Good Setting"), case.good_settings[0])
+        same_opt = [
+            gs
+            for gs in case.good_settings
+            if gs.opt_level == case.bad_setting.opt_level
+        ]
+        print(
+            ("{:.<" f"{width}}}").format("Newest Good Setting"),
+            utils.get_latest_compiler_setting_from_list(repo, same_opt),
+        )
         print(
             ("{:.<" f"{width}}}").format("Check marker"),
             _ok_fail(chkr.is_interesting_wrt_marker(case)),
@@ -345,11 +353,6 @@ if __name__ == "__main__":
             )
             if not res_empty:
                 sanitize_values(config, cpy, "Reduced: ", chkr)
-
-        print(
-            ("{:.<" f"{width}}}").format("Amount Bisections"),
-            len(case.bisection) if case.bisection is not None else 0,
-        )
 
         if case.bisection:
             print(("{:.<" f"{width}}}").format("Last Bisection"), case.bisection)

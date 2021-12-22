@@ -141,6 +141,32 @@ if __name__ == "__main__":
         print(f"Saving case to ./case_{args.case_id}.tar")
         case.to_file(Path(f"./case_{args.case_id}.tar"))
 
+    elif args.sub == "massage":
+        pre_check_case = ddb.get_case_from_id(args.case_id)
+        if not pre_check_case:
+            print("No case with this ID.", file=sys.stderr)
+            exit(1)
+        else:
+            case = pre_check_case
+
+        with open(args.code_path, "r") as f:
+            massaged_code = f.read()
+
+        cpy = copy.deepcopy(case)
+        cpy.code = massaged_code
+        # Check if massaged code is valid
+        if not chkr.is_interesting(cpy, preprocess=False):
+            print("Massaged code failed interestingness check.")
+            exit(1)
+        else:
+            print("OK")
+            _, link, fixed_by = ddb.get_report_info_from_id(args.case_id)
+            if link or fixed_by:
+                print("Not updating, was already fixed or reported..")
+                exit(0)
+            ddb.record_reported_case(args.case_id, massaged_code, link, fixed_by)
+            print("Saved...")
+
     elif args.sub == "report":
         pre_check_case = ddb.get_case_from_id(args.case_id)
         if not pre_check_case:
@@ -176,10 +202,12 @@ if __name__ == "__main__":
                 print("Could not reduce case. Aborting...", file=sys.stderr)
                 exit(1)
 
-        massaged_code, _, _ = ddb.get_report_info_from_id(args.case_id)
+        massaged_code_pre, _, _ = ddb.get_report_info_from_id(args.case_id)
 
-        if massaged_code:
+        if massaged_code_pre:
+            massaged_code = massaged_code_pre
             # Check if both bisect to the same commit
+            print("Check bisection of massaged code...", file=sys.stderr)
             cpy = copy.deepcopy(case)
             cpy.reduced_code = massaged_code
             bsctr.bisect_case(case, force=True)
@@ -197,11 +225,12 @@ if __name__ == "__main__":
         bad_repo = repository.Repo(
             bad_setting.compiler_config.repo, bad_setting.compiler_config.main_branch
         )
+        is_gcc: bool = bad_setting.compiler_config.name == "gcc"
 
         # Last sanity check
         cpy = copy.deepcopy(case)
         cpy.code = cast(str, case.reduced_code)
-        print("Normal interestingness test...", end="", file=sys.stderr)
+        print("Normal interestingness test...", end="", file=sys.stderr, flush=True)
         if not chkr.is_interesting(cpy, preprocess=False):
             print("\nCase is not interesting! Aborting...", file=sys.stderr)
             exit(1)
@@ -209,8 +238,9 @@ if __name__ == "__main__":
             print("OK", file=sys.stderr)
 
         # Check against newest upstream
-        print("Pulling Repo...", file=sys.stderr)
-        bad_repo.pull()
+        if args.pull:
+            print("Pulling Repo...", file=sys.stderr)
+            bad_repo.pull()
         print("Interestingness test against main...", end="", file=sys.stderr)
         cpy.bad_setting.rev = bad_repo.rev_to_commit(f"{bad_repo.main_branch}")
         if not chkr.is_interesting(cpy, preprocess=False):
@@ -247,59 +277,124 @@ if __name__ == "__main__":
         else:
             good_setting_tag = tmp
         good_setting_str = f"{good_setting.compiler_config.name}-{good_setting_tag} -O{good_setting.opt_level}"
-        print("cat case.c")
-        print(source)
 
-        print(f"{bad_setting_str} can not eliminate foo but {good_setting_str} can.\n")
+        def to_collapsed(
+            s: str, is_gcc: bool, summary: str = "Output", open: bool = False
+        ) -> str:
+            if not is_gcc:
+                sopen = "open" if open else ""
+                s = (
+                    f"<details {sopen}><summary>{summary}</summary><p>\n"
+                    + s
+                    + "\n</p></details>"
+                )
+            return s
 
-        # Compile
+        def to_code(code: str, is_gcc: bool, stype: str = "") -> str:
+            if not is_gcc:
+                return f"\n```{stype}\n" + code.rstrip() + "\n```"
+            return code
+
+        def print_cody_str(s: str, is_gcc: bool) -> None:
+            if not is_gcc:
+                s = "`" + s + "`"
+            print(s)
+
+        def to_cody_str(s: str, is_gcc: bool) -> str:
+            if not is_gcc:
+                s = "`" + s + "`"
+            return s
+
         def replace_rand(code: str) -> str:
             # Replace .file with case.c
-            ex = re.compile(r".*\.file.*\"(.*)\"")
-
-            m = ex.match(code)
+            ex = re.compile(r"\t\.file\t(\".*\")")
+            m = ex.search(code)
             if m:
                 res = m.group(1)
                 return code.replace(res, "case.c")
             return code
 
-        asm_bad = replace_rand(builder.get_asm_str(source, case.bad_setting, bldr))
-        asm_good = replace_rand(builder.get_asm_str(source, good_setting, bldr))
+        def prep_asm(asm: str, is_gcc: bool) -> str:
+            asm = replace_rand(asm)
+            asm = to_code(asm, is_gcc, "asm")
+            asm = to_collapsed(asm, is_gcc)
+            return asm
 
-        print(f"{bad_setting_str} -S -o /dev/stdout case.c")
-        print(asm_bad)
+        print(to_cody_str("cat case.c", is_gcc))
+        print(to_code(source, is_gcc, "c"))
+
+        print(
+            f"`{bad_setting_str}` can not eliminate `foo` but `{good_setting_str}` can.\n"
+        )
+
+        # Compile
+        asm_bad = builder.get_asm_str(source, case.bad_setting, bldr)
+        asm_good = builder.get_asm_str(source, good_setting, bldr)
+
+        print_cody_str(f"{bad_setting_str} -S -o /dev/stdout case.c", is_gcc)
+        print(prep_asm(asm_bad, is_gcc))
         print()
-        print(f"{good_setting_str} -S -o /dev/stdout case.c")
-        print(asm_good)
+
+        print_cody_str(f"{good_setting_str} -S -o /dev/stdout case.c", is_gcc)
+        print(prep_asm(asm_good, is_gcc))
         print("\n")
-        print(f"{bad_setting.compiler_config.name}-{bad_setting.rev} -v")
-        print(builder.get_verbose_compiler_info(bad_setting, bldr))
+        print(
+            to_collapsed(
+                to_cody_str(
+                    f"{bad_setting.compiler_config.name}-{bad_setting.rev} -v", is_gcc
+                ),
+                is_gcc,
+            )
+        )
+        print(to_code(builder.get_verbose_compiler_info(bad_setting, bldr), is_gcc))
         print()
-        print(f"{good_setting.compiler_config.name}-{good_setting.rev} -v")
-        print(builder.get_verbose_compiler_info(good_setting, bldr))
+        print(
+            to_cody_str(
+                f"{good_setting.compiler_config.name}-{good_setting.rev} -v", is_gcc
+            )
+        )
+        print(
+            to_collapsed(
+                to_code(builder.get_verbose_compiler_info(good_setting, bldr), is_gcc),
+                is_gcc,
+            )
+        )
 
         gcc_link = "https://gcc.gnu.org/git/?p=gcc.git;a=commit;h="
-        llvm_link = "https://github.com/llvm/llvm-project/commit/"
-        link_prefix = (
-            gcc_link if bad_setting.compiler_config.name == "gcc" else llvm_link
-        )
+        # LLVM moved to github so the commits will be automatically
+        # created.
+        llvm_link = ""
+        link_prefix = gcc_link if is_gcc else llvm_link
         print()
+        if not is_gcc:
+            print("### Bisection")
         bisection_setting = copy.deepcopy(case.bad_setting)
         bisection_setting.rev = cast(str, case.bisection)
         print(f"Started with {link_prefix}{case.bisection}")
-        print("------------------------------------------------")
-        print(f"{bisection_setting.report_string()} -S -o /dev/stdout case.c")
+        # print("------------------------------------------------")
+        print(
+            to_cody_str(
+                f"{bisection_setting.report_string()} -S -o /dev/stdout case.c", is_gcc
+            )
+        )
         bisection_asm = replace_rand(
             builder.get_asm_str(source, bisection_setting, bldr)
         )
-        print(bisection_asm)
-        print("------------------------------------------------")
+        print(prep_asm(bisection_asm, is_gcc))
+        # print("------------------------------------------------")
         prebisection_setting = copy.deepcopy(bisection_setting)
         prebisection_setting.rev = bad_repo.rev_to_commit(f"{bisection_setting.rev}~")
-        print(f"Previous commit {link_prefix}{prebisection_setting.rev}")
+        print(f"Previous commit: {link_prefix}{prebisection_setting.rev}")
+        print(
+            "\n"
+            + to_cody_str(
+                f"{prebisection_setting.report_string()} -S -o /dev/stdout case.c",
+                is_gcc,
+            )
+        )
         prebisection_asm = replace_rand(
             builder.get_asm_str(source, prebisection_setting, bldr)
         )
-        print(prebisection_asm)
+        print(prep_asm(prebisection_asm, is_gcc))
 
     gnrtr.terminate_processes()

@@ -554,6 +554,13 @@ def main_parser() -> argparse.ArgumentParser:
         help="Generate a bug report for the given id.",
     )
 
+    report_parser.add_argument(
+        "--pull",
+        help="Pull the repo to check against upsteam.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+
     tofile_parser = subparser.add_parser("tofile")
 
     tofile_parser.add_argument(
@@ -573,10 +580,10 @@ def main_parser() -> argparse.ArgumentParser:
     )
 
     massage_parser.add_argument(
-        "case_id",
-        metavar="CASE_ID",
-        type=int,
-        help="Case to work with.",
+        "code_path",
+        metavar="CODE_PATH",
+        type=str,
+        help="Code to use as massaged code.",
     )
 
     return parser
