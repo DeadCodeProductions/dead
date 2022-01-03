@@ -586,4 +586,36 @@ def main_parser() -> argparse.ArgumentParser:
         help="Code to use as massaged code.",
     )
 
+    link_parser = subparser.add_parser("link")
+
+    link_parser.add_argument(
+        "case_id",
+        metavar="CASE_ID",
+        type=int,
+        help="Case to work with.",
+    )
+
+    link_parser.add_argument(
+        "link",
+        metavar="LINK",
+        type=str,
+        help="Save link for case CASE_ID",
+    )
+
+    rereduce_parser = subparser.add_parser("rereduce")
+
+    rereduce_parser.add_argument(
+        "case_id",
+        metavar="CASE_ID",
+        type=int,
+        help="Case to work with.",
+    )
+
+    rereduce_parser.add_argument(
+        "code_path",
+        metavar="CODE_PATH",
+        type=str,
+        help="Path to code to rereduce",
+    )
+
     return parser

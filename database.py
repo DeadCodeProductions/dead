@@ -1,6 +1,7 @@
 import hashlib
 import os
 import sqlite3
+import sys
 import zlib
 from dataclasses import dataclass
 from functools import cache, reduce
@@ -596,6 +597,15 @@ class CaseDatabase:
             timestamp=timestamp,
         )
 
+        return case
+
+    def get_case_from_id_or_die(self, case_id: RowID) -> Case:
+        pre_check_case = self.get_case_from_id(case_id)
+        if not pre_check_case:
+            print("No case with this ID.", file=sys.stderr)
+            exit(1)
+        else:
+            case = pre_check_case
         return case
 
     def update_case(self, case_id: RowID, case: Case) -> None:
