@@ -621,6 +621,11 @@ def save_to_tmp_file(content: str) -> IO[bytes]:
     return ntf
 
 
+def save_to_file(path: Path, content: str) -> None:
+    with open(path, "w") as f:
+        f.write(content)
+
+
 def check_and_get(tf: tarfile.TarFile, member: str) -> str:
     try:
         f = tf.extractfile(member)

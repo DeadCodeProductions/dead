@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import copy
-import functools
+import os
+import random
 import re
 import sys
+import tempfile
 import time
 from multiprocessing import Pool
 from pathlib import Path
@@ -16,6 +18,7 @@ import database
 import generator
 import parsers
 import patchdatabase
+import preprocessing
 import reducer
 import repository
 import utils
@@ -223,12 +226,15 @@ def _report() -> None:
         massaged_code = massaged_code_pre
         # Check if both bisect to the same commit
         print("Check bisection of massaged code...", file=sys.stderr)
-        cpy = copy.deepcopy(case)
-        cpy.reduced_code = massaged_code
-        bsctr.bisect_case(case, force=True)
+        massaged_bisection = bsctr.bisect_code(
+            massaged_code, case.marker, case.bad_setting, case.good_settings
+        )
 
-        if cpy.bisection != case.bisection:
+        if massaged_bisection != case.bisection:
             print("Massaged code bisects to different commit!", file=sys.stderr)
+            print(
+                f"Initial: {case.bisection}, New: {massaged_bisection}", file=sys.stderr
+            )
             exit(1)
             # TODO: How to handle this?
             # Creating new good_settings by going through case.scenario
@@ -326,7 +332,7 @@ def _report() -> None:
         m = ex.search(code)
         if m:
             res = m.group(1)
-            return code.replace(res, "case.c")
+            return code.replace(res, '"case.c"')
         return code
 
     def prep_asm(asm: str, is_gcc: bool) -> str:
@@ -354,14 +360,14 @@ def _report() -> None:
     print(prep_asm(asm_good, is_gcc))
     print("\n")
     print(
+        to_cody_str(f"{bad_setting.compiler_config.name}-{bad_setting.rev} -v", is_gcc)
+    )
+    print(
         to_collapsed(
-            to_cody_str(
-                f"{bad_setting.compiler_config.name}-{bad_setting.rev} -v", is_gcc
-            ),
+            to_code(builder.get_verbose_compiler_info(bad_setting, bldr), is_gcc),
             is_gcc,
         )
     )
-    print(to_code(builder.get_verbose_compiler_info(bad_setting, bldr), is_gcc))
     print()
     print(
         to_cody_str(
@@ -411,6 +417,228 @@ def _report() -> None:
     print(prep_asm(prebisection_asm, is_gcc))
 
 
+def _diagnose() -> None:
+
+    width = 50
+
+    def ok_fail(b: bool) -> str:
+        if b:
+            return "OK"
+        else:
+            return "FAIL"
+
+    def nice_print(name: str, value: str) -> None:
+        print(("{:.<" f"{width}}}").format(name), value)
+
+    if args.case_id:
+        case = ddb.get_case_from_id_or_die(args.case_id)
+    else:
+        case = utils.Case.from_file(config, Path(args.file))
+
+    repo = repository.Repo(
+        case.bad_setting.compiler_config.repo,
+        case.bad_setting.compiler_config.main_branch,
+    )
+
+    def sanitize_values(
+        config: utils.NestedNamespace,
+        case: utils.Case,
+        prefix: str,
+        chkr: checker.Checker,
+    ) -> None:
+        empty_body_code = chkr._emtpy_marker_code_str(case)
+        with tempfile.NamedTemporaryFile(suffix=".c") as tf:
+            with open(tf.name, "w") as f:
+                f.write(empty_body_code)
+                res_comp_warnings = checker.check_compiler_warnings(
+                    config.gcc.sane_version,
+                    config.llvm.sane_version,
+                    Path(tf.name),
+                    case.bad_setting.get_flag_str(),
+                    10,
+                )
+                nice_print(
+                    prefix + "Sanity: compiler warnings",
+                    ok_fail(res_comp_warnings),
+                )
+                res_use_ub_san = checker.use_ub_sanitizers(
+                    config.llvm.sane_version,
+                    Path(tf.name),
+                    case.bad_setting.get_flag_str(),
+                    10,
+                    10,
+                )
+                nice_print(
+                    prefix + "Sanity: undefined behaviour", ok_fail(res_use_ub_san)
+                )
+                res_ccomp = checker.verify_with_ccomp(
+                    config.ccomp,
+                    Path(tf.name),
+                    case.bad_setting.get_flag_str(),
+                    10,
+                )
+                nice_print(
+                    prefix + "Sanity: ccomp",
+                    ok_fail(res_ccomp),
+                )
+
+    def checks(case: utils.Case, prefix: str) -> None:
+        nice_print(
+            prefix + "Check marker", ok_fail(chkr.is_interesting_wrt_marker(case))
+        )
+        nice_print(prefix + "Check CCC", ok_fail(chkr.is_interesting_wrt_ccc(case)))
+        nice_print(
+            prefix + "Check static. annotated",
+            ok_fail(chkr.is_interesting_with_static_globals(case)),
+        )
+        res_empty = chkr.is_interesting_with_empty_marker_bodies(case)
+        nice_print(prefix + "Check empty bodies", ok_fail(res_empty))
+        if not res_empty:
+            sanitize_values(config, case, prefix, chkr)
+
+    print(("{:=^" f"{width}}}").format(" Values "))
+
+    nice_print("Marker", case.marker)
+    nice_print("Code lenght", str(len(case.code)))
+    nice_print("Bad Setting", str(case.bad_setting))
+    same_opt = [
+        gs for gs in case.good_settings if gs.opt_level == case.bad_setting.opt_level
+    ]
+    nice_print(
+        "Newest Good Setting",
+        str(utils.get_latest_compiler_setting_from_list(repo, same_opt)),
+    )
+
+    checks(case, "")
+    cpy = copy.deepcopy(case)
+    if not (
+        code_pp := preprocessing.preprocess_csmith_code(
+            case.code, utils.get_marker_prefix(case.marker), case.bad_setting, bldr
+        )
+    ):
+        print("Code could not be preprocessed. Skipping perprocessed checks")
+    else:
+        cpy.code = code_pp
+        checks(cpy, "PP: ")
+
+    if case.reduced_code:
+        cpy = copy.deepcopy(case)
+        cpy.code = case.reduced_code
+        checks(cpy, "Reduced: ")
+
+    if args.case_id:
+        massaged_code, _, _ = ddb.get_report_info_from_id(args.case_id)
+        if massaged_code:
+            cpy.code = massaged_code
+            checks(cpy, "Massaged: ")
+
+    if case.bisection:
+        nice_print("Bisection", case.bisection)
+        prev_rev = repo.rev_to_commit(case.bisection + "~")
+        nice_print("Bisection prev commit", prev_rev)
+        if cpy.reduced_code:
+            cpy.code = cpy.reduced_code
+        bis_res = chkr.is_interesting(cpy, preprocess=False)
+        cpy.bad_setting.rev = prev_rev
+        bis_prev_res = chkr.is_interesting(cpy, preprocess=False)
+        nice_print("Bisection test", ok_fail(bis_res and not bis_prev_res))
+
+    if case.reduced_code:
+        print(case.reduced_code)
+
+
+def _check_reduced() -> None:
+    """Check code against every good and bad setting of a case.
+
+    Args:
+
+    Returns:
+        None:
+    """
+
+    def ok_fail(b: bool) -> str:
+        if b:
+            return "OK"
+        else:
+            return "FAIL"
+
+    def nice_print(name: str, value: str) -> None:
+        width = 100
+        print(("{:.<" f"{width}}}").format(name), value)
+
+    with open(args.code_path, "r") as f:
+        new_code = f.read()
+
+    case = ddb.get_case_from_id_or_die(args.case_id)
+
+    prefix = utils.get_marker_prefix(case.marker)
+    bad_alive = builder.find_alive_markers(new_code, case.bad_setting, prefix, bldr)
+    nice_print(f"Bad {case.bad_setting}", ok_fail(case.marker in bad_alive))
+
+    for gs in case.good_settings:
+        good_alive = builder.find_alive_markers(new_code, gs, prefix, bldr)
+        nice_print(f"Good {gs}", ok_fail(case.marker not in good_alive))
+
+    case.code = new_code
+    case.reduced_code = new_code
+    nice_print("Check", ok_fail(chkr.is_interesting(case, preprocess=False)))
+    # Useful when working with watch -n 0 to see that something happened
+    print(random.randint(0, 1000))
+
+
+def _clean_cache() -> None:
+    print("Cleaning...")
+    for c in Path(config.cachedir).iterdir():
+        if not (c / "DONE").exists():
+            try:
+                os.rmdir(c)
+            except FileNotFoundError:
+                print(c, "spooky. It just disappeared...")
+            except OSError:
+                print(c, "is not empty but also not done!")
+    print("Done")
+
+
+def _get_asm() -> None:
+    def save_wrapper(name: str, content: str) -> None:
+        utils.save_to_file(Path(name + ".s"), content)
+        print(f"Saving {name + '.s'}...")
+
+    case = ddb.get_case_from_id_or_die(args.case_id)
+    bad_repo = repository.Repo(
+        case.bad_setting.compiler_config.repo,
+        case.bad_setting.compiler_config.main_branch,
+    )
+
+    same_opt = [
+        gs for gs in case.good_settings if gs.opt_level == case.bad_setting.opt_level
+    ]
+    good_setting = utils.get_latest_compiler_setting_from_list(bad_repo, same_opt)
+
+    asmbad = builder.get_asm_str(case.code, case.bad_setting, bldr)
+    asmgood = builder.get_asm_str(case.code, good_setting, bldr)
+    save_wrapper("asmbad", asmbad)
+    save_wrapper("asmgood", asmgood)
+
+    if case.reduced_code:
+        reducedasmbad = builder.get_asm_str(case.reduced_code, case.bad_setting, bldr)
+        reducedasmgood = builder.get_asm_str(case.reduced_code, case.bad_setting, bldr)
+        save_wrapper("reducedasmbad", reducedasmbad)
+        save_wrapper("reducedasmgood", reducedasmgood)
+    if case.bisection:
+        bisection_setting = copy.deepcopy(case.bad_setting)
+        bisection_setting.rev = case.bisection
+
+        asmbisect = builder.get_asm_str(case.code, bisection_setting, bldr)
+        save_wrapper("asmbisect", asmbisect)
+        if case.reduced_code:
+            reducedasmbisect = builder.get_asm_str(
+                case.reduced_code, bisection_setting, bldr
+            )
+            save_wrapper("reducedasmbisect", reducedasmbisect)
+    print(case.marker)
+
+
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
@@ -435,5 +663,15 @@ if __name__ == "__main__":
         _rereduce()
     elif args.sub == "report":
         _report()
+    elif args.sub == "diagnose":
+        if not args.case_id and not args.file:
+            print("Need a file or a case id to work with", file=sys.stderr)
+        _diagnose()
+    elif args.sub == "checkreduced":
+        _check_reduced()
+    elif args.sub == "cleancache":
+        _clean_cache()
+    elif args.sub == "getasm":
+        _get_asm()
 
     gnrtr.terminate_processes()

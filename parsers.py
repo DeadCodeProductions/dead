@@ -618,4 +618,47 @@ def main_parser() -> argparse.ArgumentParser:
         help="Path to code to rereduce",
     )
 
+    diagnose_parser = subparser.add_parser("diagnose")
+
+    diagnose_parser.add_argument(
+        "-ci",
+        "--case-id",
+        metavar="CASE_ID",
+        type=int,
+        help="Case to work with.",
+    )
+
+    diagnose_parser.add_argument(
+        "--file",
+        metavar="PATH",
+        type=int,
+        help="Path to case to work with",
+    )
+
+    checkreduced_parser = subparser.add_parser("checkreduced")
+
+    checkreduced_parser.add_argument(
+        "case_id",
+        metavar="CASE_ID",
+        type=int,
+        help="Case to work with.",
+    )
+
+    checkreduced_parser.add_argument(
+        "code_path",
+        metavar="CODE_PATH",
+        type=str,
+        help="Path to code to checkreduced",
+    )
+
+    cleancache_parser = subparser.add_parser("cleancache")
+
+    getasm_parser = subparser.add_parser("getasm")
+    getasm_parser.add_argument(
+        "case_id",
+        metavar="CASE_ID",
+        type=int,
+        help="Case to work with.",
+    )
+
     return parser

@@ -76,12 +76,15 @@ class Reducer:
         with TempDirEnv() as tmpdir:
             # preprocess file
             if preprocess:
-                pp_code = preprocessing.preprocess_csmith_code(
+                tmp = preprocessing.preprocess_csmith_code(
                     code,
                     utils.get_marker_prefix(marker),
                     bad_setting,
                     self.bldr,
                 )
+                # Preprocesssing may fail
+                pp_code = tmp if tmp else code
+
             else:
                 pp_code = code
 

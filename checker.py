@@ -461,7 +461,8 @@ class Checker:
                 self.builder,
             )
             case_cpy = copy.deepcopy(case)
-            case_cpy.code = code_pp
+            if code_pp:
+                case_cpy.code = code_pp
             case = case_cpy
         # Taking advantage of shortciruit logic
         return (
@@ -527,7 +528,11 @@ if __name__ == "__main__":
             bldr,
         )
 
-        case.code = pp_code
+        if pp_code:
+            case.code = pp_code
+        else:
+            print("Could not preprocess code. Exiting")
+            exit(1)
         # Taking advantage of shortciruit logic
         a = chkr.is_interesting_wrt_marker(case)
         b = chkr.is_interesting_wrt_ccc(case)

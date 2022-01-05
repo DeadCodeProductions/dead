@@ -14,6 +14,10 @@ See creduce --help to see what it wants.
 """
 
 
+class PreprocessError(Exception):
+    pass
+
+
 def find_marker_decl_range(lines: list[str], marker_prefix: str) -> tuple[int, int]:
     p = re.compile(f"void {marker_prefix}(.*)\(void\);")
     first = 0
@@ -76,7 +80,7 @@ def preprocess_csmith_file(
         marker_range = find_marker_decl_range(lines, marker_prefix)
         platform_main_end_line = find_platform_main_end(lines)
         if not platform_main_end_line:
-            raise Exception("Couldn't find 'platform_main_end'")
+            raise PreprocessError("Couldn't find 'platform_main_end'")
         marker_decls = lines[marker_range[0] : marker_range[1]]
 
         lines = lines[platform_main_end_line + 1 :]
@@ -109,7 +113,23 @@ def preprocess_csmith_code(
     marker_prefix: str,
     compiler_setting: utils.CompilerSetting,
     bldr: builder.Builder,
-) -> str:
+) -> Optional[str]:
+    """Will *try* to preprocess code as if it comes from csmith.
+
+    Args:
+        code (str): code to preprocess
+        marker_prefix (str): Marker prefix
+        compiler_setting (utils.CompilerSetting): Setting to preprocess with
+        bldr (builder.Builder):
+
+    Returns:
+        Optional[str]: preprocessed code if it was able to preprocess it.
+    """
     tf = utils.save_to_tmp_file(code)
-    res = preprocess_csmith_file(Path(tf.name), marker_prefix, compiler_setting, bldr)
-    return res
+    try:
+        res = preprocess_csmith_file(
+            Path(tf.name), marker_prefix, compiler_setting, bldr
+        )
+        return res
+    except PreprocessError:
+        return None

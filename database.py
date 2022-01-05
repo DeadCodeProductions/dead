@@ -537,7 +537,9 @@ class CaseDatabase:
         return scenario
 
     def get_case_from_id(self, case_id: RowID) -> Optional[Case]:
-        """Get a case from the database based on its ID
+        """Get a case from the database based on its ID.
+        Note: the case will *NOT* replace reduced code with
+        massaged code.
 
         Args:
             case_id (int): ID of wanted case
@@ -697,6 +699,16 @@ class CaseDatabase:
     def get_report_info_from_id(
         self, case_id: RowID
     ) -> tuple[Optional[str], Optional[str], Optional[str]]:
+        """Get report infos for case_id.
+        The order is massaged_code, link, fixed_by commit.
+
+        Args:
+            self:
+            case_id (RowID): case_id
+
+        Returns:
+            tuple[Optional[str], Optional[str], Optional[str]]:
+        """
 
         res = self.con.execute(
             "SELECT * FROM reported_cases WHERE case_id == ?", (case_id,)

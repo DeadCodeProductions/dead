@@ -6,6 +6,7 @@ Grows with arising needs.
 """
 
 import copy
+import logging
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -254,15 +255,24 @@ if __name__ == "__main__":
             code_pp = preprocessing.preprocess_csmith_code(
                 case.code, utils.get_marker_prefix(case.marker), case.bad_setting, bldr
             )
+            if not code_pp:
+                print("Could not preprocess code.")
+                exit(1)
+
             f.write(code_pp)
         print("Written preprocessed code to code_pp.c")
 
     elif args.empty_marker_code:
         cpy = copy.deepcopy(case)
         if args.preprocessed:
-            cpy.code = preprocessing.preprocess_csmith_code(
+            tmp = preprocessing.preprocess_csmith_code(
                 case.code, utils.get_marker_prefix(case.marker), case.bad_setting, bldr
             )
+            if tmp:
+                cpy.code = tmp
+            else:
+                logging.warn("Could not preprocess code. Continuing anyways...")
+
         if args.reduced and cpy.reduced_code:
             cpy.code = cpy.reduced_code
 
@@ -309,9 +319,11 @@ if __name__ == "__main__":
             sanitize_values(config, case, "", chkr)
 
         cpy = copy.deepcopy(case)
-        cpy.code = preprocessing.preprocess_csmith_code(
+        tmp = preprocessing.preprocess_csmith_code(
             case.code, utils.get_marker_prefix(case.marker), case.bad_setting, bldr
         )
+        if tmp:
+            cpy.code = tmp
         print(
             ("{:.<" f"{width}}}").format("PP: Check marker"),
             _ok_fail(chkr.is_interesting_wrt_marker(cpy)),
