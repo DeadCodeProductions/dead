@@ -540,9 +540,9 @@ def main_parser() -> argparse.ArgumentParser:
     absorb_parser = subparser.add_parser("absorb")
 
     absorb_parser.add_argument(
-        "absorb_directory",
-        metavar="DIR",
-        help="Directory to read .tar cases from into the database.",
+        "absorb_object",
+        metavar="DIR|FILE",
+        help="Directory or file to read .tar cases from into the database.",
     )
 
     report_parser = subparser.add_parser("report")
@@ -651,7 +651,14 @@ def main_parser() -> argparse.ArgumentParser:
         help="Path to code to checkreduced",
     )
 
-    cleancache_parser = subparser.add_parser("cleancache")
+    cache_parser = subparser.add_parser("cache")
+
+    cache_parser.add_argument(
+        "what",
+        choices=("clean", "stats"),
+        type=str,
+        help="What you want to do with the cache. Clean will search and remove all unfinished cache entries. `stats` will print some statistics about the cache.",
+    )
 
     getasm_parser = subparser.add_parser("getasm")
     getasm_parser.add_argument(
@@ -659,6 +666,44 @@ def main_parser() -> argparse.ArgumentParser:
         metavar="CASE_ID",
         type=int,
         help="Case to work with.",
+    )
+
+    set_parser = subparser.add_parser("set")
+    get_parser = subparser.add_parser("get")
+
+    get_parser.add_argument(
+        "what",
+        choices=("link", "fixed", "mcode", "rcode", "ocode", "bisection"),
+        type=str,
+        help="What you want to get. `ocode` is the original code. `rcode` is the reduced code. `mcode` is the massaged code. fixed is the commit the commit the case was `fixed` with and `link` the link to the bug report.",
+    )
+
+    get_parser.add_argument(
+        "case_id",
+        metavar="CASE_ID",
+        type=str,
+        help="Case from which to get what you chose",
+    )
+
+    set_parser.add_argument(
+        "what",
+        choices=("link", "fixed", "mcode", "rcode", "ocode", "bisection"),
+        type=str,
+        help="What you want to set. `ocode` is the original code. `rcode` is the reduced code. `mcode` is the massaged code. `fixed` is the commit the commit the case was fixed` with and `link` the link to the bug report. `ocode`, `rcode` and `mcode` expect files, `link`, `fixed` and `bisection` strings.",
+    )
+
+    set_parser.add_argument(
+        "case_id",
+        metavar="CASE_ID",
+        type=str,
+        help="Case to set the value of",
+    )
+
+    set_parser.add_argument(
+        "var",
+        metavar="VAR",
+        type=str,
+        help="What to set the chosen value to. Expected input may change based on what you are setting.",
     )
 
     return parser

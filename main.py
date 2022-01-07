@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import copy
+import logging
 import os
 import random
 import re
@@ -103,8 +104,12 @@ def _absorb() -> None:
         case = utils.Case.from_file(config, file)
         db.record_case(case)
 
+    if Path(args.absorb_object).is_file():
+        read_into_db(Path(args.absorb_object))
+        exit(0)
     pool = Pool(10)
-    absorb_directory = Path(args.absorb_directory).absolute()
+
+    absorb_directory = Path(args.absorb_object).absolute()
     paths = [p for p in absorb_directory.iterdir() if p.match("*.tar")]
     len_paths = len(paths)
     len_len_paths = len(str(len_paths))
@@ -152,14 +157,27 @@ def _massageorlink() -> None:
         if not chkr.is_interesting(cpy, preprocess=False):
             print("Massaged code failed interestingness check.")
             exit(1)
-        else:
-            print("OK")
-            _, link, fixed_by = ddb.get_report_info_from_id(args.case_id)
-            if link or fixed_by:
-                print("Not updating, was already fixed or reported..")
-                exit(0)
-            ddb.record_reported_case(args.case_id, massaged_code, link, fixed_by)
-            print("Saved...")
+
+        # Check if both bisect to the same commit
+        print("Check bisection of massaged code...", file=sys.stderr)
+        massaged_bisection = bsctr.bisect_code(
+            massaged_code, case.marker, case.bad_setting, case.good_settings
+        )
+
+        if massaged_bisection != case.bisection:
+            print("Massaged code bisects to different commit!", file=sys.stderr)
+            print(
+                f"Initial: {case.bisection}, New: {massaged_bisection}", file=sys.stderr
+            )
+            exit(1)
+
+        _, link, fixed_by = ddb.get_report_info_from_id(args.case_id)
+        if link or fixed_by:
+            print("Not updating, was already fixed or reported..")
+            exit(1)
+
+        ddb.record_reported_case(args.case_id, massaged_code, link, fixed_by)
+        print("Saved...")
 
     elif args.sub == "link":
         maybe_massaged_code, _, fixed_by = ddb.get_report_info_from_id(args.case_id)
@@ -220,27 +238,10 @@ def _report() -> None:
             print("Could not reduce case. Aborting...", file=sys.stderr)
             exit(1)
 
-    massaged_code_pre, _, _ = ddb.get_report_info_from_id(args.case_id)
+    massaged_code, _, _ = ddb.get_report_info_from_id(args.case_id)
 
-    if massaged_code_pre:
-        massaged_code = massaged_code_pre
-        # Check if both bisect to the same commit
-        print("Check bisection of massaged code...", file=sys.stderr)
-        massaged_bisection = bsctr.bisect_code(
-            massaged_code, case.marker, case.bad_setting, case.good_settings
-        )
-
-        if massaged_bisection != case.bisection:
-            print("Massaged code bisects to different commit!", file=sys.stderr)
-            print(
-                f"Initial: {case.bisection}, New: {massaged_bisection}", file=sys.stderr
-            )
-            exit(1)
-            # TODO: How to handle this?
-            # Creating new good_settings by going through case.scenario
-            # as the massaged_code may not have the same good_settings.
-        else:
-            case.reduced_code = massaged_code
+    if massaged_code:
+        case.reduced_code = massaged_code
 
     bad_setting = case.bad_setting
     bad_repo = repository.Repo(
@@ -586,17 +587,31 @@ def _check_reduced() -> None:
     print(random.randint(0, 1000))
 
 
-def _clean_cache() -> None:
-    print("Cleaning...")
-    for c in Path(config.cachedir).iterdir():
-        if not (c / "DONE").exists():
-            try:
-                os.rmdir(c)
-            except FileNotFoundError:
-                print(c, "spooky. It just disappeared...")
-            except OSError:
-                print(c, "is not empty but also not done!")
-    print("Done")
+def _cache() -> None:
+    if args.what == "clean":
+        print("Cleaning...")
+        for c in Path(config.cachedir).iterdir():
+            if not (c / "DONE").exists():
+                try:
+                    os.rmdir(c)
+                except FileNotFoundError:
+                    print(c, "spooky. It just disappeared...")
+                except OSError:
+                    print(c, "is not empty but also not done!")
+        print("Done")
+    elif args.what == "stats":
+        count_gcc = 0
+        count_clang = 0
+        for c in Path(config.cachedir).iterdir():
+            if c.name.startswith("clang"):
+                count_clang += 1
+            else:
+                count_gcc += 1
+
+        tot = count_gcc + count_clang
+        print("Amount compilers:", tot)
+        print("Amount clang: {} {:.2f}%".format(count_clang, count_clang / tot * 100))
+        print("Amount GCC: {} {:.2f}%".format(count_gcc, count_gcc / tot * 100))
 
 
 def _get_asm() -> None:
@@ -639,6 +654,130 @@ def _get_asm() -> None:
     print(case.marker)
 
 
+def _get() -> None:
+    case_id: int = int(args.case_id)
+    if args.what in ["ocode", "rcode", "bisection"]:
+        case = ddb.get_case_from_id_or_die(args.case_id)
+        if args.what == "ocode":
+            print(case.code)
+            return
+        elif args.what == "rcode":
+            print(case.reduced_code)
+            return
+        elif args.what == "bisection":
+            print(case.bisection)
+            return
+    else:
+        mcode, link, fixed = ddb.get_report_info_from_id(case_id)
+        if args.what == "link":
+            print(link)
+            return
+        elif args.what == "fixed":
+            print(fixed)
+            return
+        elif args.what == "mcode":
+            print(mcode)
+            return
+
+    logging.warning(
+        "Whoops, this should not have"
+        " happened because the parser forces "
+        "`what` to only allow some strings."
+    )
+    return
+
+
+def _set() -> None:
+    case_id: int = int(args.case_id)
+    case = ddb.get_case_from_id_or_die(case_id)
+    mcode, link, fixed = ddb.get_report_info_from_id(case_id)
+    repo = repository.Repo(
+        case.bad_setting.compiler_config.repo,
+        case.bad_setting.compiler_config.main_branch,
+    )
+
+    if args.what == "ocode":
+        with open(args.var, "r") as f:
+            new_code = f.read()
+        case.code = new_code
+        if chkr.is_interesting(case):
+            ddb.update_case(case_id, case)
+        else:
+            logging.critical(
+                "The provided code is not interesting wrt to the case. Will not save!"
+            )
+            exit(1)
+        return
+    elif args.what == "rcode":
+        with open(args.var, "r") as f:
+            rcode = f.read()
+        old_code = case.code
+        case.code = rcode
+        if chkr.is_interesting(case):
+            case.code = old_code
+            case.reduced_code = rcode
+            ddb.update_case(case_id, case)
+        else:
+            logging.critical(
+                "The provided code is not interesting wrt to the case. Will not save!"
+            )
+            exit(1)
+        return
+    elif args.what == "bisection":
+        # Also acts as check that the given rev is ok
+        rev = repo.rev_to_commit(args.var)
+        # Just in case someone accidentally overrides things...
+        logging.info(f"Previous bisection for case {case_id}: {case.bisection}")
+        case.bisection = rev
+        return
+    elif args.what == "link":
+        ddb.record_reported_case(case_id, mcode, args.var, fixed)
+        return
+    elif args.what == "fixed":
+        rev = repo.rev_to_commit(args.var)
+
+        case.bad_setting.rev = rev
+        if not chkr.is_interesting(case):
+            ddb.record_reported_case(case_id, mcode, link, rev)
+        else:
+            logging.critical(f"Case {case_id} was not fixed by {args.var}! Not saving!")
+            exit(1)
+        return
+    elif args.what == "mcode":
+        if not case.bisection:
+            logging.fatal(
+                "Can not save massaged code to a case that is not bisected. Bad things could happen. Stopping..."
+            )
+            exit(1)
+        with open(args.var, "r") as f:
+            new_mcode = f.read()
+        old_bisection = case.bisection
+        case.code = new_mcode
+        if chkr.is_interesting(case):
+            print("Checking bisection...")
+            if not bsctr.bisect_case(case):
+                logging.critical("Checking bisection failed...")
+                exit(1)
+            if case.bisection != old_bisection:
+                logging.critical(
+                    "Bisection of provided the massaged code does not match the original bisection!"
+                )
+                exit(1)
+            ddb.record_reported_case(case_id, new_mcode, link, fixed)
+        else:
+            logging.critical("The provided massaged code is not interesting!")
+            exit(1)
+
+        return
+
+    logging.warning(
+        "Whoops, this should not have"
+        " happened because the parser forces "
+        "`what` to only allow some strings."
+    )
+    return
+
+
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
@@ -653,6 +792,10 @@ if __name__ == "__main__":
 
     if args.sub == "run":
         _run()
+    elif args.sub == "get":
+        _get()
+    elif args.sub == "set":
+        _set()
     elif args.sub == "absorb":
         _absorb()
     elif args.sub == "tofile":
@@ -669,8 +812,8 @@ if __name__ == "__main__":
         _diagnose()
     elif args.sub == "checkreduced":
         _check_reduced()
-    elif args.sub == "cleancache":
-        _clean_cache()
+    elif args.sub == "cache":
+        _cache()
     elif args.sub == "getasm":
         _get_asm()
 
