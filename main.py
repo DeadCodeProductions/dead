@@ -5,6 +5,7 @@ import logging
 import os
 import random
 import re
+import subprocess
 import sys
 import tempfile
 import time
@@ -614,7 +615,7 @@ def _cache() -> None:
         print("Amount GCC: {} {:.2f}%".format(count_gcc, count_gcc / tot * 100))
 
 
-def _get_asm() -> None:
+def _asm() -> None:
     def save_wrapper(name: str, content: str) -> None:
         utils.save_to_file(Path(name + ".s"), content)
         print(f"Saving {name + '.s'}...")
@@ -778,6 +779,50 @@ def _set() -> None:
     return
 
 
+def _build() -> None:
+    compiler_config = utils.get_compiler_config(config, args.project)
+    for rev in args.rev:
+        print(bldr.build(compiler_config, rev))
+
+
+def _reduce() -> None:
+    for i, case_id in enumerate(args.case_id):
+        print(f"Reducing {case_id}. Done {i}/{len(args.case_id)}", file=sys.stderr)
+        case = ddb.get_case_from_id_or_die(case_id)
+        start_time = time.perf_counter()
+        if rdcr.reduce_case(case, force=args.force):
+            reducer_time = time.perf_counter() - start_time
+            ddb.update_case(case_id, case)
+            gtime, gtc, b_time, b_steps, _ = ddb.get_timing_from_id(case_id)
+            ddb.record_timing(case_id, gtime, gtc, b_time, b_steps, reducer_time)
+        else:
+            print(f"{case_id} failed...", file=sys.stderr)
+    print("Done")
+
+
+def _bisect() -> None:
+    for i, case_id in enumerate(args.case_id):
+        print(f"Bisecting {case_id}. Done {i}/{len(args.case_id)}", file=sys.stderr)
+        case = ddb.get_case_from_id_or_die(case_id)
+        start_time = time.perf_counter()
+        if bsctr.bisect_case(case, force=args.force):
+            bisector_time = time.perf_counter() - start_time
+            ddb.update_case(case_id, case)
+            gtime, gtc, _, _, rtime = ddb.get_timing_from_id(case_id)
+            ddb.record_timing(case_id, gtime, gtc, bisector_time, bsctr.steps, rtime)
+        else:
+            print(f"{case_id} failed...", file=sys.stderr)
+    print("Done", file=sys.stderr)
+
+
+def _edit() -> None:
+    if "EDITOR" not in os.environ:
+        print("Did not find EDITOR variable. Using nano...", file=sys.stderr)
+        subprocess.run(["nano", config.config_path])
+    else:
+        subprocess.run(os.environ["EDITOR"].split(" ") + [config.config_path])
+
+
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
@@ -814,7 +859,15 @@ if __name__ == "__main__":
         _check_reduced()
     elif args.sub == "cache":
         _cache()
-    elif args.sub == "getasm":
-        _get_asm()
+    elif args.sub == "asm":
+        _asm()
+    elif args.sub == "build":
+        _build()
+    elif args.sub == "reduce":
+        _reduce()
+    elif args.sub == "bisect":
+        _bisect()
+    elif args.sub == "edit":
+        _edit()
 
     gnrtr.terminate_processes()

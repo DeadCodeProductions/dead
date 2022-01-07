@@ -660,8 +660,8 @@ def main_parser() -> argparse.ArgumentParser:
         help="What you want to do with the cache. Clean will search and remove all unfinished cache entries. `stats` will print some statistics about the cache.",
     )
 
-    getasm_parser = subparser.add_parser("getasm")
-    getasm_parser.add_argument(
+    asm_parser = subparser.add_parser("asm")
+    asm_parser.add_argument(
         "case_id",
         metavar="CASE_ID",
         type=int,
@@ -695,7 +695,7 @@ def main_parser() -> argparse.ArgumentParser:
     set_parser.add_argument(
         "case_id",
         metavar="CASE_ID",
-        type=str,
+        type=int,
         help="Case to set the value of",
     )
 
@@ -705,5 +705,41 @@ def main_parser() -> argparse.ArgumentParser:
         type=str,
         help="What to set the chosen value to. Expected input may change based on what you are setting.",
     )
+
+    build_parser = subparser.add_parser("build")
+
+    build_parser.add_argument(
+        "project",
+        choices=("gcc", "llvm", "clang"),
+        type=str,
+        help="Which compiler to build",
+    )
+    build_parser.add_argument(
+        "rev", nargs="+", type=str, help="Which revision(s)/commit(s) to build"
+    )
+
+    reduce_parser = subparser.add_parser("reduce")
+
+    reduce_parser.add_argument(
+        "case_id", nargs="+", type=int, help="Which case to reduce"
+    )
+    reduce_parser.add_argument(
+        "--force",
+        action=argparse.BooleanOptionalAction,
+        help="Whether or not to force another reduction. This will override the old reduced code.",
+    )
+
+    bisect_parser = subparser.add_parser("bisect")
+
+    bisect_parser.add_argument(
+        "case_id", nargs="+", type=int, help="Which case to bisect"
+    )
+    bisect_parser.add_argument(
+        "--force",
+        action=argparse.BooleanOptionalAction,
+        help="Whether or not to force another bisection. This will override the old bisection.",
+    )
+
+    edit_parser = subparser.add_parser("edit")
 
     return parser

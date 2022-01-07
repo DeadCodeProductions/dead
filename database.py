@@ -687,6 +687,17 @@ class CaseDatabase:
     ) -> tuple[
         Optional[float], Optional[int], Optional[float], Optional[int], Optional[float]
     ]:
+        """Get the timing entries for a case.
+
+        Args:
+            self:
+            case_id (RowID): case_id
+
+        Returns:
+            tuple[
+                Optional[float], Optional[int], Optional[float], Optional[int], Optional[float]
+            ]: Generator time, generator try count, bisector time, bisector steps, reducer time
+        """
 
         res = self.con.execute(
             "SELECT * FROM timing WHERE case_id == ?", (case_id,)
