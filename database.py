@@ -704,7 +704,7 @@ class CaseDatabase:
         ).fetchone()
         if not res:
             return (None, None, None, None, None)
-        g_time, gtc, b_time, b_steps, r_time = res
+        _, g_time, gtc, b_time, b_steps, r_time = res
         return g_time, gtc, b_time, b_steps, r_time
 
     def get_report_info_from_id(

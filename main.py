@@ -791,10 +791,13 @@ def _reduce() -> None:
         case = ddb.get_case_from_id_or_die(case_id)
         start_time = time.perf_counter()
         if rdcr.reduce_case(case, force=args.force):
-            reducer_time = time.perf_counter() - start_time
             ddb.update_case(case_id, case)
-            gtime, gtc, b_time, b_steps, _ = ddb.get_timing_from_id(case_id)
-            ddb.record_timing(case_id, gtime, gtc, b_time, b_steps, reducer_time)
+            reducer_time = time.perf_counter() - start_time
+            # If the reduction takes less than 5 seconds,
+            # we can assume that the reduction was already done
+            if reducer_time > 5.0:
+                gtime, gtc, b_time, b_steps, _ = ddb.get_timing_from_id(case_id)
+                ddb.record_timing(case_id, gtime, gtc, b_time, b_steps, reducer_time)
         else:
             print(f"{case_id} failed...", file=sys.stderr)
     print("Done")
@@ -806,10 +809,15 @@ def _bisect() -> None:
         case = ddb.get_case_from_id_or_die(case_id)
         start_time = time.perf_counter()
         if bsctr.bisect_case(case, force=args.force):
-            bisector_time = time.perf_counter() - start_time
             ddb.update_case(case_id, case)
-            gtime, gtc, _, _, rtime = ddb.get_timing_from_id(case_id)
-            ddb.record_timing(case_id, gtime, gtc, bisector_time, bsctr.steps, rtime)
+            bisector_time = time.perf_counter() - start_time
+            # if the bisection took less than 5 seconds
+            # we can assume that it was already bisected
+            if bisector_time > 5.0:
+                gtime, gtc, _, _, rtime = ddb.get_timing_from_id(case_id)
+                ddb.record_timing(
+                    case_id, gtime, gtc, bisector_time, bsctr.steps, rtime
+                )
         else:
             print(f"{case_id} failed...", file=sys.stderr)
     print("Done", file=sys.stderr)
