@@ -742,4 +742,42 @@ def main_parser() -> argparse.ArgumentParser:
 
     edit_parser = subparser.add_parser("edit")
 
+    unreported_parser = subparser.add_parser("unreported")
+
+    unreported_parser.add_argument(
+        "--id-only",
+        action="store_true",
+        help="Print only the case ids. Useful for scripting.",
+    )
+
+    unrep_mut_ex_red = unreported_parser.add_mutually_exclusive_group()
+    unrep_mut_ex_red.add_argument(
+        "--not-reduced",
+        action="store_true",
+        help="If the listed cases should NOT be reduced",
+    )
+    unrep_mut_ex_red.add_argument(
+        "--reduced", action="store_true", help="If the listed cases should be reduced"
+    )
+
+    unrep_mut_ex = unreported_parser.add_mutually_exclusive_group()
+    # I'd call the options --gcc, --clang etc. but
+    # running ./main.py unreported --gcc will complain about ambiguity
+    # wrt to --gcc.repo etc. from the config.
+    # However when running ./main.py unreported --gcc.repo it is an unknown option
+    # as these flags are only parsed directly after ./main.py.
+    unrep_mut_ex.add_argument(
+        "--gcc-only", action="store_true", help="Print only GCC related bisections."
+    )
+    unrep_mut_ex.add_argument(
+        "--llvm-only",
+        action="store_true",
+        help="Print only LLVM related bisections. Same as --clang-only.",
+    )
+    unrep_mut_ex.add_argument(
+        "--clang-only",
+        action="store_true",
+        help="Print only clang related bisections. Same as --llvm-only.",
+    )
+
     return parser

@@ -831,6 +831,45 @@ def _edit() -> None:
         subprocess.run(os.environ["EDITOR"].split(" ") + [config.config_path])
 
 
+def _unreported() -> None:
+
+    # MIN(cases.case_id) to ensure we always get the same case_id
+    query = "select MIN(cases.case_id), bisection, COUNT(bisection) as cnt  from cases join compiler_setting on bad_setting_id = compiler_setting_id left join reported_cases on cases.case_id = reported_cases.case_id "
+
+    # The command is called 'unreported'
+    query += " where bug_report_link IS NULL"
+
+    if args.clang_only or args.llvm_only:
+        query += " and compiler = 'clang'"
+    elif args.gcc_only:
+        query += " and compiler = 'gcc'"
+
+    query += " group by bisection "
+
+    if args.reduced:
+        query += " having reduced_code_sha1 is not null "
+    elif args.not_reduced:
+        query += " having reduced_code_sha1 is null "
+
+    query += " order by cnt desc"
+
+    res = ddb.con.execute(query).fetchall()
+
+    if res[-1][1] is None:
+        res = res[:-1]
+
+    if args.id_only:
+        for case_id, _, _ in res:
+            print(case_id)
+    else:
+        print("{: <8} {: <45} {}".format("ID", "Bisection", "Count"))
+        print("{:-<64}".format(""))
+        for case_id, bisection, count in res:
+            print("{: <8} {: <45} {}".format(case_id, bisection, count))
+        print("{:-<64}".format(""))
+        print("{: <8} {: <45} {}".format("ID", "Bisection", "Count"))
+
+
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
@@ -877,5 +916,7 @@ if __name__ == "__main__":
         _bisect()
     elif args.sub == "edit":
         _edit()
+    elif args.sub == "unreported":
+        _unreported()
 
     gnrtr.terminate_processes()
