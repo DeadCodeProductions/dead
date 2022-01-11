@@ -756,7 +756,7 @@ def _set() -> None:
         case.code = new_mcode
         if chkr.is_interesting(case):
             print("Checking bisection...")
-            if not bsctr.bisect_case(case):
+            if not bsctr.bisect_case(case, force=True):
                 logging.critical("Checking bisection failed...")
                 exit(1)
             if case.bisection != old_bisection:
