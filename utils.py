@@ -17,8 +17,7 @@ from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
-from typing import (IO, TYPE_CHECKING, Any, Optional, Sequence, TextIO, Union,
-                    cast)
+from typing import IO, TYPE_CHECKING, Any, Optional, Sequence, TextIO, Union, cast
 
 import parsers
 import repository
