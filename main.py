@@ -362,7 +362,7 @@ def _report() -> None:
     print(prep_asm(asm_good, is_gcc))
     print("\n")
     print(
-        to_cody_str(f"{bad_setting.compiler_config.name}-{bad_setting.rev} -v", is_gcc)
+        to_cody_str(f"{bad_setting.compiler_config.name}-{bad_setting_tag} -v", is_gcc)
     )
     print(
         to_collapsed(
@@ -373,7 +373,7 @@ def _report() -> None:
     print()
     print(
         to_cody_str(
-            f"{good_setting.compiler_config.name}-{good_setting.rev} -v", is_gcc
+            f"{good_setting.compiler_config.name}-{good_setting_tag} -v", is_gcc
         )
     )
     print(
@@ -420,7 +420,6 @@ def _report() -> None:
 
 
 def _diagnose() -> None:
-
     width = 50
 
     def ok_fail(b: bool) -> str:
