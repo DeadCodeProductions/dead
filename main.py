@@ -786,7 +786,17 @@ def _build() -> None:
 def _reduce() -> None:
     for i, case_id in enumerate(args.case_id):
         print(f"Reducing {case_id}. Done {i}/{len(args.case_id)}", file=sys.stderr)
-        case = ddb.get_case_from_id_or_die(case_id)
+        pre_case = ddb.get_case_from_id(case_id)
+        if not pre_case:
+            if len(args.case_id) == 1:
+                print(f"Case ID {case_id} is not known. Aborting...", file=sys.stderr)
+                exit(1)
+            else:
+                print(f"Case ID {case_id} is not known. Continuing...", file=sys.stderr)
+
+            continue
+        else:
+            case = pre_case
         start_time = time.perf_counter()
         if rdcr.reduce_case(case, force=args.force):
             ddb.update_case(case_id, case)
@@ -804,7 +814,16 @@ def _reduce() -> None:
 def _bisect() -> None:
     for i, case_id in enumerate(args.case_id):
         print(f"Bisecting {case_id}. Done {i}/{len(args.case_id)}", file=sys.stderr)
-        case = ddb.get_case_from_id_or_die(case_id)
+        pre_case = ddb.get_case_from_id(case_id)
+        if not pre_case:
+            if len(args.case_id) == 1:
+                print(f"Case ID {case_id} is not known. Aborting...", file=sys.stderr)
+                exit(1)
+            else:
+                print(f"Case ID {case_id} is not known. Continuing...", file=sys.stderr)
+            continue
+        else:
+            case = pre_case
         start_time = time.perf_counter()
         if bsctr.bisect_case(case, force=args.force):
             ddb.update_case(case_id, case)
