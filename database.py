@@ -55,7 +55,7 @@ class CaseDatabase:
         ],
         "reported_cases": [
             ColumnInfo("case_id", "", "REFERENCES cases(case_id) PRIMARY KEY"),
-            ColumnInfo("massaged_code", "", "REFERENCES code(code_sha1) NOT NULL"),
+            ColumnInfo("massaged_code_sha1", "", "REFERENCES code(code_sha1)"),
             ColumnInfo("bug_report_link", "TEXT"),
             ColumnInfo("fixed_by", "CHAR(40)"),
         ],
@@ -182,8 +182,8 @@ class CaseDatabase:
 
         Args:
             case_id (RowID): case_id
-            massaged_code (str): adapted reduced code for better reduction.
-            bug_report_link (str): Link to the bug report.
+            massaged_code (Optional[str]): adapted reduced code for better reduction.
+            bug_report_link (Optional[str]): Link to the bug report.
             fixed_by (Optional[str]): If the case is already fixed.
 
         Returns:
