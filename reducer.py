@@ -3,6 +3,8 @@
 import json
 import logging
 import os
+import random
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -134,8 +136,12 @@ class Reducer:
             try:
                 current_time = time.strftime("%Y%m%d-%H%M%S")
                 build_log_path = (
-                    Path(self.config.logdir) / f"{current_time}-creduce.log"
+                    Path(self.config.logdir)
+                    / f"{current_time}-creduce-{random.randint(0,1000)}.log"
                 )
+                # Set permissions of logfile
+                shutil.chown(build_log_path, group=self.config.cache_group)
+                os.chmod(build_log_path, 0o660)
                 logging.info(f"creduce logfile at {build_log_path}")
                 with open(build_log_path, "a") as build_log:
                     utils.run_cmd_to_logfile(
