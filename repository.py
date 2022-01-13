@@ -152,6 +152,19 @@ class Repo:
         return utils.run_cmd(request_str)
 
     def pull(self) -> None:
+        """Pulls from the main branch of the repository.
+        It will switch the repository to the main branch.
+        It will also invalidate the caches of `rev_to_commit`
+        and `get_best_common_ancestor`.
+
+        Args:
+            self:
+
+        Returns:
+            None:
+        """
+        self.rev_to_commit.cache_clear()
+        self.get_best_common_ancestor.cache_clear()
         # Just in case...
         cmd = f"git -C {self.path} switch {self.main_branch}"
         utils.run_cmd(cmd)

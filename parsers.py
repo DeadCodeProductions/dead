@@ -631,7 +631,7 @@ def main_parser() -> argparse.ArgumentParser:
     diagnose_parser.add_argument(
         "--file",
         metavar="PATH",
-        type=int,
+        type=str,
         help="Path to case to work with",
     )
 
@@ -681,7 +681,7 @@ def main_parser() -> argparse.ArgumentParser:
     get_parser.add_argument(
         "case_id",
         metavar="CASE_ID",
-        type=str,
+        type=int,
         help="Case from which to get what you chose",
     )
 

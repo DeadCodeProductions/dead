@@ -152,10 +152,9 @@ def _massageorlink() -> None:
         with open(args.code_path, "r") as f:
             massaged_code = f.read()
 
-        cpy = copy.deepcopy(case)
-        cpy.code = massaged_code
+        case.code = massaged_code
         # Check if massaged code is valid
-        if not chkr.is_interesting(cpy, preprocess=False):
+        if not chkr.is_interesting(case, preprocess=False):
             print("Massaged code failed interestingness check.")
             exit(1)
 
