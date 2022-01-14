@@ -13,6 +13,8 @@ from multiprocessing import Pool
 from pathlib import Path
 from typing import Optional, cast
 
+import requests
+
 import bisector
 import builder
 import checker
@@ -24,6 +26,18 @@ import preprocessing
 import reducer
 import repository
 import utils
+
+
+def get_llvm_github_commit_author(rev: str) -> Optional[str]:
+    html = requests.get(
+        "https://github.com/llvm/llvm-project/commit/" + rev
+    ).content.decode()
+    p = re.compile(r'.*\/llvm\/llvm-project\/commits\?author=(.*)".*')
+    for l in html.split("\n"):
+        l = l.strip()
+        if m := p.match(l):
+            return m.group(1)
+    return None
 
 
 def _run() -> None:
@@ -469,6 +483,9 @@ def _report() -> None:
             builder.get_asm_str(source, prebisection_setting, bldr)
         )
         print(prep_asm(prebisection_asm, is_gcc))
+        author = get_llvm_github_commit_author(cast(str, case.bisection))
+        if author:
+            print(f"CC: @{author}")
 
 
 def _diagnose() -> None:
