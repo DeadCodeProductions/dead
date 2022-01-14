@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from dataclasses import dataclass
 from os.path import join as pjoin
 from pathlib import Path
 from types import TracebackType
@@ -29,23 +30,14 @@ class BuildException(Exception):
     pass
 
 
+@dataclass
 class BuildContext:
-    def __init__(
-        self,
-        cache_prefix: Path,
-        success_indicator: Path,
-        compiler_config: NestedNamespace,
-        rev: str,
-        logdir: os.PathLike[str],
-        cache_group: str,
-    ):
-
-        self.cache_prefix = cache_prefix
-        self.success_indicator = success_indicator
-        self.compiler_config = compiler_config
-        self.rev = rev
-        self.logdir = logdir
-        self.cache_group = cache_group
+    cache_prefix: Path
+    success_indicator: Path
+    compiler_config: NestedNamespace
+    rev: str
+    logdir: os.PathLike[str]
+    cache_group: str
 
     def __enter__(self) -> tuple[Path, TextIO]:
         self.build_dir = tempfile.mkdtemp()
@@ -103,7 +95,7 @@ class Builder:
         self.config = config
         # Do not set cores to 0. For gcc this means all available cores,
         # for llvm this means infinite! You'll only survive this with around 250GB of RAM.
-        self.cores = cores if cores is not None else multiprocessing.cpu_count()
+        self.cores = cores if cores else multiprocessing.cpu_count()
         self.patchdb = patchdb
         self.force = force
 
@@ -115,7 +107,6 @@ class Builder:
         self,
         compiler_config: NestedNamespace,
         rev: str,
-        cores: Optional[int] = None,
         additional_patches: Optional[list[Path]] = None,
         force: bool = False,
     ) -> Path:
@@ -124,8 +115,6 @@ class Builder:
         Args:
             compiler_config: What project to build (config.llvm/config.gcc).
             rev (str): Which revision/commit to build.
-            cores (Optional[int]): How many cores to use.
-                Builder.cores is used when not defined.
             additional_patches (Optional[list]): Which patches to apply *additionally*
                 to the ones reported by the PatchDB.
             force (bool): Force to build a compiler, even if it is known to be bad.
@@ -134,58 +123,150 @@ class Builder:
             Path: Path to the compiler directory.
         """
 
-        # Always force
         force = self.force or force
-
-        if cores is None:
-            cores = self.cores
-
         repo = Repo(compiler_config.repo, main_branch=compiler_config.main_branch)
+        prefix, symlink_prefix, rev = self._get_cache_prefix(rev, repo, compiler_config)
+        success_indicator = Path(pjoin(prefix, "DONE"))
 
+        if self._is_in_cache(prefix, success_indicator):
+            if symlink_prefix:
+                utils.create_symlink(prefix, symlink_prefix)
+            return prefix
+
+        required_patches = self._collect_patches(
+            compiler_config, rev, repo, force, additional_patches
+        )
+        with BuildContext(
+            prefix,
+            success_indicator,
+            compiler_config,
+            rev,
+            self.config.logdir,
+            self.config.cache_group,
+        ) as (tmpdir, build_log):
+            utils.run_cmd(f"git worktree add {tmpdir} {rev} -f", compiler_config.repo)
+            tmpdir_repo = Repo(Path(tmpdir), compiler_config.main_branch)
+            self._apply_patches(tmpdir_repo, required_patches, compiler_config, rev)
+            try:
+                Builder._run_build(compiler_config, prefix, self.cores, build_log)
+                # Build was successful and can be cached
+                success_indicator.touch()
+                # Other cache members should also be able to read the cache
+                subprocess.run(f"chmod -R g+rwX {prefix}".split(" "))
+            except subprocess.CalledProcessError as e:
+                self.patchdb.save_bad(required_patches, rev, repo, compiler_config)
+                raise BuildException(
+                    f"Couldn't build {compiler_config.name} {rev} with patches {required_patches}. Exception: {e}"
+                )
+
+        self._update_patchdb(required_patches, rev, repo, compiler_config)
+
+        if symlink_prefix:
+            utils.create_symlink(prefix, symlink_prefix)
+
+        return prefix
+
+    def _get_cache_prefix(
+        self, rev: str, repo: Repo, compiler_config: NestedNamespace
+    ) -> tuple[Path, Optional[Path], str]:
+        """Create the prefix path where the compiler is or will be installed.
+
+        Args:
+            rev (str): Which revision or commit.
+            repo (Repo): The repository of the target compiler
+            compiler_config: Which compiler to build (config.llvm/config.gcc).
+
+        Returns:
+            Path: Path to the prefix.
+        """
         input_rev = rev
         rev = repo.rev_to_commit(rev)
 
         # For maximum caching efficiency, the cache should always work with the
         # full commit hash. However, to not confuse human operators, we will create a symlink
         # from $COMPILER_NAME-$INPUT_REV to $COMPILER_NAME-$FULL_COMMIT_HASH
-        create_input_rev_symlink = False
-        if input_rev != rev:
-            create_input_rev_symlink = True
+        create_input_rev_symlink = input_rev != rev
 
         # Sanitize input rev
         input_rev = input_rev.replace("/", "-")
 
         # Installation prefix: [$PWD]/$CACHEDIR/$COMPILER-$REV
-        if os.path.isabs(self.config.cachedir):
-            prefix = Path(pjoin(self.config.cachedir, compiler_config.name + "-" + rev))
-            symlink_prefix = Path(
-                pjoin(self.config.cachedir, compiler_config.name + "-" + input_rev)
-            )
-        else:
-            prefix = Path(
-                pjoin(
-                    os.getcwd(), self.config.cachedir, compiler_config.name + "-" + rev
-                )
-            )
-            symlink_prefix = Path(
-                pjoin(
-                    os.getcwd(),
-                    self.config.cachedir,
-                    compiler_config.name + "-" + input_rev,
-                )
-            )
-        success_indicator = Path(pjoin(prefix, "DONE"))
+        prefix = Path(pjoin(self.config.cachedir, compiler_config.name + "-" + rev))
+        symlink_prefix = Path(
+            pjoin(self.config.cachedir, compiler_config.name + "-" + input_rev)
+        )
+        if not os.path.isabs(self.config.cachedir):
+            prefix = os.getcwd() / prefix
+            symlink_prefix = os.getcwd() / symlink_prefix
 
-        # Check cache
-        if self._is_in_cache(prefix, success_indicator):
-            if create_input_rev_symlink:
-                utils.create_symlink(prefix, symlink_prefix)
+        return (prefix, symlink_prefix if create_input_rev_symlink else None, rev)
 
-            return prefix
+    @staticmethod
+    def _run_build(
+        compiler_config: NestedNamespace, prefix: Path, cores: int, build_log: TextIO
+    ) -> None:
+        os.makedirs("build")
+        if compiler_config.name == "gcc":
+            Builder._run_gcc_build(prefix, cores, build_log)
+        elif compiler_config.name == "clang":
+            Builder._run_clang_build(prefix, cores, build_log)
 
-        # Collect patches from patchdb
+    @staticmethod
+    def _run_gcc_build(prefix: Path, cores: int, build_log: TextIO) -> None:
+        pre_cmd = "./contrib/download_prerequisites"
+        logging.debug("GCC: Starting download_prerequisites")
+        utils.run_cmd_to_logfile(pre_cmd, log_file=build_log)
+
+        os.chdir("build")
+        logging.debug("GCC: Starting configure")
+        configure_cmd = f"../configure --disable-multilib --disable-bootstrap --enable-languages=c,c++ --prefix={prefix}"
+        utils.run_cmd_to_logfile(configure_cmd, log_file=build_log)
+
+        logging.debug("GCC: Starting to build...")
+        utils.run_cmd_to_logfile(f"make -j {cores}", log_file=build_log)
+        utils.run_cmd_to_logfile("make install", log_file=build_log)
+
+    @staticmethod
+    def _run_clang_build(prefix: Path, cores: int, build_log: TextIO) -> None:
+        os.chdir("build")
+        logging.debug("LLVM: Starting cmake")
+        cmake_cmd = f"cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=clang -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_USE_NEWPM=ON -DLLVM_TARGETS_TO_BUILD=X86 -DCMAKE_INSTALL_PREFIX={prefix} ../llvm"
+        utils.run_cmd_to_logfile(
+            cmake_cmd,
+            additional_env={"CC": "clang", "CXX": "clang++"},
+            log_file=build_log,
+        )
+
+        logging.debug("LLVM: Starting to build...")
+        utils.run_cmd_to_logfile(
+            f"ninja -j {cores} install",
+            log_file=build_log,
+        )
+
+    def _collect_patches(
+        self,
+        compiler_config: NestedNamespace,
+        rev: str,
+        repo: Repo,
+        force: bool,
+        additional_patches: Optional[list[Path]],
+    ) -> list[Path]:
+        """Collect the necessary (known) patches for the target build from the
+        patch database.
+
+        Args:
+            compiler_config: The target compiler project (config.llvm/config.gcc).
+            rev (str): Which revision/commit to build.
+            repo (Repo): The repository of the target compiler
+            force (bool): Force to build a compiler, even if it is known to be bad.
+            additional_patches (Optional[list]): Which patches to apply *additionally*
+                to the ones reported by the PatchDB.
+
+        Returns:
+            Path: Path to the compiler directory.
+        """
         required_patches = self.patchdb.required_patches(rev, repo)
-        if isinstance(additional_patches, list):
+        if additional_patches:
             required_patches.extend(additional_patches)
 
         # Check if combination is a known bad one
@@ -195,84 +276,10 @@ class Builder:
             raise BuildException(
                 f"Known Bad combination {compiler_config.name} {rev} with patches {required_patches}"
             )
-
-        with BuildContext(
-            prefix,
-            success_indicator,
-            compiler_config,
-            rev,
-            self.config.logdir,
-            self.config.cache_group,
-        ) as ctxt:
-            tmpdir, build_log = ctxt
-            # Getting source code
-            worktree_cmd = f"git worktree add {tmpdir} {rev} -f"
-            utils.run_cmd(worktree_cmd, compiler_config.repo)
-
-            tmpdir_repo = Repo(Path(tmpdir), compiler_config.main_branch)
-
-            # Apply patches
-            self._apply_patches(tmpdir_repo, required_patches, compiler_config, rev)
-
-            os.makedirs("build")
-
-            # Compiling
-            try:
-                if compiler_config.name == "gcc":
-                    pre_cmd = "./contrib/download_prerequisites"
-                    logging.debug("GCC: Starting download_prerequisites")
-                    utils.run_cmd_to_logfile(pre_cmd, log_file=build_log)
-
-                    os.chdir("build")
-                    logging.debug("GCC: Starting configure")
-                    configure_cmd = f"../configure --disable-multilib --disable-bootstrap --enable-languages=c,c++ --prefix={prefix}"
-                    utils.run_cmd_to_logfile(configure_cmd, log_file=build_log)
-
-                    logging.debug("GCC: Starting to build...")
-                    utils.run_cmd_to_logfile(f"make -j {cores}", log_file=build_log)
-                    utils.run_cmd_to_logfile("make install", log_file=build_log)
-
-                elif compiler_config.name == "clang":
-                    os.chdir("build")
-                    logging.debug("LLVM: Starting cmake")
-                    cmake_cmd = f"cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=clang -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_USE_NEWPM=ON -DLLVM_TARGETS_TO_BUILD=X86 -DCMAKE_INSTALL_PREFIX={prefix} ../llvm"
-                    utils.run_cmd_to_logfile(
-                        cmake_cmd,
-                        additional_env={"CC": "clang", "CXX": "clang++"},
-                        log_file=build_log,
-                    )
-
-                    logging.debug("LLVM: Starting to build...")
-                    utils.run_cmd_to_logfile(
-                        f"ninja -j {cores} install",
-                        log_file=build_log,
-                    )
-
-                # Build was successful and can be cached
-                success_indicator.touch()
-
-                # Other cache members should also be able to read the cache
-                subprocess.run(f"chmod -R g+rwX {prefix}".split(" "))
-
-            except subprocess.CalledProcessError as e:
-                self.patchdb.save_bad(required_patches, rev, repo, compiler_config)
-                raise BuildException(
-                    f"Couldn't build {compiler_config.name} {rev} with patches {required_patches}. Exception: {e}"
-                )
-
-        # Save combination as successful
-        for patch in required_patches:
-            self.patchdb.save(patch, [rev], repo)
-        # Clear bad "bad"-entries for this combo
-        self.patchdb.clear_bad(required_patches, rev, repo, compiler_config)
-
-        if create_input_rev_symlink:
-            utils.create_symlink(prefix, symlink_prefix)
-
-        return prefix
+        return required_patches
 
     def _is_in_cache(self, prefix: Path, success_indicator: Path) -> bool:
-        # Super safe caching "lock"/queue
+        # Super safe caching "lock"/queue /s
         if prefix.exists() and not success_indicator.exists():
             logging.info(f"{prefix} is currently building; need to wait")
             while not success_indicator.exists():
@@ -299,14 +306,29 @@ class Builder:
         if len(patches) > 0:
             if not repo.apply(patches):
                 self.patchdb.save_bad(patches, rev, repo, compiler_config)
-                raise BuildException(f"All patches not applicable to {rev}: {patches}")
+                raise BuildException(
+                    f"Not all patches are applicable to {rev}: {patches}"
+                )
+
+    def _update_patchdb(
+        self,
+        required_patches: list[Path],
+        rev: str,
+        repo: Repo,
+        compiler_config: NestedNamespace,
+    ) -> None:
+        # Save combination as successful
+        for patch in required_patches:
+            self.patchdb.save(patch, [rev], repo)
+        # Clear bad "bad"-entries for this combo
+        self.patchdb.clear_bad(required_patches, rev, repo, compiler_config)
 
     def build_releases(self) -> None:
         for ver in self.llvm_versions:
-            print(self.build(self.config.llvm, ver, cores=cores))
+            print(self.build(self.config.llvm, ver))
 
         for ver in self.gcc_versions:
-            print(self.build(self.config.gcc, ver, cores=cores))
+            print(self.build(self.config.gcc, ver))
         return
 
 
@@ -480,7 +502,7 @@ if __name__ == "__main__":
 
     compiler_config = utils.get_compiler_config(config, args.compiler)
 
-    additional_patches = None
+    additional_patches = []
     if args.add_patches is not None:
         additional_patches = [os.path.abspath(patch) for patch in args.add_patches]
 
@@ -489,7 +511,6 @@ if __name__ == "__main__":
             builder.build(
                 compiler_config,
                 rev,
-                cores=cores,
                 additional_patches=additional_patches,
                 force=args.force,
             )
