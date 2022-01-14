@@ -2,7 +2,7 @@ image: "python:3.9"
 
 before_script:
   - python --version
-  - pip3 install pytype mypy black
+  - pip3 install pytype mypy black types-requests
 
 stages:
   - Printing Environment
