@@ -669,7 +669,7 @@ def _asm() -> None:
 
     if case.reduced_code:
         reducedasmbad = builder.get_asm_str(case.reduced_code, case.bad_setting, bldr)
-        reducedasmgood = builder.get_asm_str(case.reduced_code, case.bad_setting, bldr)
+        reducedasmgood = builder.get_asm_str(case.reduced_code, good_setting, bldr)
         save_wrapper("reducedasmbad", reducedasmbad)
         save_wrapper("reducedasmgood", reducedasmgood)
     if case.bisection:
