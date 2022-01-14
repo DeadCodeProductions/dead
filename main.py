@@ -303,7 +303,13 @@ def _report() -> None:
     def to_collapsed(
         s: str, is_gcc: bool, summary: str = "Output", open: bool = False
     ) -> str:
-        if not is_gcc:
+        if is_gcc:
+            s = (
+                "--------- OUTPUT ---------\n"
+                + s
+                + "\n---------- END OUTPUT ---------\n"
+            )
+        else:
             sopen = "open" if open else ""
             s = (
                 f"<details {sopen}><summary>{summary}</summary><p>\n"
@@ -318,8 +324,7 @@ def _report() -> None:
         return code
 
     def print_cody_str(s: str, is_gcc: bool) -> None:
-        if not is_gcc:
-            s = "`" + s + "`"
+        s = "`" + s + "`"
         print(s)
 
     def to_cody_str(s: str, is_gcc: bool) -> str:
@@ -350,72 +355,100 @@ def _report() -> None:
     )
 
     # Compile
-    asm_bad = builder.get_asm_str(source, case.bad_setting, bldr)
-    asm_good = builder.get_asm_str(source, good_setting, bldr)
-
-    print_cody_str(f"{bad_setting_str} -S -o /dev/stdout case.c", is_gcc)
-    print(prep_asm(asm_bad, is_gcc))
-    print()
-
-    print_cody_str(f"{good_setting_str} -S -o /dev/stdout case.c", is_gcc)
-    print(prep_asm(asm_good, is_gcc))
-    print("\n")
-    print(
-        to_cody_str(f"{bad_setting.compiler_config.name}-{bad_setting_tag} -v", is_gcc)
-    )
-    print(
-        to_collapsed(
-            to_code(builder.get_verbose_compiler_info(bad_setting, bldr), is_gcc),
-            is_gcc,
+    if is_gcc:
+        print("Commands to reproduce:")
+        print_cody_str(f"{bad_setting_str} -S -o /dev/stdout case.c", is_gcc)
+        print_cody_str(f"{good_setting_str} -S -o /dev/stdout case.c", is_gcc)
+        print()
+        print(
+            "Bisects to: https://gcc.gnu.org/git/?p=gcc.git;a=commit;h="
+            + str(case.bisection)
         )
-    )
-    print()
-    print(
-        to_cody_str(
-            f"{good_setting.compiler_config.name}-{good_setting_tag} -v", is_gcc
+        print()
+        print("----- Build information -----")
+        print(f"----- {bad_setting_tag}")
+        print(
+            builder.get_verbose_compiler_info(bad_setting, bldr).split("lto-wrapper\n")[
+                -1
+            ]
         )
-    )
-    print(
-        to_collapsed(
-            to_code(builder.get_verbose_compiler_info(good_setting, bldr), is_gcc),
-            is_gcc,
+        print(f"\n----- {good_setting_tag}")
+        print(
+            builder.get_verbose_compiler_info(good_setting, bldr).split(
+                "lto-wrapper\n"
+            )[-1]
         )
-    )
 
-    gcc_link = "https://gcc.gnu.org/git/?p=gcc.git;a=commit;h="
-    # LLVM moved to github so the commits will be automatically
-    # created.
-    llvm_link = ""
-    link_prefix = gcc_link if is_gcc else llvm_link
-    print()
-    if not is_gcc:
+    else:
+        asm_bad = builder.get_asm_str(source, case.bad_setting, bldr)
+        asm_good = builder.get_asm_str(source, good_setting, bldr)
+
+        print_cody_str(f"{bad_setting_str} -S -o /dev/stdout case.c", is_gcc)
+        print(prep_asm(asm_bad, is_gcc))
+        print()
+
+        print_cody_str(f"{good_setting_str} -S -o /dev/stdout case.c", is_gcc)
+        print(prep_asm(asm_good, is_gcc))
+        print("\n")
+        print(
+            to_cody_str(
+                f"{bad_setting.compiler_config.name}-{bad_setting_tag} -v", is_gcc
+            )
+        )
+        print(
+            to_collapsed(
+                to_code(builder.get_verbose_compiler_info(bad_setting, bldr), is_gcc),
+                is_gcc,
+            )
+        )
+        print()
+        print(
+            to_cody_str(
+                f"{good_setting.compiler_config.name}-{good_setting_tag} -v", is_gcc
+            )
+        )
+        print(
+            to_collapsed(
+                to_code(builder.get_verbose_compiler_info(good_setting, bldr), is_gcc),
+                is_gcc,
+            )
+        )
+
+        gcc_link = "https://gcc.gnu.org/git/?p=gcc.git;a=commit;h="
+        # LLVM moved to github so the commits will be automatically
+        # created.
+        llvm_link = ""
+        link_prefix = gcc_link if is_gcc else llvm_link
+        print()
         print("### Bisection")
-    bisection_setting = copy.deepcopy(case.bad_setting)
-    bisection_setting.rev = cast(str, case.bisection)
-    print(f"Started with {link_prefix}{case.bisection}")
-    # print("------------------------------------------------")
-    print(
-        to_cody_str(
-            f"{bisection_setting.report_string()} -S -o /dev/stdout case.c", is_gcc
+        bisection_setting = copy.deepcopy(case.bad_setting)
+        bisection_setting.rev = cast(str, case.bisection)
+        print(f"Started with {link_prefix}{case.bisection}")
+        # print("------------------------------------------------")
+        print(
+            to_cody_str(
+                f"{bisection_setting.report_string()} -S -o /dev/stdout case.c", is_gcc
+            )
         )
-    )
-    bisection_asm = replace_rand(builder.get_asm_str(source, bisection_setting, bldr))
-    print(prep_asm(bisection_asm, is_gcc))
-    # print("------------------------------------------------")
-    prebisection_setting = copy.deepcopy(bisection_setting)
-    prebisection_setting.rev = bad_repo.rev_to_commit(f"{bisection_setting.rev}~")
-    print(f"Previous commit: {link_prefix}{prebisection_setting.rev}")
-    print(
-        "\n"
-        + to_cody_str(
-            f"{prebisection_setting.report_string()} -S -o /dev/stdout case.c",
-            is_gcc,
+        bisection_asm = replace_rand(
+            builder.get_asm_str(source, bisection_setting, bldr)
         )
-    )
-    prebisection_asm = replace_rand(
-        builder.get_asm_str(source, prebisection_setting, bldr)
-    )
-    print(prep_asm(prebisection_asm, is_gcc))
+        print(prep_asm(bisection_asm, is_gcc))
+        # print("------------------------------------------------")
+        prebisection_setting = copy.deepcopy(bisection_setting)
+        prebisection_setting.rev = bad_repo.rev_to_commit(f"{bisection_setting.rev}~")
+        print(f"Previous commit: {link_prefix}{prebisection_setting.rev}")
+        print(
+            "\n"
+            + to_cody_str(
+                f"{prebisection_setting.report_string()} -S -o /dev/stdout case.c",
+                is_gcc,
+            )
+        )
+        prebisection_asm = replace_rand(
+            builder.get_asm_str(source, prebisection_setting, bldr)
+        )
+        print(prep_asm(prebisection_asm, is_gcc))
 
 
 def _diagnose() -> None:
