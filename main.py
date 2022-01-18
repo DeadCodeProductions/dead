@@ -44,6 +44,15 @@ def _run() -> None:
     scenario = utils.get_scenario(config, args)
 
     counter = 0
+    output_directory = (
+        Path(args.output_directory).absolute() if args.output_directory else None
+    )
+
+    parallel_generator = (
+        gnrtr.parallel_interesting_case(config, scenario, args.cores, start_stop=True)
+        if args.parallel_generation
+        else None
+    )
     while True:
         if args.amount and args.amount != 0:
             if counter >= args.amount:
@@ -55,11 +64,14 @@ def _run() -> None:
         bisector_steps: Optional[int] = None
         reducer_time: Optional[float] = None
 
-        time_start_gen = time.perf_counter()
-        case = gnrtr.generate_interesting_case(scenario)
-        time_end_gen = time.perf_counter()
-        generator_time = time_end_gen - time_start_gen
-        generator_try_count = gnrtr.try_counter
+        if parallel_generator:
+            case = next(parallel_generator)
+        else:
+            time_start_gen = time.perf_counter()
+            case = gnrtr.generate_interesting_case(scenario)
+            time_end_gen = time.perf_counter()
+            generator_time = time_end_gen - time_start_gen
+            generator_try_count = gnrtr.try_counter
 
         if args.bisector:
             try:
@@ -90,15 +102,22 @@ def _run() -> None:
                 print(f"BuildException: {e}")
                 continue
 
-        case_id = ddb.record_case(case)
-        ddb.record_timing(
-            case_id,
-            generator_time,
-            generator_try_count,
-            bisector_time,
-            bisector_steps,
-            reducer_time,
-        )
+        if not output_directory:
+            case_id = ddb.record_case(case)
+            ddb.record_timing(
+                case_id,
+                generator_time,
+                generator_try_count,
+                bisector_time,
+                bisector_steps,
+                reducer_time,
+            )
+
+        else:
+            h = abs(hash(str(case)))
+            path = output_directory / Path(f"case_{counter:08}-{h:019}.tar")
+            logging.debug("Writing case to {path}...")
+            case.to_file(path)
 
         counter += 1
 

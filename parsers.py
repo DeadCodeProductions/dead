@@ -530,11 +530,10 @@ def main_parser() -> argparse.ArgumentParser:
     )
 
     run_parser.add_argument(
-        "-only",
-        "--only-new-bisections",
-        help="Save only new cases.",
-        action=argparse.BooleanOptionalAction,
-        default=False,
+        "-pg",
+        "--parallel-generation",
+        action="store_true",
+        help="Run the case generation part in parallel. This will disable timing for the generation part.",
     )
 
     absorb_parser = subparser.add_parser("absorb")
