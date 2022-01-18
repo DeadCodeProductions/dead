@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import copy
+import hashlib
 import logging
 import os
 import random
@@ -695,17 +696,18 @@ def _asm() -> None:
 
 
 def _get() -> None:
+    # Why are you printing code with end=""?
     case_id: int = int(args.case_id)
     if args.what in ["ocode", "rcode", "bisection"]:
         case = ddb.get_case_from_id_or_die(args.case_id)
         if args.what == "ocode":
-            print(case.code)
+            print(case.code, end="")
             return
         elif args.what == "rcode":
-            print(case.reduced_code)
+            print(case.reduced_code, end="")
             return
         elif args.what == "bisection":
-            print(case.bisection)
+            print(case.bisection, end="")
             return
     else:
         mcode, link, fixed = ddb.get_report_info_from_id(case_id)
@@ -716,7 +718,7 @@ def _get() -> None:
             print(fixed)
             return
         elif args.what == "mcode":
-            print(mcode)
+            print(mcode, end="")
             return
 
     logging.warning(
@@ -749,6 +751,13 @@ def _set() -> None:
             exit(1)
         return
     elif args.what == "rcode":
+        if args.var == "null":
+            print("Old reduced_code:")
+            print(case.reduced_code)
+            case.reduced_code = None
+            ddb.update_case(case_id, case)
+            return
+
         with open(args.var, "r") as f:
             rcode = f.read()
         old_code = case.code
@@ -764,26 +773,51 @@ def _set() -> None:
             exit(1)
         return
     elif args.what == "bisection":
+        if args.var == "null":
+            print("Old bisection:", case.bisection)
+            case.bisection = None
+            ddb.update_case(case_id, case)
+            return
+
         # Also acts as check that the given rev is ok
         rev = repo.rev_to_commit(args.var)
         # Just in case someone accidentally overrides things...
         logging.info(f"Previous bisection for case {case_id}: {case.bisection}")
         case.bisection = rev
+        ddb.update_case(case_id, case)
         return
     elif args.what == "link":
-        ddb.record_reported_case(case_id, mcode, args.var, fixed)
+        if args.var == "null":
+            print("Old link:", link)
+            ddb.record_reported_case(case_id, mcode, None, fixed)
+            return
+        tmp: str = args.var
+        tmp = tmp.strip()
+        ddb.record_reported_case(case_id, mcode, tmp, fixed)
         return
     elif args.what == "fixed":
+        if args.var == "null":
+            print("Old fixed:", fixed)
+            ddb.record_reported_case(case_id, mcode, link, None)
+            return
+
         rev = repo.rev_to_commit(args.var)
 
         case.bad_setting.rev = rev
         if not chkr.is_interesting(case):
             ddb.record_reported_case(case_id, mcode, link, rev)
+            print("Fixed")
         else:
             logging.critical(f"Case {case_id} was not fixed by {args.var}! Not saving!")
             exit(1)
         return
     elif args.what == "mcode":
+        if args.var == "null":
+            print("Old massaged code:")
+            print(mcode)
+            ddb.record_reported_case(case_id, None, link, fixed)
+            return
+
         if not case.bisection:
             logging.fatal(
                 "Can not save massaged code to a case that is not bisected. Bad things could happen. Stopping..."
@@ -928,6 +962,73 @@ def _unreported() -> None:
         print("{: <8} {: <45} {}".format("ID", "Bisection", "Count"))
 
 
+def _findby() -> None:
+
+    if args.what == "link":
+        link_query = "SELECT case_id FROM reported_cases WHERE bug_report_link = ?"
+        res = ddb.con.execute(link_query, (args.var.strip(),)).fetchall()
+        for r in res:
+            print(r[0])
+        return
+    elif args.what == "fixed":
+        query = "SELECT case_id FROM reported_cases WHERE fixed_by = ?"
+        res = ddb.con.execute(query, (args.var.strip(),)).fetchall()
+        for r in res:
+            print(r[0])
+        return
+    elif args.what == "case":
+        case = utils.Case.from_file(config, Path(args.var))
+        code_sha1 = hashlib.sha1(case.code.encode("utf-8")).hexdigest()
+        # Try if we have any luck with just using code
+        code_query = "SELECT cases.case_id FROM cases LEFT OUTER JOIN reported_cases ON cases.case_id = reported_cases.case_id WHERE code_sha1 = ? OR reduced_code_sha1 = ? OR massaged_code_sha1 = ?"
+        res_ocode = ddb.con.execute(
+            code_query, (code_sha1, code_sha1, code_sha1)
+        ).fetchall()
+
+        possible = set([i[0] for i in res_ocode])
+        if case.reduced_code:
+            rcode_sha1 = hashlib.sha1(case.reduced_code.encode("utf-8")).hexdigest()
+            res_ocode = ddb.con.execute(
+                code_query, (rcode_sha1, rcode_sha1, rcode_sha1)
+            ).fetchall()
+            possible.update([i[0] for i in res_ocode])
+
+        if case.bisection:
+            other = ddb.con.execute(
+                "SELECT case_id FROM cases WHERE marker = ? AND bisection = ?",
+                (case.marker, case.bisection),
+            ).fetchall()
+        else:
+            other = ddb.con.execute(
+                "SELECT case_id FROM cases WHERE marker = ?", (case.marker)
+            ).fetchall()
+
+        if len(possible) > 0:
+            possible = possible.intersection([i[0] for i in other])
+        else:
+            possible = set([i[0] for i in other])
+
+        for i in possible:
+            print(i)
+        return
+
+    elif args.what == "code":
+        with open(args.var, "r") as f:
+            code = f.read()
+
+        code_sha1 = hashlib.sha1(code.encode("utf-8")).hexdigest()
+
+        res = ddb.con.execute(
+            "SELECT cases.case_id FROM cases LEFT OUTER JOIN reported_cases ON cases.case_id = reported_cases.case_id WHERE code_sha1 = ? OR reduced_code_sha1 = ? OR massaged_code_sha1 = ?",
+            (code_sha1, code_sha1, code_sha1),
+        ).fetchall()
+
+        for i in res:
+            print(i[0])
+        return
+    return
+
+
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
@@ -974,5 +1075,7 @@ if __name__ == "__main__":
         _edit()
     elif args.sub == "unreported":
         _unreported()
+    elif args.sub == "findby":
+        _findby()
 
     gnrtr.terminate_processes()

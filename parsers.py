@@ -747,4 +747,18 @@ def main_parser() -> argparse.ArgumentParser:
         help="Print only clang related bisections. Same as --llvm-only.",
     )
 
+    findby_parser = subparser.add_parser("findby")
+    findby_parser.add_argument(
+        "what",
+        type=str,
+        choices=("link", "case", "code", "fixed"),
+    )
+
+    findby_parser.add_argument(
+        "var",
+        type=str,
+        metavar="VAR",
+        help="Is a string, when choosing link or fixed, is a path when choosing case or code.",
+    )
+
     return parser
