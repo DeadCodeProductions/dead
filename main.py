@@ -329,8 +329,9 @@ def _report() -> None:
 
     def keep_only_main(code: str) -> str:
         lines = list(code.split("\n"))
+        first = 0
         for i, line in enumerate(lines):
-            if line == "main:":
+            if "main:" in line:
                 first = i
                 break
         last = first + 1
@@ -343,9 +344,10 @@ def _report() -> None:
 
     def prep_asm(asm: str, is_gcc: bool) -> str:
         asm = replace_rand(asm)
+        asm = keep_only_main(asm)
         asm = to_code(asm, is_gcc, "asm")
-        asm = to_collapsed(asm, is_gcc)
-        return keep_only_main(asm)
+        asm = to_collapsed(asm, is_gcc, summary="Reduced assembly")
+        return asm
 
     print(to_cody_str("cat case.c", is_gcc))
     print(to_code(source, is_gcc, "c"))
