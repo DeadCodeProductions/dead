@@ -173,54 +173,6 @@ def _tofile() -> None:
     case.to_file(Path(f"./case_{args.case_id}.tar"))
 
 
-def _massageorlink() -> None:
-    pre_check_case = ddb.get_case_from_id(args.case_id)
-    if not pre_check_case:
-        print("No case with this ID.", file=sys.stderr)
-        exit(1)
-    else:
-        case = pre_check_case
-
-    if args.sub == "massage":
-        with open(args.code_path, "r") as f:
-            massaged_code = f.read()
-
-        case.code = massaged_code
-        # Check if massaged code is valid
-        if not chkr.is_interesting(case, preprocess=False):
-            print("Massaged code failed interestingness check.")
-            exit(1)
-
-        # Check if both bisect to the same commit
-        print("Check bisection of massaged code...", file=sys.stderr)
-        massaged_bisection = bsctr.bisect_code(
-            massaged_code, case.marker, case.bad_setting, case.good_settings
-        )
-
-        if massaged_bisection != case.bisection:
-            print("Massaged code bisects to different commit!", file=sys.stderr)
-            print(
-                f"Initial: {case.bisection}, New: {massaged_bisection}", file=sys.stderr
-            )
-            exit(1)
-
-        _, link, fixed_by = ddb.get_report_info_from_id(args.case_id)
-        if link or fixed_by:
-            print("Not updating, was already fixed or reported..")
-            exit(1)
-
-        ddb.record_reported_case(args.case_id, massaged_code, link, fixed_by)
-        print("Saved...")
-
-    elif args.sub == "link":
-        maybe_massaged_code, _, fixed_by = ddb.get_report_info_from_id(args.case_id)
-        if fixed_by:
-            print("Not updating, was already fixed...")
-            exit(0)
-        ddb.record_reported_case(args.case_id, maybe_massaged_code, args.link, fixed_by)
-        print("Saved...")
-
-
 def _rereduce() -> None:
     with open(args.code_path, "r") as f:
         rereduce_code = f.read()
@@ -998,8 +950,6 @@ if __name__ == "__main__":
         _absorb()
     elif args.sub == "tofile":
         _tofile()
-    elif args.sub == "massage" or args.sub == "link":
-        _massageorlink()
     elif args.sub == "rereduce":
         _rereduce()
     elif args.sub == "report":
