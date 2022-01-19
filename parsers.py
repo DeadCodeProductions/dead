@@ -747,6 +747,29 @@ def main_parser() -> argparse.ArgumentParser:
         help="Print only clang related bisections. Same as --llvm-only.",
     )
 
+    reported_parser = subparser.add_parser("reported")
+
+    reported_parser.add_argument(
+        "--id-only",
+        action="store_true",
+        help="Print only the case ids. Useful for scripting.",
+    )
+
+    rep_mut_ex = reported_parser.add_mutually_exclusive_group()
+    rep_mut_ex.add_argument(
+        "--gcc-only", action="store_true", help="Print only GCC related bisections."
+    )
+    rep_mut_ex.add_argument(
+        "--llvm-only",
+        action="store_true",
+        help="Print only LLVM related bisections. Same as --clang-only.",
+    )
+    rep_mut_ex.add_argument(
+        "--clang-only",
+        action="store_true",
+        help="Print only clang related bisections. Same as --llvm-only.",
+    )
+
     findby_parser = subparser.add_parser("findby")
     findby_parser.add_argument(
         "what",

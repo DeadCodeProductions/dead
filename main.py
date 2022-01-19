@@ -12,7 +12,7 @@ import tempfile
 import time
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Optional, cast
+from typing import Any, Optional, cast
 
 import requests
 
@@ -431,7 +431,7 @@ def _report() -> None:
         print("### Bisection")
         bisection_setting = copy.deepcopy(case.bad_setting)
         bisection_setting.rev = cast(str, case.bisection)
-        print(f"Started with {link_prefix}{case.bisection}")
+        print(f"Bisected to {link_prefix}{case.bisection}")
         # print("------------------------------------------------")
         print(
             to_cody_str(
@@ -964,6 +964,30 @@ def _unreported() -> None:
         print("{: <8} {: <45} {}".format("ID", "Bisection", "Count"))
 
 
+def _reported() -> None:
+    query = "select cases.case_id, bisection, bug_report_link from cases join compiler_setting on bad_setting_id = compiler_setting_id left join reported_cases on cases.case_id = reported_cases.case_id "
+
+    query += " where bug_report_link is not null"
+
+    if args.clang_only or args.llvm_only:
+        query += " and compiler = 'clang'"
+    elif args.gcc_only:
+        query += " and compiler = 'gcc'"
+
+    res = ddb.con.execute(query).fetchall()
+
+    if args.id_only:
+        for case_id, _, _ in res:
+            print(case_id)
+    else:
+        print("{: <8} {: <45} {}".format("ID", "Bisection", "Link"))
+        print("{:-<110}".format(""))
+        for case_id, bisection, link in res:
+            print("{: <8} {: <45} {}".format(case_id, bisection, link))
+        print("{:-<110}".format(""))
+        print("{: <8} {: <45} {}".format("ID", "Bisection", "Link"))
+
+
 def _findby() -> None:
 
     if args.what == "link":
@@ -1077,6 +1101,8 @@ if __name__ == "__main__":
         _edit()
     elif args.sub == "unreported":
         _unreported()
+    elif args.sub == "reported":
+        _reported()
     elif args.sub == "findby":
         _findby()
 
