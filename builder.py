@@ -448,6 +448,30 @@ def get_asm_str(
             return f.read()
 
 
+def get_llvm_IR(
+    code: str, compiler_setting: utils.CompilerSetting, bldr: Builder
+) -> str:
+    if compiler_setting.compiler_config.name != "clang":
+        raise CompileError("Requesting LLVM IR from non-clang compiler!")
+
+    compiler_exe = get_compiler_executable(compiler_setting, bldr)
+
+    with CompileContext(code) as context_res:
+        code_file, asm_file = context_res
+
+        cmd = f"{compiler_exe} -emit-llvm -S {code_file} -o{asm_file} -O{compiler_setting.opt_level}".split(
+            " "
+        )
+        cmd += compiler_setting.get_flag_cmd()
+        try:
+            utils.run_cmd(cmd)
+        except subprocess.CalledProcessError:
+            raise CompileError()
+
+        with open(asm_file, "r") as f:
+            return f.read()
+
+
 def find_alive_markers(
     code: str,
     compiler_setting: utils.CompilerSetting,

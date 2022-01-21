@@ -327,6 +327,12 @@ def _report() -> None:
             return code.replace(res, '"case.c"')
         return code
 
+    def replace_file_name_IR(ir: str) -> str:
+        head = "; ModuleID = 'case.c'\n" + 'source_filename = "case.c"\n'
+        tail = ir.split("\n")[2:]
+        ir = head + "\n".join(tail)
+        return ir
+
     def keep_only_main(code: str) -> str:
         lines = list(code.split("\n"))
         first = 0
@@ -349,7 +355,13 @@ def _report() -> None:
         asm = to_collapsed(asm, is_gcc, summary="Reduced assembly")
         return asm
 
-    print(to_cody_str("cat case.c", is_gcc))
+    def prep_IR(ir: str) -> str:
+        ir = replace_file_name_IR(ir)
+        ir = to_code(ir, False, "ll")
+        ir = to_collapsed(ir, False, summary="Emitted IR")
+        return ir
+
+    print(to_cody_str(f"cat case.c #{args.case_id}", is_gcc))
     print(to_code(source, is_gcc, "c"))
 
     print(
@@ -358,6 +370,8 @@ def _report() -> None:
 
     # Compile
     if is_gcc:
+        case.bad_setting.add_flag("-emit-llvm")
+        good_setting.add_flag("-emit-llvm")
         asm_bad = builder.get_asm_str(source, case.bad_setting, bldr)
         asm_good = builder.get_asm_str(source, good_setting, bldr)
 
@@ -388,78 +402,72 @@ def _report() -> None:
         )
 
     else:
+
+        print("Target: `x86_64-unknown-linux-gnu`")
+        ir_bad = builder.get_llvm_IR(source, case.bad_setting, bldr)
+        ir_good = builder.get_llvm_IR(source, good_setting, bldr)
+
         asm_bad = builder.get_asm_str(source, case.bad_setting, bldr)
         asm_good = builder.get_asm_str(source, good_setting, bldr)
-
-        print_cody_str(f"{bad_setting_str} -S -o /dev/stdout case.c", is_gcc)
+        print("\n------------------------------------------------\n")
+        print_cody_str(
+            f"{bad_setting_str} [-emit-llvm] -S -o /dev/stdout case.c", is_gcc
+        )
+        print(prep_IR(ir_bad))
+        print()
         print(prep_asm(asm_bad, is_gcc))
         print()
-
-        print_cody_str(f"{good_setting_str} -S -o /dev/stdout case.c", is_gcc)
+        print("\n------------------------------------------------\n")
+        print_cody_str(
+            f"{good_setting_str} [-emit-llvm] -S -o /dev/stdout case.c", is_gcc
+        )
+        print()
+        print(prep_IR(ir_good))
+        print()
         print(prep_asm(asm_good, is_gcc))
-        print("\n")
-        print(
-            to_cody_str(
-                f"{bad_setting.compiler_config.name}-{bad_setting_tag} -v", is_gcc
-            )
-        )
-        print(
-            to_collapsed(
-                to_code(builder.get_verbose_compiler_info(bad_setting, bldr), is_gcc),
-                is_gcc,
-            )
-        )
-        print()
-        print(
-            to_cody_str(
-                f"{good_setting.compiler_config.name}-{good_setting_tag} -v", is_gcc
-            )
-        )
-        print(
-            to_collapsed(
-                to_code(builder.get_verbose_compiler_info(good_setting, bldr), is_gcc),
-                is_gcc,
-            )
-        )
 
-        gcc_link = "https://gcc.gnu.org/git/?p=gcc.git;a=commit;h="
-        # LLVM moved to github so the commits will be automatically
-        # created.
-        llvm_link = ""
-        link_prefix = gcc_link if is_gcc else llvm_link
-        print()
+        print("\n------------------------------------------------\n")
         print("### Bisection")
         bisection_setting = copy.deepcopy(case.bad_setting)
         bisection_setting.rev = cast(str, case.bisection)
-        print(f"Bisected to {link_prefix}{case.bisection}")
-        # print("------------------------------------------------")
+        print(f"Bisected to: {case.bisection}")
+        author = get_llvm_github_commit_author(cast(str, case.bisection))
+        if author:
+            print(f"Committed by: @{author}")
+        print("\n------------------------------------------------\n")
+        bisection_asm = builder.get_asm_str(source, bisection_setting, bldr)
+        bisection_ir = builder.get_llvm_IR(source, bisection_setting, bldr)
         print(
             to_cody_str(
-                f"{bisection_setting.report_string()} -S -o /dev/stdout case.c", is_gcc
-            )
-        )
-        bisection_asm = replace_rand(
-            builder.get_asm_str(source, bisection_setting, bldr)
-        )
-        print(prep_asm(bisection_asm, is_gcc))
-        # print("------------------------------------------------")
-        prebisection_setting = copy.deepcopy(bisection_setting)
-        prebisection_setting.rev = bad_repo.rev_to_commit(f"{bisection_setting.rev}~")
-        print(f"Previous commit: {link_prefix}{prebisection_setting.rev}")
-        print(
-            "\n"
-            + to_cody_str(
-                f"{prebisection_setting.report_string()} -S -o /dev/stdout case.c",
+                f"{bisection_setting.report_string()} [-emit-llvm] -S -o /dev/stdout case.c",
                 is_gcc,
             )
         )
-        prebisection_asm = replace_rand(
-            builder.get_asm_str(source, prebisection_setting, bldr)
+        print(prep_IR(bisection_ir))
+        print()
+        print(prep_asm(bisection_asm, is_gcc))
+
+        print("\n------------------------------------------------\n")
+        prebisection_setting = copy.deepcopy(bisection_setting)
+        prebisection_setting.rev = bad_repo.rev_to_commit(f"{bisection_setting.rev}~")
+        print(f"Previous commit: {prebisection_setting.rev}")
+        print(
+            "\n"
+            + to_cody_str(
+                f"{prebisection_setting.report_string()} [-emit-llvm] -S -o /dev/stdout case.c",
+                is_gcc,
+            )
         )
+        prebisection_asm = builder.get_asm_str(source, prebisection_setting, bldr)
+        prebisection_ir = builder.get_llvm_IR(source, prebisection_setting, bldr)
+        print()
+        print(prep_IR(prebisection_ir))
+        print()
         print(prep_asm(prebisection_asm, is_gcc))
-        author = get_llvm_github_commit_author(cast(str, case.bisection))
-        if author:
-            print(f"CC: @{author}")
+
+    with open("case.txt", "w") as f:
+        f.write(source)
+    print("Saved case.txt...", file=sys.stderr)
 
 
 def _diagnose() -> None:
@@ -836,7 +844,7 @@ def _set() -> None:
                 exit(1)
             if case.bisection != old_bisection:
                 logging.critical(
-                    "Bisection of provided the massaged code does not match the original bisection!"
+                    "Bisection of provided massaged code does not match the original bisection!"
                 )
                 exit(1)
             ddb.record_reported_case(case_id, new_mcode, link, fixed)

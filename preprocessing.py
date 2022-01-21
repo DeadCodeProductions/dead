@@ -63,8 +63,6 @@ def preprocess_csmith_file(
     with tempfile.NamedTemporaryFile(suffix=".c") as tf:
         shutil.copy(path, tf.name)
 
-        bldr
-
         additional_flags = (
             []
             if compiler_setting.additional_flags is None
