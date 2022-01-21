@@ -936,15 +936,45 @@ def _edit() -> None:
 def _unreported() -> None:
 
     # MIN(cases.case_id) to ensure we always get the same case_id
-    query = "select MIN(cases.case_id), bisection, COUNT(bisection) as cnt  from cases join compiler_setting on bad_setting_id = compiler_setting_id left join reported_cases on cases.case_id = reported_cases.case_id "
+    query = """
+    select MIN(cases.case_id), bisection, COUNT(bisection) as cnt from cases
+    join compiler_setting on bad_setting_id = compiler_setting.compiler_setting_id 
+    left join reported_cases on cases.case_id = reported_cases.case_id 
+    """
+
+    if args.good_version:
+        gcc_repo = repository.Repo(config.gcc.repo, config.gcc.main_branch)
+        llvm_repo = repository.Repo(config.llvm.repo, config.llvm.main_branch)
+
+        try:
+            rev = gcc_repo.rev_to_commit(args.good_version)
+        except:
+            rev = llvm_repo.rev_to_commit(args.good_version)
+
+        query = (
+            f"""
+        WITH concrete_good AS (
+                select * from good_settings join compiler_setting on good_settings.compiler_setting_id = compiler_setting.compiler_setting_id
+                where rev = "{rev}"
+            )
+
+        """
+            + query
+            + "join concrete_good on cases.case_id = concrete_good.case_id and concrete_good.opt_level = compiler_setting.opt_level"
+        )
 
     # The command is called 'unreported'
-    query += " where bug_report_link IS NULL"
+    query += " where reported_cases.bug_report_link IS NULL"
 
     if args.clang_only or args.llvm_only:
-        query += " and compiler = 'clang'"
+        query += " and compiler_setting.compiler = 'clang'"
     elif args.gcc_only:
-        query += " and compiler = 'gcc'"
+        query += " and compiler_setting.compiler = 'gcc'"
+
+    if args.OX_only:
+        query += f" and compiler_setting.opt_level = {args.OX_only} "
+
+    " group by bisection order by cnt desc "
 
     query += " group by bisection "
 

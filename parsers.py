@@ -747,6 +747,20 @@ def main_parser() -> argparse.ArgumentParser:
         help="Print only clang related bisections. Same as --llvm-only.",
     )
 
+    unreported_parser.add_argument(
+        "--OX-only",
+        type=str,
+        metavar="OPT_LEVEL",
+        help="Print only bisections with OPT_LEVEL as bad setting.",
+    )
+
+    unreported_parser.add_argument(
+        "--good-version",
+        type=str,
+        metavar="REV",
+        help="Print only bisections which ",
+    )
+
     reported_parser = subparser.add_parser("reported")
 
     reported_parser.add_argument(
