@@ -361,6 +361,10 @@ def _report() -> None:
         ir = to_collapsed(ir, False, summary="Emitted IR")
         return ir
 
+    print(
+        f"Dead Code Elimination Regression at -O{bad_setting.opt_level} (trunk vs. {good_setting_tag.split('-')[-1]}) {args.case_id}"
+    )
+    print("---------------")
     print(to_cody_str(f"cat case.c #{args.case_id}", is_gcc))
     print(to_code(source, is_gcc, "c"))
 
@@ -935,55 +939,62 @@ def _edit() -> None:
 
 def _unreported() -> None:
 
-    # MIN(cases.case_id) to ensure we always get the same case_id
     query = """
-    select MIN(cases.case_id), bisection, COUNT(bisection) as cnt from cases
-    join compiler_setting on bad_setting_id = compiler_setting.compiler_setting_id 
-    left join reported_cases on cases.case_id = reported_cases.case_id 
+        WITH exclude_bisections AS (
+        select distinct bisection from reported_cases join cases on cases.case_id = reported_cases.case_id
+            where fixed_by is not NULL
+                or bug_report_link is not NULL
+        )
     """
 
-    if args.good_version:
-        gcc_repo = repository.Repo(config.gcc.repo, config.gcc.main_branch)
-        llvm_repo = repository.Repo(config.llvm.repo, config.llvm.main_branch)
-
-        try:
-            rev = gcc_repo.rev_to_commit(args.good_version)
-        except:
-            rev = llvm_repo.rev_to_commit(args.good_version)
-
-        query = (
-            f"""
-        WITH concrete_good AS (
-                select * from good_settings join compiler_setting on good_settings.compiler_setting_id = compiler_setting.compiler_setting_id
-                where rev = "{rev}"
-            )
-
+    if args.good_version or args.OX_only:
+        query += f"""
+        ,concrete_good AS (
+          select case_id from good_settings join compiler_setting on good_settings.compiler_setting_id = compiler_setting.compiler_setting_id
+          where 1 
         """
-            + query
-            + "join concrete_good on cases.case_id = concrete_good.case_id and concrete_good.opt_level = compiler_setting.opt_level"
-        )
 
-    # The command is called 'unreported'
-    query += " where reported_cases.bug_report_link IS NULL"
+        if args.good_version:
+            gcc_repo = repository.Repo(config.gcc.repo, config.gcc.main_branch)
+            llvm_repo = repository.Repo(config.llvm.repo, config.llvm.main_branch)
 
-    if args.clang_only or args.llvm_only:
-        query += " and compiler_setting.compiler = 'clang'"
+            try:
+                rev = gcc_repo.rev_to_commit(args.good_version)
+            except:
+                rev = llvm_repo.rev_to_commit(args.good_version)
+            query += f" and rev = '{rev}'"
+
+        query += ")"
+
+    query += """
+    select MIN(cases.case_id), bisection, count(bisection) as cnt from cases
+    join compiler_setting on cases.bad_setting_id = compiler_setting.compiler_setting_id
+    """
+    if args.good_version:
+        query += "\njoin concrete_good on cases.case_id = concrete_good.case_id\n"
+
+    if args.reduced or args.not_reduced:
+        query += "\nleft join reported_cases on cases.case_id = reported_cases.case_id"
+
+    query += """
+    where bisection not in exclude_bisections
+    """
+    if args.clang_only:
+        query += "\nand compiler = 'clang'"
     elif args.gcc_only:
-        query += " and compiler_setting.compiler = 'gcc'"
+        query += "\nand compiler = 'gcc'"
 
     if args.OX_only:
-        query += f" and compiler_setting.opt_level = {args.OX_only} "
+        query += f" and opt_level = '{args.OX_only}'"
 
-    " group by bisection order by cnt desc "
-
-    query += " group by bisection "
+    query += "\ngroup by bisection"
 
     if args.reduced:
-        query += " having reduced_code_sha1 is not null "
+        query += "\n having reduced_code_sha1 is not null "
     elif args.not_reduced:
-        query += " having reduced_code_sha1 is null "
+        query += "\n having reduced_code_sha1 is null "
 
-    query += " order by cnt desc"
+    query += "\norder by cnt desc"
 
     res = ddb.con.execute(query).fetchall()
 
