@@ -139,6 +139,7 @@ class Reducer:
                     Path(self.config.logdir)
                     / f"{current_time}-creduce-{random.randint(0,1000)}.log"
                 )
+                build_log_path.touch()
                 # Set permissions of logfile
                 shutil.chown(build_log_path, group=self.config.cache_group)
                 os.chmod(build_log_path, 0o660)
