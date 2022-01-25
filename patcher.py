@@ -73,8 +73,8 @@ class Patcher:
         max_double_fail: int = 2,
     ) -> tuple[str, str]:
 
-        good = [good_rev]
-        bad = [bad_rev]
+        good = good_rev
+        bad = bad_rev
 
         double_fail_counter = 0
         encountered_double_fail = False
@@ -92,14 +92,14 @@ class Patcher:
                 # TODO: More robust testing.
                 if double_fail_counter % 2 == 0:
                     # Get size of range
-                    range_size = len(repo.direct_first_parent_path(midpoint, bad[-1]))
+                    range_size = len(repo.direct_first_parent_path(midpoint, bad))
 
                     # Move 10% towards the last bad
                     step = max(int(0.9 * range_size), 1)
-                    midpoint = repo.rev_to_commit(f"{bad[-1]}~{step}")
+                    midpoint = repo.rev_to_commit(f"{bad}~{step}")
                 else:
                     # Symmetric to case above
-                    range_size = len(repo.direct_first_parent_path(good[-1], midpoint))
+                    range_size = len(repo.direct_first_parent_path(good, midpoint))
                     step = max(int(0.2 * range_size), 1)
                     midpoint = repo.rev_to_commit(f"{midpoint}~{step}")
 
@@ -108,7 +108,7 @@ class Patcher:
 
             else:
                 old_midpoint = midpoint
-                midpoint = repo.next_bisection_commit(good=good[-1], bad=bad[-1])
+                midpoint = repo.next_bisection_commit(good=good, bad=bad)
                 logging.info(f"Midpoint: {midpoint}")
                 if midpoint == "" or midpoint == old_midpoint:
                     break
@@ -119,21 +119,21 @@ class Patcher:
 
             if patching_result.BuildsWithoutPatch:
                 if failure_is_good:
-                    bad.append(midpoint)
+                    bad = midpoint
                 else:
-                    good.append(midpoint)
+                    good = midpoint
                 continue
 
             if patching_result.BuildsWithPatch:
                 if failure_is_good:
-                    good.append(midpoint)
+                    good = midpoint
                 else:
-                    bad.append(midpoint)
+                    bad = midpoint
                 continue
 
             encountered_double_fail = True
 
-        return good[-1], bad[-1]
+        return good, bad
 
     def find_ranges(
         self, compiler_config: utils.NestedNamespace, patchable_commit: str, patch: Path
