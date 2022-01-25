@@ -135,19 +135,19 @@ class Patcher:
 
         return good, bad
 
-    def find_ranges(
-        self, compiler_config: utils.NestedNamespace, patchable_commit: str, patch: Path
-    ) -> None:
-        introducer = ""
-        found_introducer = False
-        repo = Repo(compiler_config.repo, compiler_config.main_branch)
-
-        potentially_human_readable_name = patchable_commit
-        patchable_commit = repo.rev_to_commit(patchable_commit)
-        patch = patch.absolute()
-        if not Path(patch).exists():
-            logging.critical(f"Patch {patch} doesn't exist. Aborting...")
-            raise Exception(f"Patch {patch} doesn't exist. Aborting...")
+    def _find_oldest_ancestor_not_needing_patch_and_oldest_patchable_from_releases(
+        self,
+        repo: Repo,
+        compiler_config: utils.NestedNamespace,
+        patchable_commit: str,
+        potentially_human_readable_name: str,
+        patch: Path,
+    ) -> tuple[Optional[str], Optional[str]]:
+        """
+        Find two oldest common ancestors of patchable_commit and one of the releases:
+            (1) that doesn't need the patch
+            (2) that is buildable only with the patch
+        """
 
         # For now, just assume this is sorted in descending release-recency
         # Using commit dates doesn't really work
@@ -156,15 +156,17 @@ class Patcher:
         release_versions.reverse()
 
         tested_ancestors = []
-        no_patch_common_ancestor = ""
-        oldest_patchable_ancestor = ""
+        no_patch_common_ancestor = None
+        oldest_patchable_ancestor = None
         for old_version in release_versions:
 
             logging.info(f"Testing for {old_version}")
             if not repo.is_branch_point_ancestor_wrt_master(
                 old_version, patchable_commit
             ):
-                if oldest_patchable_ancestor != "":
+                if oldest_patchable_ancestor:
+                    # XXX: Would something like "All older releases require
+                    # patching" make more sense as a warning?
                     logging.warning(f"Found only older releases requiring the patch!")
                     break
                 raise Exception(
@@ -177,7 +179,6 @@ class Patcher:
             # TODO: Check that common_ancestor is ancestor of master.
             #       Otherwise we get stuck in a branch
             #       Is this actually a problem?
-
             if common_ancestor in tested_ancestors:
                 logging.info(
                     f"Common ancestor of {old_version} and {potentially_human_readable_name} was already tested. Proceeding..."
@@ -194,10 +195,37 @@ class Patcher:
                 break
 
             if patching_result is PatchingResult.BuildsWithPatch:
-                if oldest_patchable_ancestor == "":  # None have been found
+                if not oldest_patchable_ancestor:  # None have been found
                     oldest_patchable_ancestor = common_ancestor
             else:
                 tested_ancestors.append(common_ancestor)
+
+        return no_patch_common_ancestor, oldest_patchable_ancestor
+
+    def find_ranges(
+        self, compiler_config: utils.NestedNamespace, patchable_commit: str, patch: Path
+    ) -> None:
+        introducer = ""
+        found_introducer = False
+        repo = Repo(compiler_config.repo, compiler_config.main_branch)
+
+        potentially_human_readable_name = patchable_commit
+        patchable_commit = repo.rev_to_commit(patchable_commit)
+        patch = patch.absolute()
+        if not Path(patch).exists():
+            logging.critical(f"Patch {patch} doesn't exist. Aborting...")
+            raise Exception(f"Patch {patch} doesn't exist. Aborting...")
+
+        (
+            no_patch_common_ancestor,
+            oldest_patchable_ancestor,
+        ) = self._find_oldest_ancestor_not_needing_patch_and_oldest_patchable_from_releases(
+            repo,
+            compiler_config,
+            patchable_commit,
+            potentially_human_readable_name,
+            patch,
+        )
 
         # Possible cases
         # no_patch_common_ancestor was found AND oldest_patchable_ancestor was found
@@ -212,7 +240,7 @@ class Patcher:
         #    (which currently is 7d75ea04cf6d9c8960d5c6119d6203568b7069e9 for gcc)
         #   - Find fixer commits from there (could do something if no_patch_common_ancestor exists)
 
-        if no_patch_common_ancestor != "":
+        if no_patch_common_ancestor:
             # Find introducer commit
             _, introducer = self._bisection(
                 no_patch_common_ancestor, patchable_commit, compiler_config, patch, repo
@@ -223,7 +251,6 @@ class Patcher:
             rev_range = f"{introducer}~..{patchable_commit}"
             self.patchdb.save(patch, repo.rev_to_commit_list(rev_range), repo)
 
-            # Do what is happening for oldest_patchable_ancestor for introducer
             self.find_fixer_from_introducer_to_releases(
                 introducer=introducer,
                 compiler_config=compiler_config,
@@ -231,7 +258,7 @@ class Patcher:
                 repo=repo,
             )
 
-        elif oldest_patchable_ancestor != "":
+        elif oldest_patchable_ancestor:
             self.find_fixer_from_introducer_to_releases(
                 introducer=oldest_patchable_ancestor,
                 compiler_config=compiler_config,
