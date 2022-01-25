@@ -261,8 +261,6 @@ class Patcher:
 
             # Check if any of already found fixers is ancestor of release
             # As we assume that a fixer at a given point fixes all its children, this is fine.
-            # What about release backporting? For example 8.5.0 and 8.4.0 both get an update just thrown
-            # into their history and 8.4.0 is still ancestor of 8.5.0; then we have a problem: TODO
             logging.info(f"Checking for known fixers...")
             if (
                 len(fixer_list) > 0
