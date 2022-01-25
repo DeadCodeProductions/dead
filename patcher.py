@@ -13,11 +13,18 @@ from typing import TYPE_CHECKING, Optional, Union
 import builder
 import parsers
 import utils
+from enum import Enum
 from patchdatabase import PatchDB
 from repository import Repo
 
 if TYPE_CHECKING:
     from utils import NestedNamespace
+
+
+class PatchingResult(Enum):
+    BuildsWithoutPatch: int = 1
+    BuildsWithPatch: int = 2
+    BuildFailed: int = 3
 
 
 class Patcher:
@@ -30,13 +37,12 @@ class Patcher:
 
     def _check_building_patch(
         self, compiler_config: NestedNamespace, rev: str, patch: Path, repo: Repo
-    ) -> tuple[bool, Optional[bool]]:
-
+    ) -> PatchingResult:
         if not self.patchdb.requires_this_patch(rev, patch, repo):
             try:
                 logging.info(f"Building {rev} without patch {patch}...")
                 self.builder.build(compiler_config, rev)
-                return True, None
+                return PatchingResult.BuildsWithoutPatch
 
             except builder.BuildException as e:
                 logging.info(f"Failed to build {rev} without patch {patch}: {e}")
@@ -44,17 +50,17 @@ class Patcher:
             try:
                 logging.info(f"Building {rev} WITH patch {patch}...")
                 self.builder.build(compiler_config, rev, additional_patches=[patch])
-                return False, True
+                return PatchingResult.BuildsWithPatch
 
             except builder.BuildException as e:
                 logging.critical(
                     f"Failed to build {rev} with patch {patch}. Manual intervention needed. Exception: {e}"
                 )
                 self.patchdb.manual_intervention_required(compiler_config, rev)
-                return False, False
+                return PatchingResult.BuildFailed
         else:
             logging.info(f"Read form PatchDB: {rev} requires patch {patch}")
-            return False, True
+            return PatchingResult.BuildsWithPatch
 
     def _bisection(
         self,
@@ -107,18 +113,18 @@ class Patcher:
                 if midpoint == "" or midpoint == old_midpoint:
                     break
 
-            built_wo_patch, built_w_patch = self._check_building_patch(
+            patching_result = self._check_building_patch(
                 compiler_config, midpoint, patch, repo
             )
 
-            if built_wo_patch:
+            if patching_result.BuildsWithoutPatch:
                 if failure_is_good:
                     bad.append(midpoint)
                 else:
                     good.append(midpoint)
                 continue
 
-            if built_w_patch:
+            if patching_result.BuildsWithPatch:
                 if failure_is_good:
                     good.append(midpoint)
                 else:
@@ -179,15 +185,15 @@ class Patcher:
                 continue
 
             # Building of releases
-            built_wo_patch, built_w_patch = self._check_building_patch(
+            patching_result = self._check_building_patch(
                 compiler_config, common_ancestor, patch, repo
             )
 
-            if built_wo_patch:
+            if patching_result is PatchingResult.BuildsWithoutPatch:
                 no_patch_common_ancestor = common_ancestor
                 break
 
-            if built_w_patch:
+            if patching_result is PatchingResult.BuildsWithPatch:
                 if oldest_patchable_ancestor == "":  # None have been found
                     oldest_patchable_ancestor = common_ancestor
             else:
@@ -249,7 +255,7 @@ class Patcher:
         for release in reachable_releases:
             logging.info(f"Searching fixer for release {release}")
 
-            no_patch_release, w_patch_release = self._check_building_patch(
+            patching_result = self._check_building_patch(
                 compiler_config, release, patch, repo
             )
 
@@ -260,23 +266,22 @@ class Patcher:
             logging.info(f"Checking for known fixers...")
             if (
                 len(fixer_list) > 0
-                and no_patch_release
+                and patching_result.BuildsWithoutPatch
                 and any([repo.is_ancestor(fixer, release) for fixer in fixer_list])
             ):
                 logging.info(f"Already known fixer. No additional searching required")
                 continue
 
-            if not no_patch_release and not w_patch_release:
+            if patching_result is PatchingResult.BuildFailed:
                 continue
 
-            elif not no_patch_release and w_patch_release:
+            elif patching_result is PatchingResult.BuildsWithPatch:
                 # release only builds with patch, everything to release is to be included
                 commits = repo.rev_to_commit_list(f"{introducer}~1..{release}")
                 self.patchdb.save(patch, commits, repo)
                 continue
 
-            elif no_patch_release and not w_patch_release:
-
+            elif patching_result is PatchingResult.BuildsWithoutPatch:
                 # Range A..B is includes B, thus we want B to be the last good one
                 # as good requires the patch
                 fixer, _ = self._bisection(
