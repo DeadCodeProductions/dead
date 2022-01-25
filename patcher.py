@@ -62,6 +62,42 @@ class Patcher:
             logging.info(f"Read form PatchDB: {rev} requires patch {patch}")
             return PatchingResult.BuildsWithPatch
 
+    def _adjust_bisection_midpoint_after_failure(
+        self,
+        repo: Repo,
+        double_fail_counter: int,
+        max_double_fail: int,
+        bad: str,
+        midpoint: str,
+        good: str,
+    ) -> str:
+        """
+        Move the midpoint either forwards or backwards (depending on the double_fail_counter)
+
+        Returns:
+            new midpoint (str)
+        """
+        if double_fail_counter >= max_double_fail:
+            raise Exception(
+                "Failed too many times in a row while bisecting. Aborting bisection..."
+            )
+        # TODO: More robust testing.
+        # XXX: what's the purpose of this check? To switch between moving the
+        # midpoint forwards and backwards?
+        if double_fail_counter % 2 == 0:
+            # Get size of range
+            range_size = len(repo.direct_first_parent_path(midpoint, bad))
+
+            # Move 10% towards the last bad
+            step = max(int(0.9 * range_size), 1)
+            midpoint = repo.rev_to_commit(f"{bad}~{step}")
+        else:
+            # Symmetric to case above
+            range_size = len(repo.direct_first_parent_path(good, midpoint))
+            step = max(int(0.2 * range_size), 1)
+            midpoint = repo.rev_to_commit(f"{midpoint}~{step}")
+        return midpoint
+
     def _bisection(
         self,
         good_rev: str,
@@ -83,29 +119,11 @@ class Patcher:
         midpoint = ""
         while True:
             if encountered_double_fail:
-
-                if double_fail_counter >= max_double_fail:
-                    raise Exception(
-                        "Failed too many times in a row while bisecting. Aborting bisection..."
-                    )
-
-                # TODO: More robust testing.
-                if double_fail_counter % 2 == 0:
-                    # Get size of range
-                    range_size = len(repo.direct_first_parent_path(midpoint, bad))
-
-                    # Move 10% towards the last bad
-                    step = max(int(0.9 * range_size), 1)
-                    midpoint = repo.rev_to_commit(f"{bad}~{step}")
-                else:
-                    # Symmetric to case above
-                    range_size = len(repo.direct_first_parent_path(good, midpoint))
-                    step = max(int(0.2 * range_size), 1)
-                    midpoint = repo.rev_to_commit(f"{midpoint}~{step}")
-
+                midpoint = self._adjust_bisection_midpoint_after_failure(
+                    repo, double_fail_counter, max_double_fail, bad, midpoint, good
+                )
                 double_fail_counter += 1
                 encountered_double_fail = False
-
             else:
                 old_midpoint = midpoint
                 midpoint = repo.next_bisection_commit(good=good, bad=bad)
@@ -117,21 +135,14 @@ class Patcher:
                 compiler_config, midpoint, patch, repo
             )
 
-            if patching_result.BuildsWithoutPatch:
-                if failure_is_good:
-                    bad = midpoint
-                else:
-                    good = midpoint
-                continue
-
-            if patching_result.BuildsWithPatch:
-                if failure_is_good:
-                    good = midpoint
-                else:
-                    bad = midpoint
-                continue
-
-            encountered_double_fail = True
+            if patching_result is PatchingResult.BuildFailed:
+                encountered_double_fail = True
+            elif (
+                patching_result is PatchingResult.BuildsWithoutPatch
+            ) ^ failure_is_good:
+                good = midpoint
+            else:
+                bad = midpoint
 
         return good, bad
 
