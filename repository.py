@@ -55,13 +55,12 @@ class Repo:
             cmd = f"git -C {self.path} rev-parse " + "^@ ".join(merges_after_introducer)
             merger_parents = set(utils.run_cmd(cmd).split("\n"))
 
-            # Remove all parents which which are child of requested commit
+            # Remove all parents which are child of the requested commit
             unwanted_merger_parents = [
                 parent
                 for parent in merger_parents
                 if not self.is_ancestor(introducer, parent)
             ]
-            # Final command
         else:
             unwanted_merger_parents = []
         cmd = f"git -C {self.path} rev-list {fixer} ^{introducer} " + " ^".join(

@@ -1,19 +1,34 @@
 #!/usr/bin/env python3
 
+"""
+
+This code tries to figure out where a patch needs to be applied for a build to succeed. 
+To achieve this, it heavily uses git and bisections and with that the terms 'good' and 'bad'.
+However, 'good' does mean something different in different circumstances does not always indicate
+a successful build.
+
+The convention used for good and bad is taken from the normal use-case of `git bisect`:
+    Something broke along the way and is now bad. Additionally, we know a commit, which worked,
+    which is good.
+So the bad commit is the newest w.r.t. the git history i.e. good is ancestor of bad.
+And this is how 'good' and 'bad' are (should be) used in this file.
+
+Other concepts are:
+    introducer: The first commit, that makes a test fail.
+    fixer: The first commit, that does not make a test fail, i.e. fixed it.
+"""
+
 from __future__ import annotations
 
-import json
 import logging
 import math
-import os
-from os.path import join as pjoin
+from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional
 
 import builder
 import parsers
 import utils
-from enum import Enum
 from patchdatabase import PatchDB
 from repository import Repo
 
@@ -289,7 +304,7 @@ class Patcher:
             if repo.is_ancestor(introducer, release)
         ]
 
-        fixer_list: list[str] = []
+        last_needing_patch_list: list[str] = []
         for release in reachable_releases:
             logging.info(f"Searching fixer for release {release}")
 
@@ -301,9 +316,14 @@ class Patcher:
             # As we assume that a fixer at a given point fixes all its children, this is fine.
             logging.info(f"Checking for known fixers...")
             if (
-                len(fixer_list) > 0
+                len(last_needing_patch_list) > 0
                 and patching_result.BuildsWithoutPatch
-                and any([repo.is_ancestor(fixer, release) for fixer in fixer_list])
+                and any(
+                    [
+                        repo.is_ancestor(fixer, release)
+                        for fixer in last_needing_patch_list
+                    ]
+                )
             ):
                 logging.info(f"Already known fixer. No additional searching required")
                 continue
@@ -320,7 +340,7 @@ class Patcher:
             elif patching_result is PatchingResult.BuildsWithoutPatch:
                 # Range A..B is includes B, thus we want B to be the last good one
                 # as good requires the patch
-                fixer, _ = self._bisection(
+                last_needing_patch, _ = self._bisection(
                     introducer,
                     release,
                     compiler_config,
@@ -329,10 +349,12 @@ class Patcher:
                     failure_is_good=True,
                 )
 
-                fixer_list.append(fixer)
+                last_needing_patch_list.append(last_needing_patch)
 
                 self.patchdb.save(
-                    patch, repo.rev_to_range_needing_patch(introducer, fixer), repo
+                    patch,
+                    repo.rev_to_range_needing_patch(introducer, last_needing_patch),
+                    repo,
                 )
 
         logging.info("Done finding fixers")
