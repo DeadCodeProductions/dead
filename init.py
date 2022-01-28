@@ -116,6 +116,20 @@ if __name__ == "__main__":
         "llvmorg-11.0.0",
         "llvmorg-10.0.1",
         "llvmorg-10.0.0",
+        "llvmorg-9.0.1",
+        "llvmorg-9.0.0",
+        "llvmorg-8.0.1",
+        "llvmorg-8.0.0",
+        "llvmorg-7.1.0",
+        "llvmorg-7.0.1",
+        "llvmorg-7.0.0",
+        "llvmorg-6.0.1",
+        "llvmorg-6.0.0",
+        "llvmorg-5.0.2",
+        "llvmorg-5.0.1",
+        "llvmorg-5.0.0",
+        "llvmorg-4.0.1",
+        "llvmorg-4.0.0",
     ]
 
     config["llvm"] = llvm

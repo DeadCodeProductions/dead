@@ -1,0 +1,32 @@
+From 902e0e717fcb1796f540d4fea95b010ee821caa8 Mon Sep 17 00:00:00 2001
+From: Theodoros Theodoridis <theodort@inf.ethz.ch>
+Date: Fri, 28 Jan 2022 14:13:13 +0100
+Subject: [PATCH] MicrosoftDemangleNodes.h fix includes
+
+---
+ llvm/include/llvm/Demangle/MicrosoftDemangleNodes.h | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/llvm/include/llvm/Demangle/MicrosoftDemangleNodes.h b/llvm/include/llvm/Demangle/MicrosoftDemangleNodes.h
+index 9e3478e9fd29..f54e8d161e04 100644
+--- a/llvm/include/llvm/Demangle/MicrosoftDemangleNodes.h
++++ b/llvm/include/llvm/Demangle/MicrosoftDemangleNodes.h
+@@ -4,6 +4,8 @@
+ #include "llvm/Demangle/Compiler.h"
+ #include "llvm/Demangle/StringView.h"
+ #include <array>
++#include <cstdint>
++#include <string>
+ 
+ class OutputStream;
+ 
+@@ -602,4 +604,4 @@ struct FunctionSymbolNode : public SymbolNode {
+ } // namespace ms_demangle
+ } // namespace llvm
+ 
+-#endif
+\ No newline at end of file
++#endif
+-- 
+2.34.1
+
