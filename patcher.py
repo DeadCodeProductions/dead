@@ -468,7 +468,7 @@ if __name__ == "__main__":
             print("Missing argument for `patch` when using --find-range.")
             exit(1)
         else:
-            patch = args.patch
+            patch = Path(args.patch)
 
         compiler_config = utils.get_compiler_config(config, args.compiler)
 
