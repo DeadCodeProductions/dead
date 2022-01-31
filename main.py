@@ -868,8 +868,18 @@ def _set() -> None:
 
 def _build() -> None:
     compiler_config = utils.get_compiler_config(config, args.project)
+    additional_patches: list[Path] = []
+    if args.add_patches:
+        additional_patches = [Path(patch).absolute() for patch in args.add_patches]
     for rev in args.rev:
-        print(bldr.build(compiler_config, rev))
+        print(
+            bldr.build(
+                compiler_config,
+                rev,
+                additional_patches=additional_patches,
+                force=args.force,
+            )
+        )
 
 
 def _reduce() -> None:

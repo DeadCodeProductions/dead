@@ -684,6 +684,18 @@ def main_parser() -> argparse.ArgumentParser:
     build_parser.add_argument(
         "rev", nargs="+", type=str, help="Which revision(s)/commit(s) to build"
     )
+    build_parser.add_argument(
+        "--force",
+        action=argparse.BooleanOptionalAction,
+        help="Whether or not to force another build.",
+    )
+
+    build_parser.add_argument(
+        "--add-patches",
+        help="Which patches to apply in addition to the ones found in patchDB",
+        nargs="+",
+        type=str,
+    )
 
     reduce_parser = subparser.add_parser("reduce")
 
