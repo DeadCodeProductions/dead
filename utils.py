@@ -38,14 +38,12 @@ EXPECTED_ENTRIES = [
     (str,       ("gcc", "name"),            "Prefix for the gcc cache directory"),
     (str,       ("gcc", "main_branch"),     "Name of main/trunk/master branch"),
     (Path,      ("gcc", "repo"),            "Path to gcc repository"),
-    (list,      ("gcc", "patches"),         "List of names of patches for gcc that can be found in ./patches" ),
     (Executable,("gcc", "sane_version",),   "Path to executable or name in PATH for a sane gcc" ),
     (list,      ("gcc", "releases",),       "GCC releases of interest"),
 
     (str,       ("llvm", "name"),           "Prefix for the llvm cache directory"),
     (str,       ("llvm", "main_branch"),    "Name of main/trunk/master branch"),
     (Path,      ("llvm", "repo"),           "Path to llvm-project repository"),
-    (list,      ("llvm", "patches"),        "List of names of patches for gcc that can be found in ./patches" ),
     (Executable,("llvm", "sane_version",),  "Path to executable or name in PATH for a sane clang" ),
     (list,      ("llvm", "releases",),      "LLVM releases of interest"),
 

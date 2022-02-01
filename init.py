@@ -59,12 +59,6 @@ if __name__ == "__main__":
             "gcc is not in $PATH, you have to specify the executable yourself in gcc.sane_version"
         )
 
-    gcc["patches"] = [
-        "./patches/" + patch
-        for patch in os.listdir("./patches")
-        if patch.startswith("gcc-")
-    ]
-
     gcc["releases"] = [
         "trunk",
         "releases/gcc-11.2.0",
@@ -99,12 +93,6 @@ if __name__ == "__main__":
         print(
             "clang is not in $PATH, you have to specify the executable yourself in llvm.sane_version"
         )
-
-    llvm["patches"] = [
-        "./patches/" + patch
-        for patch in os.listdir("./patches")
-        if patch.startswith("llvm-")
-    ]
 
     llvm["releases"] = [
         "trunk",
