@@ -143,6 +143,18 @@ class PatchDB:
         else:
             return rev in self.data[patch_basename]
 
+    def requires_all_these_patches(
+        self, rev: str, patches: list[Path], repo: Repo
+    ) -> bool:
+        rev = repo.rev_to_commit(rev)
+        patch_basenames = [os.path.basename(patch) for patch in patches]
+        if any(patch_basename not in self.data for patch_basename in patch_basenames):
+            return False
+        else:
+            return all(
+                rev in self.data[patch_basename] for patch_basename in patch_basenames
+            )
+
     @_save_db
     def manual_intervention_required(
         self, compiler_config: NestedNamespace, rev: str

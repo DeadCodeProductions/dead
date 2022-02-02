@@ -1,0 +1,25 @@
+From 9d1ebb15d6cbabe767ae28a86c15f63a1ba2851f Mon Sep 17 00:00:00 2001
+From: Theodoros Theodoridis <theodort@inf.ethz.ch>
+Date: Wed, 2 Feb 2022 11:19:26 +0100
+Subject: [PATCH] simple-object declaration
+
+---
+ include/simple-object.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/simple-object.h b/include/simple-object.h
+index db72f86de17..82f4722782a 100644
+--- a/include/simple-object.h
++++ b/include/simple-object.h
+@@ -203,7 +203,7 @@ simple_object_release_write (simple_object_write *);
+ extern const char *
+ simple_object_copy_lto_debug_sections (simple_object_read *src_object,
+ 				       const char *dest,
+-				       int *err);
++				       int *err, int rename);
+ 
+ #ifdef __cplusplus
+ }
+-- 
+2.34.1
+

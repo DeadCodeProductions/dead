@@ -72,6 +72,13 @@ if __name__ == "__main__":
         "releases/gcc-9.1.0",
         "releases/gcc-8.5.0",
         "releases/gcc-8.4.0",
+        "releases/gcc-8.3.0",
+        "releases/gcc-8.2.0",
+        "releases/gcc-8.1.0",
+        "releases/gcc-7.5.0",
+        "releases/gcc-7.4.0",
+        "releases/gcc-7.3.0",
+        "releases/gcc-7.2.0",
     ]
     config["gcc"] = gcc
 

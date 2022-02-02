@@ -528,7 +528,9 @@ if __name__ == "__main__":
 
     additional_patches = []
     if args.add_patches is not None:
-        additional_patches = [os.path.abspath(patch) for patch in args.add_patches]
+        additional_patches = [
+            Path(os.path.abspath(patch)) for patch in args.add_patches
+        ]
 
     for rev in args.revision:
         print(

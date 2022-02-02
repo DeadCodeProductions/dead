@@ -1,0 +1,39 @@
+From b44637d9aac854de180e9125fcacb504a1c38aef Mon Sep 17 00:00:00 2001
+From: Theodoros Theodoridis <theodort@inf.ethz.ch>
+Date: Fri, 4 Feb 2022 11:15:44 +0100
+Subject: [PATCH] Fix simple-object decl and use in gcc-lto
+
+---
+ gcc/lto-wrapper.c       | 2 +-
+ include/simple-object.h | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/gcc/lto-wrapper.c b/gcc/lto-wrapper.c
+index 7de58d47781..6759597a849 100644
+--- a/gcc/lto-wrapper.c
++++ b/gcc/lto-wrapper.c
+@@ -1008,7 +1008,7 @@ debug_objcopy (const char *infile)
+     }
+ 
+   outfile = make_temp_file ("debugobjtem");
+-  errmsg = simple_object_copy_lto_debug_sections (inobj, outfile, &err);
++  errmsg = simple_object_copy_lto_debug_sections (inobj, outfile, &err, 0);
+   if (errmsg)
+     {
+       unlink_if_ordinary (outfile);
+diff --git a/include/simple-object.h b/include/simple-object.h
+index db72f86de17..82f4722782a 100644
+--- a/include/simple-object.h
++++ b/include/simple-object.h
+@@ -203,7 +203,7 @@ simple_object_release_write (simple_object_write *);
+ extern const char *
+ simple_object_copy_lto_debug_sections (simple_object_read *src_object,
+ 				       const char *dest,
+-				       int *err);
++				       int *err, int rename);
+ 
+ #ifdef __cplusplus
+ }
+-- 
+2.34.1
+

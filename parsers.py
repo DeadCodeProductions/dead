@@ -85,13 +85,14 @@ def patcher_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-pr",
         "--patchable-revision",
-        help="Which revision is patchable with the commit specified in --patch",
+        help="Which revision is patchable with the commit specified in --patches",
         type=str,
     )
 
     parser.add_argument(
-        "--patch",
-        help="Which revision is patchable with the commit specified in --patch",
+        "--patches",
+        nargs="*",
+        help="Which patch(es) to apply.",
         type=str,
     )
     # ====================
