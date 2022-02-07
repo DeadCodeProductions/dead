@@ -55,7 +55,7 @@ def _run() -> None:
         else None
     )
     pipeline_components = (
-        ["Generator"]
+        ["Generator<" + "parallel>" if args.parallel_generation else "single>"]
         + (["Bisector"] if args.bisector else [])
         + (["Reducer"] if args.reducer else [])
     )

@@ -533,7 +533,8 @@ def main_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "-pg",
         "--parallel-generation",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Run the case generation part in parallel. This will disable timing for the generation part.",
     )
 
