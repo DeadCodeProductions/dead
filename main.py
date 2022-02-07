@@ -54,6 +54,14 @@ def _run() -> None:
         if args.parallel_generation
         else None
     )
+    pipeline_components = (
+        ["Generator"]
+        + (["Bisector"] if args.bisector else [])
+        + (["Reducer"] if args.reducer else [])
+    )
+
+    print("Pipeline:", " -> ".join(pipeline_components), file=sys.stderr)
+
     while True:
         if args.amount and args.amount != 0:
             if counter >= args.amount:

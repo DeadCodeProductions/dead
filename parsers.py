@@ -520,7 +520,7 @@ def main_parser() -> argparse.ArgumentParser:
         "--reducer",
         help="If the generated case should be reduced or not.",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
     )
 
     run_parser.add_argument(
