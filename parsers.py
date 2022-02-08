@@ -772,7 +772,7 @@ def main_parser() -> argparse.ArgumentParser:
         "--good-version",
         type=str,
         metavar="REV",
-        help="Print only bisections which ",
+        help="Print only bisections which have REV as a good compiler matching the opt level of the bad compiler.",
     )
 
     reported_parser = subparser.add_parser("reported")
