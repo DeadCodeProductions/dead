@@ -32,9 +32,9 @@ if __name__ == "__main__":
     if not_found:
         exit(1)
 
-    print("Creating default ~/.config/dce/config.json...")
+    print("Creating default ~/.config/dead/config.json...")
 
-    path = Path.home() / ".config/dce/config.json"
+    path = Path.home() / ".config/dead/config.json"
     if path.exists():
         print(f"{path} already exists! Aborting to prevent overriding data...")
         exit(1)

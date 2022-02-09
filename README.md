@@ -23,8 +23,8 @@ Then run
 ```
 ./init.py
 ```
-It will:
-- create the config file located at `~/.config/dce/config.json`
+`init.py` will:
+- create a config file located at `~/.config/dead/config.json`
 - Compile tooling to instrument and check programs: `dcei`, `static-annotator`, `ccc`
 - Clone repositories of `gcc` and `llvm` into the local directory
 - Create the `compiler_cache` directory

@@ -199,7 +199,7 @@ def import_config(
     config_path: Optional[Path] = None, validate: bool = True
 ) -> NestedNamespace:
     if config_path is None:
-        p = Path.home() / ".config/dce/config.json"
+        p = Path.home() / ".config/dead/config.json"
         if p.exists():
             config_path = p
         else:
