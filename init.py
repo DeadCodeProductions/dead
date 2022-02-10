@@ -203,11 +203,4 @@ if __name__ == "__main__":
     with open(path, "w") as f:
         json.dump(config, f, indent=4)
 
-    print("Example command:")
-    print(
-        "Generate, reduce and bisect 10 cases for LLVM trunk O3 vs. LLVM 13.0.0 O3 and LLVM 12.0.1 O3 into directory ./llvmo3 with 64 processes"
-    )
-    print(
-        "\t./bisector.py -g -a 10 -t llvm trunk 3 -ac llvm llvmorg-13.0.0 3 llvm llvmorg-12.0.1 3 -d ./llvmo3 -p 64"
-    )
-    print("Get additional output with `-ll info`")
+    print("Done!")
