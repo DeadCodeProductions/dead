@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import subprocess
@@ -13,6 +15,11 @@ class Repo:
         self.path = os.path.abspath(path)
         self._showed_stale_warning = False
         self.main_branch = main_branch
+
+    @staticmethod
+    def repo_from_setting(setting: utils.CompilerSetting) -> Repo:
+
+        return Repo(setting.compiler_config.repo, setting.compiler_config.main_branch)
 
     @cache
     def get_best_common_ancestor(self, rev_a: str, rev_b: str) -> str:

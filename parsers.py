@@ -538,6 +538,13 @@ def main_parser() -> argparse.ArgumentParser:
         help="Run the case generation part in parallel. This will disable timing for the generation part.",
     )
 
+    run_parser.add_argument(
+        "--update-trunk-after-X-hours",
+        help="Enable automatic updating target compilers which are at the current trunk after X hours of running.",
+        metavar="X",
+        type=int,
+    )
+
     absorb_parser = subparser.add_parser("absorb")
 
     absorb_parser.add_argument(

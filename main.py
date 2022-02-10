@@ -12,7 +12,7 @@ import tempfile
 import time
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Dict, Optional, cast
 
 import requests
 
@@ -63,10 +63,39 @@ def _run() -> None:
 
     print("Pipeline:", " -> ".join(pipeline_components), file=sys.stderr)
 
+    last_update_time = time.time()
+
     while True:
         if args.amount and args.amount != 0:
             if counter >= args.amount:
                 break
+
+        if args.update_trunk_after_X_hours is not None:
+            if (
+                time.time() - last_update_time
+            ) / 3600 > args.update_trunk_after_X_hours:
+
+                logging.info("Updating repositories...")
+
+                known: Dict[str, list[int]] = dict()
+                for i, s in enumerate(scenario.target_settings):
+                    cname = s.compiler_config.name
+                    if cname not in known:
+                        known[cname] = []
+                    known[cname].append(i)
+
+                for cname, l in known.items():
+                    repo = repository.Repo.repo_from_setting(
+                        scenario.target_settings[l[0]]
+                    )
+                    old_trunk_commit = repo.rev_to_commit("trunk")
+                    repo.pull()
+                    new_trunk_commit = repo.rev_to_commit("trunk")
+
+                    for i in l:
+                        if scenario.target_settings[i].rev == old_trunk_commit:
+                            scenario.target_settings[i].rev = new_trunk_commit
+
         # Time db values
         generator_time: Optional[float] = None
         generator_try_count: Optional[int] = None
