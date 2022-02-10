@@ -21,6 +21,7 @@ import builder
 import checker
 import database
 import generator
+import init
 import parsers
 import patchdatabase
 import preprocessing
@@ -1172,5 +1173,7 @@ if __name__ == "__main__":
         _reported()
     elif args.sub == "findby":
         _findby()
+    elif args.sub == "init":
+        init.main()
 
     gnrtr.terminate_processes()

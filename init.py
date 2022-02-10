@@ -10,7 +10,8 @@ from typing import Any
 
 import utils
 
-if __name__ == "__main__":
+
+def main() -> None:
     print(
         "Have you installed the following programs/projects: llvm, clang, compiler-rt, gcc, cmake, ccomp, csmith and creduce?"
     )
@@ -204,3 +205,7 @@ if __name__ == "__main__":
         json.dump(config, f, indent=4)
 
     print("Done!")
+
+
+if __name__ == "__main__":
+    main()

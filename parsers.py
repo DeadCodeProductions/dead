@@ -812,4 +812,6 @@ def main_parser() -> argparse.ArgumentParser:
         help="Is a string, when choosing link or fixed, is a path when choosing case or code.",
     )
 
+    init_parser = subparser.add_parser("init")
+
     return parser
