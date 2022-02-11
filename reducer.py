@@ -47,14 +47,34 @@ class Reducer:
     bldr: builder.Builder
 
     def reduce_file(self, file: Path, force: bool = False) -> bool:
+        """Reduce a case given in the .tar format.
+        Interface for `reduced_code`.
+
+        Args:
+            file (Path): Path to .tar case.
+            force (bool): Force a reduction (even if the case is already reduced).
+        Returns:
+            bool: If the reduction was successful.
+        """
         case = utils.Case.from_file(self.config, file)
+
         if self.reduce_case(case, force=force):
             case.to_file(file)
             return True
         return False
 
     def reduce_case(self, case: utils.Case, force: bool = False) -> bool:
+        """Reduce a case.
+
+        Args:
+            case (utils.Case): Case to reduce.
+            force (bool): Force a reduction (even if the case is already reduced).
+
+        Returns:
+            bool: If the reduction was successful.
+        """
         if not force and case.reduced_code:
+
             return True
 
         case.reduced_code = self.reduce_code(
@@ -70,12 +90,25 @@ class Reducer:
         good_settings: list[utils.CompilerSetting],
         preprocess: bool = True,
     ) -> Optional[str]:
+        """Reduce given code w.r.t. `marker`
+
+        Args:
+            code (str):
+            marker (str): Marker which exhibits the interesting behaviour.
+            bad_setting (utils.CompilerSetting): Setting which can not eliminate the marker.
+            good_settings (list[utils.CompilerSetting]): Settings which can eliminate the marker.
+            preprocess (bool): Whether or not to run the code through preprocessing.
+
+        Returns:
+            Optional[str]: Reduced code, if successful.
+        """
 
         # creduce likes to kill unfinished processes with SIGKILL
         # so they can't clean up after themselves.
         # Setting a temporary temporary directory for creduce to be able to clean
-        # up everthing
+        # up everything
         with TempDirEnv() as tmpdir:
+
             # preprocess file
             if preprocess:
                 tmp = preprocessing.preprocess_csmith_code(
