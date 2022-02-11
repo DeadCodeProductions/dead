@@ -131,6 +131,9 @@ class Patcher:
         good = good_rev
         bad = bad_rev
 
+        # When building a particular commit and it fails to build
+        # without the patches and with the patches, it is considered
+        # a double fail.
         double_fail_counter = 0
         encountered_double_fail = False
 
@@ -240,7 +243,27 @@ class Patcher:
         patchable_commit: str,
         patches: list[Path],
     ) -> None:
+        """Given a compiler, a revision of the compiler that normally does not build
+        and the set of patches needed to fix this particular revision,
+        find the continuous region on the commit history which requires all these
+        patches to build.
+
+        We assume that such region is continuous. That means in case there's a gap
+        which does not need the patch, we may end up including the whole gap into the
+        region or do not find the region after the gap (w.r.t. the starting commit)
+        at all.
+
+        Args:
+            compiler_config (utils.NestedNamespace): The compiler project which has the problematic commit (it is either config.llvm or config.gcc).
+            patchable_commit (str): The problematic commit which is buildable with `patches`.
+            patches (list[Path]): Patches required to build `patchable_commit`.
+
+
+        Returns:
+            None:
+        """
         introducer = ""
+
         found_introducer = False
         repo = Repo(compiler_config.repo, compiler_config.main_branch)
 
@@ -272,7 +295,6 @@ class Patcher:
         #   - Proceed with bisection of introducer commit
         #
         # ONLY oldest_patchable_ancestor was found
-        #    (which currently is 7d75ea04cf6d9c8960d5c6119d6203568b7069e9 for gcc)
         #   - Find fixer commits from there (could do something if no_patch_common_ancestor exists)
 
         if no_patch_common_ancestor:
@@ -391,8 +413,21 @@ class Patcher:
         repo: Repo,
         failure_is_good: bool = False,
     ) -> tuple[str, str]:
+        """Bisect w.r.t. building and not building.
+
+        Args:
+            good (str): Commit that is closer to the head of the branch than `bad`.
+            bad (str): Commit that is further away from the head of the branch than `good`.
+            compiler_config (NestedNamespace): Either config.gcc or config.llvm
+            repo (Repo): Repository object for the compiler project.
+            failure_is_good (bool): If failing to build is expected to happen to the `good` commit.
+
+        Returns:
+            tuple[str, str]: The two commits around the bisection point.
+        """
 
         midpoint = ""
+
         while True:
             old_midpoint = midpoint
             midpoint = repo.next_bisection_commit(good=good, bad=bad)
@@ -421,6 +456,15 @@ class Patcher:
         return (good, bad)
 
     def find_introducer(self, compiler_config: NestedNamespace, broken_rev: str) -> str:
+        """Given a broken commit, find the commit that introduced the build failure.
+
+        Args:
+            compiler_config (NestedNamespace): Either config.gcc or config.llvm
+            broken_rev (str): The revision which does not build.
+
+        Returns:
+            str: introducer commit hash
+        """
         logging.info(f"Looking for introducer commit starting at {broken_rev}")
 
         repo = Repo(compiler_config.repo, compiler_config.main_branch)
