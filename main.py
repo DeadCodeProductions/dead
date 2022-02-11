@@ -77,6 +77,8 @@ def _run() -> None:
 
                 logging.info("Updating repositories...")
 
+                last_update_time = time.time()
+
                 known: Dict[str, list[int]] = dict()
                 for i, s in enumerate(scenario.target_settings):
                     cname = s.compiler_config.name
