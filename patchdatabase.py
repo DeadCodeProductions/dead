@@ -28,7 +28,6 @@ def _save_db(func: Callable[..., T]) -> Callable[..., T]:
 
 class PatchDB:
     def __init__(self, path_to_db: Path):
-        # TODO: maybe enforce this somehow...
         logging.debug(
             "Creating an instance of PatchDB. If you see this message twice, you may have a problem. Only one instance of PatchDB should exist."
         )
@@ -108,7 +107,21 @@ class PatchDB:
         repo: Repo,
         compiler_config: NestedNamespace,
     ) -> bool:
+        """Checks if a given compiler-revision-patches combination
+        has already been tested and failed to build.
+
+        Args:
+            self:
+            patches (list[Path]): patches
+            rev (str): rev
+            repo (Repo): repo
+            compiler_config (NestedNamespace): compiler_config
+
+        Returns:
+            bool:
+        """
         patches_str = [str(os.path.basename(patch)) for patch in patches]
+
         rev = repo.rev_to_commit(rev)
 
         if "bad" not in self.data:
@@ -128,7 +141,18 @@ class PatchDB:
         return False
 
     def required_patches(self, rev: str, repo: Repo) -> list[Path]:
+        """Get the known required patches form the database.
+
+        Args:
+            self:
+            rev (str): rev
+            repo (Repo): repo
+
+        Returns:
+            list[Path]: List of known required patches.
+        """
         commit = repo.rev_to_commit(rev)
+
         required_patches = []
         for patch, patch_commits in self.data.items():
             if commit in patch_commits:
