@@ -42,6 +42,11 @@ def get_llvm_github_commit_author(rev: str) -> Optional[str]:
     return None
 
 
+def get_all_bisections(ddb: database.CaseDatabase) -> list[str]:
+    res = ddb.con.execute("select distinct bisection from cases")
+    return [r[0] for r in res]
+
+
 def _run() -> None:
     scenario = utils.get_scenario(config, args)
 
@@ -133,15 +138,20 @@ def _run() -> None:
                 print(f"BuildException: '{e}'")
                 continue
 
-        if args.reducer:
-            try:
-                time_start_reducer = time.perf_counter()
-                worked = rdcr.reduce_case(case)
-                time_end_reducer = time.perf_counter()
-                reducer_time = time_end_reducer - time_start_reducer
-            except builder.BuildException as e:
-                print(f"BuildException: {e}")
-                continue
+        if args.reducer is not False:
+            if (
+                args.reducer
+                or case.bisection
+                and case.bisection in get_all_bisections(ddb)
+            ):
+                try:
+                    time_start_reducer = time.perf_counter()
+                    worked = rdcr.reduce_case(case)
+                    time_end_reducer = time.perf_counter()
+                    reducer_time = time_end_reducer - time_start_reducer
+                except builder.BuildException as e:
+                    print(f"BuildException: {e}")
+                    continue
 
         if not output_directory:
             case_id = ddb.record_case(case)
