@@ -29,28 +29,45 @@ class Repo:
 
     @cache
     def rev_to_commit(self, rev: str) -> str:
+        """Convert any revision (commits, tags etc.) into their
+        SHA1 hash via git rev-parse.
+
+        Args:
+            rev (str): Revision to convert.
+
+        Returns:
+            str: Hash of `rev` in this repo.
+        """
         # Could support list of revs...
         if rev == "trunk" or rev == "master" or rev == "main":
+
             if not self._showed_stale_warning:
-                logging.warning(
-                    "Reminder: trunk/master/main/hauptzweig/principale is stale"
-                )
+                logging.warning("Reminder: trunk is stale")
                 self._showed_stale_warning = True
             rev = self.main_branch
         return utils.run_cmd(f"git -C {self.path} rev-parse {rev}")
 
     def rev_to_range_needing_patch(self, introducer: str, fixer: str) -> list[str]:
-        # This functions aim is best described with a picture
-        #    O---------P
-        #   /   G---H   \      I---J       L--M
-        #  /   /     \   \    /     \     /
-        # A---B---Z---C---N---D-------E---F---K
-        #      \     /
-        #       Q---R
-        # call rev_to_range_needing_patch(G, K) gives
-        # (K, F, 'I, J, D, E', C, H, G)
-        # in particular it doesn't include Z, P, O, Q and R
-        # Range G~..K would include these
+        """
+        This functions aim is best described with a picture
+           O---------P
+          /   G---H   \      I---J       L--M
+         /   /     \   \    /     \     /
+        A---B---Z---C---N---D-------E---F---K
+             \     /
+              Q---R
+        call rev_to_range_needing_patch(G, K) gives
+        (K, F, 'I, J, D, E', C, H, G)
+        in particular it doesn't include Z, P, O, Q and R
+        Range G~..K would include these
+
+        Args:
+            introducer (str): introducer commit
+            fixer (str): fixer commit
+
+        Returns:
+            list[str]: List of revision hashes needing the patch.
+        """
         #
 
         # Get all commits with at least 2 parents
@@ -86,7 +103,6 @@ class Repo:
         return res
 
     def rev_to_commit_list(self, rev: str) -> list[str]:
-        # TODO: maybe merge with rev_to_commit...
         return utils.run_cmd(f"git -C {self.path} log --format=%H {rev}").split("\n")
 
     def is_ancestor(self, rev_old: str, rev_young: str) -> bool:
