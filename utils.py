@@ -128,8 +128,17 @@ class NestedNamespace(SimpleNamespace):
 
 
 def validate_config(config: Union[dict[str, Any], NestedNamespace]) -> None:
-    # TODO: Also check if there are fields that are not supposed to be there
+    """Given a config, check if the fields are of the correct type.
+    Exit if it is not the case.
+
+    Args:
+        config (Union[dict[str, Any], NestedNamespace]): config
+
+    Returns:
+        None:
+    """
     key_problems = set()
+
     for exkeys in EXPECTED_ENTRIES:
         pos = []
         key_type = exkeys[0]
@@ -198,7 +207,17 @@ def to_absolute_paths(config: NestedNamespace) -> None:
 def import_config(
     config_path: Optional[Path] = None, validate: bool = True
 ) -> NestedNamespace:
+    """Read and potentially verify the specified config.
+
+    Args:
+        config_path (Optional[Path]): Path to config. Defaults to ~/.config/dead/config.json.
+        validate (bool): Whether or not to validate the config.
+
+    Returns:
+        NestedNamespace: The config
+    """
     if config_path is None:
+
         p = Path.home() / ".config/dead/config.json"
         if p.exists():
             config_path = p
@@ -255,7 +274,18 @@ def import_config(
 def get_config_and_parser(
     own_parser: Optional[argparse.ArgumentParser] = None,
 ) -> tuple[NestedNamespace, argparse.Namespace]:
+    """Get the config object and its parser.
+    You can specify other parsers which will be incorporated into the config parser.
+    Will also parse the CLI.
+
+    Args:
+        own_parser (Optional[argparse.ArgumentParser]): Parsers to be incorporated into the config parser.
+
+    Returns:
+        tuple[NestedNamespace, argparse.Namespace]: The config and the parsed arguments.
+    """
     if own_parser is not None:
+
         parser_list = [own_parser, parsers.config_parser(EXPECTED_ENTRIES)]
     else:
         parser_list = [parsers.config_parser(EXPECTED_ENTRIES)]
@@ -545,12 +575,21 @@ def get_compiler_config(
 
 
 def get_scenario(config: NestedNamespace, args: argparse.Namespace) -> Scenario:
-    # This function requires
-    # args.scenario
-    # args.targets
-    # args.targets-default_opt_levels and
-    # args.additional_compilers
-    # args.additional_compilers_default_opt_levels
+    """Extract the scenario from the parser and config.
+    This function the following options be part of the parser.
+    args.scenario
+    args.targets
+    args.targets-default_opt_levels and
+    args.additional_compilers
+    args.additional_compilers_default_opt_levels
+
+    Args:
+        config (NestedNamespace): config
+        args (argparse.Namespace): parsed arguments.
+
+    Returns:
+        Scenario:
+    """
 
     scenario = Scenario([], [])
 
