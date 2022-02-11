@@ -1064,20 +1064,77 @@ def _unreported() -> None:
 
 
 def _reported() -> None:
-    query = "select cases.case_id, bisection, bug_report_link from cases join compiler_setting on bad_setting_id = compiler_setting_id left join reported_cases on cases.case_id = reported_cases.case_id "
 
-    query += " where bug_report_link is not null"
+    query = """
+    with rep as (	
+        select cases.case_id, bisection, bug_report_link from cases 
+        join compiler_setting on bad_setting_id = compiler_setting_id 
+        left join reported_cases on cases.case_id = reported_cases.case_id  
+        where bug_report_link is not null order by cases.case_id
+    )
 
+    select rep.case_id, bisection, bug_report_link 
+    """
+
+    if args.good_settings:
+        query += """, compiler_setting.compiler, compiler_setting.rev, compiler_setting.opt_level 
+        from rep
+        left join good_settings on rep.case_id = good_settings.case_id
+        left join compiler_setting on good_settings.compiler_setting_id = compiler_setting.compiler_setting_id
+        """
+    else:
+        query += " from rep"
+
+    query += " where 1 "
     if args.clang_only or args.llvm_only:
         query += " and compiler = 'clang'"
     elif args.gcc_only:
         query += " and compiler = 'gcc'"
+
+    query += " order by rep.case_id"
 
     res = ddb.con.execute(query).fetchall()
 
     if args.id_only:
         for case_id, _, _ in res:
             print(case_id)
+    elif args.good_settings:
+
+        gcc_repo = repository.Repo(config.gcc.repo, config.gcc.main_branch)
+        llvm_repo = repository.Repo(config.llvm.repo, config.llvm.main_branch)
+        print(
+            "{: <8} {: <45} {: <45} {}".format(
+                "ID", "Bisection", "Good Settings", "Link"
+            )
+        )
+        last_case_id = -1
+        for case_id, bisection, link, name, rev, opt_level in res:
+
+            if name == "gcc":
+                maybe_tag = gcc_repo.rev_to_tag(rev)
+            else:
+                maybe_tag = llvm_repo.rev_to_tag(rev)
+            nice_rev = maybe_tag if maybe_tag else rev
+
+            comp_str = f"{name}-{nice_rev} -O{opt_level}"
+            if last_case_id != case_id:
+                last_case_id = case_id
+                print("{:-<155}".format(""))
+                print(
+                    "{: <8} {: <45} {: <45} {}".format(
+                        case_id, bisection, comp_str, link
+                    )
+                )
+            else:
+                print("{: <8} {: <45} {: <45} {}".format("", "", comp_str, ""))
+
+        print("{:-<155}".format(""))
+        print(
+            "{: <8} {: <45} {: <45} {}".format(
+                "ID", "Bisection", "Good Settings", "Link"
+            )
+        )
+
     else:
         print("{: <8} {: <45} {}".format("ID", "Bisection", "Link"))
         print("{:-<110}".format(""))

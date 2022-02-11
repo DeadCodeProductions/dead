@@ -805,6 +805,12 @@ def main_parser() -> argparse.ArgumentParser:
         help="Print only clang related bisections. Same as --llvm-only.",
     )
 
+    reported_parser.add_argument(
+        "--good-settings",
+        action="store_true",
+        help="Print the good settings of the cases.",
+    )
+
     findby_parser = subparser.add_parser("findby")
     findby_parser.add_argument(
         "what",

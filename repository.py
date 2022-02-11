@@ -161,7 +161,7 @@ class Repo:
         """Pulls from the main branch of the repository.
         It will switch the repository to the main branch.
         It will also invalidate the caches of `rev_to_commit`
-        and `get_best_common_ancestor`.
+        , `get_best_common_ancestor` and `rev_to_tag`.
 
         Args:
             self:
@@ -171,12 +171,14 @@ class Repo:
         """
         self.rev_to_commit.cache_clear()
         self.get_best_common_ancestor.cache_clear()
+        self.rev_to_tag.cache_clear()
         # Just in case...
         cmd = f"git -C {self.path} switch {self.main_branch}"
         utils.run_cmd(cmd)
         cmd = f"git -C {self.path} pull"
         utils.run_cmd(cmd)
 
+    @cache
     def rev_to_tag(self, rev: str) -> Optional[str]:
         request_str = f"git -C {self.path} describe --exact-match {rev}"
         logging.debug(request_str)
