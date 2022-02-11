@@ -312,6 +312,23 @@ def _report() -> None:
         # Use newest main in report
         case.bad_setting.rev = cpy.bad_setting.rev
 
+    # Check if bisection commit is what it should be
+    print("Checking bisection commit...")
+    bisection_setting = copy.deepcopy(cpy.bad_setting)
+    bisection_setting.rev = cast(str, cpy.bisection)
+    prebisection_setting = copy.deepcopy(bisection_setting)
+    repo = repository.Repo.repo_from_setting(bisection_setting)
+    prebisection_setting.rev = repo.rev_to_commit(f"{case.bisection}~")
+
+    bis_set = builder.find_alive_markers(cpy.code, bisection_setting, cpy.marker, bldr)
+    rebis_set = builder.find_alive_markers(
+        cpy.code, prebisection_setting, cpy.marker, bldr
+    )
+
+    if not cpy.marker in bis_set or cpy.marker in rebis_set:
+        print("Bisection commit is not correct! Aborting...", file=sys.stderr)
+        exit(1)
+
     # Choose same opt level and newest version
     possible_good_compiler = [
         gs for gs in case.good_settings if gs.opt_level == bad_setting.opt_level
