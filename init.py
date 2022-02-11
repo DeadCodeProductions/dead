@@ -195,9 +195,10 @@ def main() -> None:
         config["ccomp"] = "???"
 
     config["casedb"] = "./casedb.sqlite3"
-    import sqlite3
 
-    sqlite3.Connection(config["casedb"])  # Creating db
+    Path(config["casedb"]).touch()
+    shutil.chown(config["casedb"], group=config["cache_group"])
+    os.chmod(config["casedb"], 0o660)
 
     print("Saving config...")
     os.makedirs(path.parent, exist_ok=True)
