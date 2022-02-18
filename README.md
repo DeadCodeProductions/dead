@@ -2,7 +2,7 @@
 
 *NOTE: This is 'Work in Progress'. Expect to encounter rough edges, especially with respect to the UX.*
 
-DEAD is a tool to find and process compiler regressions automatically to produce reports.
+DEAD is a tool to find and process compiler regressions and other missed optimizations automatically to produce reports.
 
 ## Setup
 ### Setup with Docker
@@ -74,8 +74,8 @@ ln -s $PWD/git-hooks/pre-commit ./git/hooks/pre-commit
 
 ## Run
 As DEAD is based on differential testing, it requires two informations to be able to run:
-- Which compilers to find a regression in. These are called *target* compilers. This is typically the current `trunk`.
-- Which compilers to use as a comparison to find regression in the target compilers. These are called *additional* or *attacking* compilers.
+- Which compilers to find missed optimizations in. These are called *target* compilers. This is typically the current `trunk`.
+- Which compilers to use as a comparison to find missed optimizations in the target compilers. These are called *additional* or *attacking* compilers.
 
 A compiler on the CLI is specified by writing `PROJECT REVISION [OPT_LEVEL ...]`. For example, to get `gcc 11.2.0` with all optimizations, write `gcc releases/gcc-11.2.0 1 2 3 s`. This can be repeated to specify more compilers.
 
@@ -101,9 +101,9 @@ The flags are `--additional_compilers_default_opt_levels` and `--targets_default
 ```
 
 DEAD consists of three parts which are: 
-- Generator, which finds regressions from the given target and attacking compilers. We call such a regression and any additional information related to it a *case*.
+- Generator, which finds missed optimizations from the given target and attacking compilers. We call such a missed optimization and any additional information related to it a *case*.
 - Bisector, which finds the introducing commit of the found case.
-- Reducer, which extracts a small part of the code, which still exhibits the regression found.
+- Reducer, which extracts a small part of the code, which still exhibits the missed optimization found.
 
 By default, the Reducer is only enabled for cases which have a new bisection commit, as reducing takes long and is often not necessary.
 It can be enabled for all cases with `--reducer` and completely disabled with `--no-reducer`.
@@ -112,7 +112,7 @@ The last two important options are `--cores POSITIVE_INT` and `--log-level debug
 When not specified, `--cores` will equal to the amount of logical cores on the machine.
 The default verbosity level is `warning`. However, to have a sense of progress, we suggest setting it to `info`.
 
-Finally, to find regressions in `trunk`, run
+Finally, to find missed optimizations in `trunk`, run
 ```sh
 # For GCC
 ./main.py -ll info\
@@ -197,7 +197,7 @@ If this is not the case, run
 ./main.py report $ID > report.txt
 ```
 
-It will pull the compiler project of the case, build `trunk` and test if the regression can still be observed. 
+It will pull the compiler project of the case, build `trunk` and test if the missed optimization can still be observed. 
 You can disable pulling with `--no-pull`.
 If so, it will output a copy-and-pasteable report into `report.txt` (don't forget to remove the title if there is one) and `case.txt`[^1],  a copy of the reported code.
 [^1]: It is `.txt` instead of `.c` because GitHub does not allow `.c` files to be attached to issues.
@@ -208,7 +208,7 @@ When you have submitted the bug report, you can save the link to the report via
 ```
 so that the bisection isn't displayed anymore.
 
-Hopefully, the regression gets fixed. When this is the case, you can extract the case ID from the bug report and note down the fixing commit. Then save it with
+Hopefully, the missed optimization gets fixed. When this is the case, you can extract the case ID from the bug report and note down the fixing commit. Then save it with
 ```
 ./main.py set fixed $ID $COMMIT
 ```
@@ -225,7 +225,7 @@ Instead of directly generating the report after having selected an ID and checke
 ```sh
 ./main.py get rcode $ID > rcode.c
 ```
-To continuously check if the changes still exhibit the regression, open a separate terminal in the same directory and run 
+To continuously check if the changes still exhibit the missed optimization, open a separate terminal in the same directory and run 
 ```sh
 echo rcode.c | entr -c ./main.py checkreduced $ID ./rcode.c
 ```
@@ -240,7 +240,7 @@ Empirically, changes to cases who's bisection is rarely found often don't allow 
 
 ## Subcommand overview of `main.py`
 
-- `run`: Find new regressions.
+- `run`: Find new regressions/missed optimizations.
 - `tofile ID`: Save a case into a tar-file.
 - `absorb PATH`: Read tar-files into the database of DEAD.
 - `report ID`: Generate a report for a given case.
