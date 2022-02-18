@@ -282,8 +282,5 @@ If you are processing a case and `git` throws an exception, try pulling `llvm-pr
 ### Why does this case fail?
 Maybe `./main.py diagnose -ci $ID` can illuminate the situation.
 
-### What is `WARNING:root:Reminder: trunk is stale` supposed To mean?
-It means that the `llvm-project` and `gcc` repo aren't updated/pulled automatically i.e. even if you write `-t llvm trunk`, you don't get upstream trunk but your local one.
-
 ### This case does not reduce but `diagnose` says everything is fine!
 Try throwing your whole machine at it (`./main.py reduce ID`).

@@ -13,7 +13,6 @@ import utils
 class Repo:
     def __init__(self, path: Path, main_branch: str):
         self.path = os.path.abspath(path)
-        self._showed_stale_warning = False
         self.main_branch = main_branch
 
     @staticmethod
@@ -40,10 +39,6 @@ class Repo:
         """
         # Could support list of revs...
         if rev == "trunk" or rev == "master" or rev == "main":
-
-            if not self._showed_stale_warning:
-                logging.warning("Reminder: trunk is stale")
-                self._showed_stale_warning = True
             rev = self.main_branch
         return utils.run_cmd(f"git -C {self.path} rev-parse {rev}")
 
