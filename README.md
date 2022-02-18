@@ -1,4 +1,4 @@
-# DEAD: *D*ead Code *E*limination based *A*utomatic *D*ifferential Testing
+# DEAD: Dead Code Elimination based Automatic Differential Testing
 
 *NOTE: This is 'Work in Progress'. Expect to encounter rough edges, especially with respect to the UX.*
 
