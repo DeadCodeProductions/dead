@@ -105,8 +105,8 @@ DEAD consists of three parts which are:
 - Bisector, which finds the introducing commit of the found case.
 - Reducer, which extracts a small part of the code, which still exhibits the regression found.
 
-By default, the Reducer is *not* enabled, as reducing takes long and is often not necessary.
-It can be enabled with `--reducer`.
+By default, the Reducer is only enabled for cases which have a new bisection commit, as reducing takes long and is often not necessary.
+It can be enabled for all cases with `--reducer` and completely disabled with `--no-reducer`.
 
 The last two important options are `--cores POSITIVE_INT` and `--log-level debug|info|warning|error|critical`. 
 When not specified, `--cores` will equal to the amount of logical cores on the machine.
@@ -197,8 +197,10 @@ If this is not the case, run
 ./main.py report $ID > report.txt
 ```
 
-It will pull the compiler project of the case, build `trunk` and test if the regression can still be observed.
-If so, it will output a copy-and-pasteable report into `report.txt` (Don't forget to remove the title).
+It will pull the compiler project of the case, build `trunk` and test if the regression can still be observed. 
+You can disable pulling with `--no-pull`.
+If so, it will output a copy-and-pasteable report into `report.txt` (don't forget to remove the title if there is one) and `case.txt`[^1],  a copy of the reported code.
+[^1]: It is `.txt` instead of `.c` because GitHub does not allow `.c` files to be attached to issues.
 
 When you have submitted the bug report, you can save the link to the report via
 ```
@@ -263,14 +265,16 @@ Empirically, changes to cases who's bisection is rarely found often don't allow 
 - `patcher.py`: Automatically finds the region in the history where a patch needs to be applied.
 - `reducer.py`: Reduce the code of a given.
 
-## FAQ
+## Q&A for potential issues
+### I set flag X which I found in the help, but DEAD says the option does not exist!
+Sadly, flags are position dependent. You have to put it after the command whose help you found the flag in and before any other subcommand.
 ### I want to do XYZ. How?
 Maybe there's already an option for it. Consult the program with `--help` for all the options.
 
 ### Why don't I see anything?
 Are you running with `-ll info`?
 
-### The program got a commit that doesn't exist!
+### DEAD wants to work with a commit that doesn't exist!
 If you are checking things manually: Are you sure you are looking in the right repository?
 
 If you are processing a case and `git` throws an exception, try pulling `llvm-project` and `gcc` so you are sure to have all the commits.
@@ -278,5 +282,8 @@ If you are processing a case and `git` throws an exception, try pulling `llvm-pr
 ### Why does this case fail?
 Maybe `./main.py diagnose -ci $ID` can illuminate the situation.
 
-### What is `WARNING:root:Reminder: trunk/master/main/hauptzweig/principale is stale` supposed to mean?
+### What is `WARNING:root:Reminder: trunk is stale` supposed To mean?
 It means that the `llvm-project` and `gcc` repo aren't updated/pulled automatically i.e. even if you write `-t llvm trunk`, you don't get upstream trunk but your local one.
+
+### This case does not reduce but `diagnose` says everything is fine!
+Try throwing your whole machine at it (`./main.py reduce ID`).
