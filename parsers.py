@@ -469,7 +469,7 @@ def main_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
     subparser = parser.add_subparsers(title="sub", dest="sub")
-    run_parser = subparser.add_parser("run")
+    run_parser = subparser.add_parser("run", help="Let DEAD search for cases.")
 
     run_parser.add_argument(
         "-d", "--output-directory", help="Where the cases should be saved to.", type=str
@@ -545,7 +545,9 @@ def main_parser() -> argparse.ArgumentParser:
         type=int,
     )
 
-    absorb_parser = subparser.add_parser("absorb")
+    absorb_parser = subparser.add_parser(
+        "absorb", help="Read cases outside of the database into the database."
+    )
 
     absorb_parser.add_argument(
         "absorb_object",
@@ -553,7 +555,7 @@ def main_parser() -> argparse.ArgumentParser:
         help="Directory or file to read .tar cases from into the database.",
     )
 
-    report_parser = subparser.add_parser("report")
+    report_parser = subparser.add_parser("report", help="Generate a report for a case.")
 
     report_parser.add_argument(
         "case_id",
@@ -569,7 +571,10 @@ def main_parser() -> argparse.ArgumentParser:
         default=True,
     )
 
-    tofile_parser = subparser.add_parser("tofile")
+    tofile_parser = subparser.add_parser(
+        "tofile",
+        help="Save a case from the database into a file. This is a LOSSY operation.",
+    )
 
     tofile_parser.add_argument(
         "case_id",
@@ -578,7 +583,10 @@ def main_parser() -> argparse.ArgumentParser:
         help="Case to get a .tar from ",
     )
 
-    rereduce_parser = subparser.add_parser("rereduce")
+    rereduce_parser = subparser.add_parser(
+        "rereduce",
+        help="Reduce code from outside the database w.r.t. a specified case.",
+    )
 
     rereduce_parser.add_argument(
         "case_id",
@@ -594,7 +602,9 @@ def main_parser() -> argparse.ArgumentParser:
         help="Path to code to rereduce",
     )
 
-    diagnose_parser = subparser.add_parser("diagnose")
+    diagnose_parser = subparser.add_parser(
+        "diagnose", help="Run tests on a specified case and print a summary."
+    )
 
     diagnose_parser.add_argument(
         "-ci",
@@ -611,7 +621,10 @@ def main_parser() -> argparse.ArgumentParser:
         help="Path to case to work with",
     )
 
-    checkreduced_parser = subparser.add_parser("checkreduced")
+    checkreduced_parser = subparser.add_parser(
+        "checkreduced",
+        help="Check if code outside of the database passes the checks of a specified case.",
+    )
 
     checkreduced_parser.add_argument(
         "case_id",
@@ -627,7 +640,7 @@ def main_parser() -> argparse.ArgumentParser:
         help="Path to code to checkreduced",
     )
 
-    cache_parser = subparser.add_parser("cache")
+    cache_parser = subparser.add_parser("cache", help="Perform actions on the cache.")
 
     cache_parser.add_argument(
         "what",
@@ -636,7 +649,10 @@ def main_parser() -> argparse.ArgumentParser:
         help="What you want to do with the cache. Clean will search and remove all unfinished cache entries. `stats` will print some statistics about the cache.",
     )
 
-    asm_parser = subparser.add_parser("asm")
+    asm_parser = subparser.add_parser(
+        "asm",
+        help="Save assembly outputs (-S) for the good and bad settings for each code found in a case.",
+    )
     asm_parser.add_argument(
         "case_id",
         metavar="CASE_ID",
@@ -644,8 +660,10 @@ def main_parser() -> argparse.ArgumentParser:
         help="Case to work with.",
     )
 
-    set_parser = subparser.add_parser("set")
-    get_parser = subparser.add_parser("get")
+    set_parser = subparser.add_parser("set", help="Set values of a case.")
+    get_parser = subparser.add_parser(
+        "get", help="Print values of a case to the command line."
+    )
 
     get_parser.add_argument(
         "what",
@@ -682,7 +700,9 @@ def main_parser() -> argparse.ArgumentParser:
         help="What to set the chosen value to. Expected input may change based on what you are setting.",
     )
 
-    build_parser = subparser.add_parser("build")
+    build_parser = subparser.add_parser(
+        "build", help="Build a specific compiler version."
+    )
 
     build_parser.add_argument(
         "project",
@@ -706,7 +726,9 @@ def main_parser() -> argparse.ArgumentParser:
         type=str,
     )
 
-    reduce_parser = subparser.add_parser("reduce")
+    reduce_parser = subparser.add_parser(
+        "reduce", help="Reduce the initially found code of a case."
+    )
 
     reduce_parser.add_argument(
         "case_id", nargs="+", type=int, help="Which case to reduce"
@@ -717,7 +739,9 @@ def main_parser() -> argparse.ArgumentParser:
         help="Whether or not to force another reduction. This will override the old reduced code.",
     )
 
-    bisect_parser = subparser.add_parser("bisect")
+    bisect_parser = subparser.add_parser(
+        "bisect", help="Find the bisection commit for a specified case."
+    )
 
     bisect_parser.add_argument(
         "case_id", nargs="+", type=int, help="Which case to bisect"
@@ -728,9 +752,11 @@ def main_parser() -> argparse.ArgumentParser:
         help="Whether or not to force another bisection. This will override the old bisection.",
     )
 
-    edit_parser = subparser.add_parser("edit")
+    edit_parser = subparser.add_parser("edit", help="Open DEADs config in $EDITOR.")
 
-    unreported_parser = subparser.add_parser("unreported")
+    unreported_parser = subparser.add_parser(
+        "unreported", help="List cases which have not been reported or fixed."
+    )
 
     unreported_parser.add_argument(
         "--id-only",
@@ -782,7 +808,9 @@ def main_parser() -> argparse.ArgumentParser:
         help="Print only bisections which have REV as a good compiler matching the opt level of the bad compiler.",
     )
 
-    reported_parser = subparser.add_parser("reported")
+    reported_parser = subparser.add_parser(
+        "reported", help="List cases which have been reported."
+    )
 
     reported_parser.add_argument(
         "--id-only",
@@ -811,7 +839,9 @@ def main_parser() -> argparse.ArgumentParser:
         help="Print the good settings of the cases.",
     )
 
-    findby_parser = subparser.add_parser("findby")
+    findby_parser = subparser.add_parser(
+        "findby", help="Find case IDs given only a part of a case."
+    )
     findby_parser.add_argument(
         "what",
         type=str,
@@ -825,6 +855,6 @@ def main_parser() -> argparse.ArgumentParser:
         help="Is a string, when choosing link or fixed, is a path when choosing case or code.",
     )
 
-    init_parser = subparser.add_parser("init")
+    init_parser = subparser.add_parser("init", help="Initialize DEAD.")
 
     return parser
