@@ -35,12 +35,12 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 add_subdirectory(src)
 
-include(CTest)
-enable_testing()
 
-find_package(Catch2 REQUIRED)
-
-include(CTest)
-include(Catch)
-
-add_subdirectory(test)
+IF (BUILD_TESTING)
+    include(CTest)
+    enable_testing()
+    find_package(Catch2 REQUIRED)
+    include(CTest)
+    include(Catch)
+    add_subdirectory(test)
+ENDIF(BUILD_TESTING)
