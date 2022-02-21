@@ -37,7 +37,6 @@ RUN yay -S --noconfirm --noprogressbar python\
                                         llvm\
                                         compiler-rt\
                                         cmake\
-                                        catch2\
                                         boost\
                                         ninja\
                                         entr

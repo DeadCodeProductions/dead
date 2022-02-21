@@ -27,7 +27,6 @@ The following programs or libraries must be installed:
 - `compiler-rt` (for the sanitization libraries. It's also part of LLVM)
 - `boost`
 - `ninja`
-- `catch2`
 
 Optional programs:
 - `entr`
@@ -43,7 +42,6 @@ yay -Sy --noconfirm python\
                     llvm\
                     compiler-rt\
                     cmake\
-                    catch2\
                     boost\
                     ninja\
                     csmith\
