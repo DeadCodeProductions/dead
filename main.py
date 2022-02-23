@@ -656,15 +656,26 @@ def _diagnose() -> None:
             checks(cpy, "Massaged: ")
 
     if case.bisection:
+        cpy = copy.deepcopy(case)
         nice_print("Bisection", case.bisection)
         prev_rev = repo.rev_to_commit(case.bisection + "~")
         nice_print("Bisection prev commit", prev_rev)
+        bis_res_og = chkr.is_interesting(cpy, preprocess=False)
+        cpy.bad_setting.rev = prev_rev
+        bis_prev_res_og = chkr.is_interesting(cpy, preprocess=False)
+
+        nice_print(
+            "Bisection test original code", ok_fail(bis_res_og and not bis_prev_res_og)
+        )
+        cpy = copy.deepcopy(case)
         if cpy.reduced_code:
             cpy.code = cpy.reduced_code
-        bis_res = chkr.is_interesting(cpy, preprocess=False)
-        cpy.bad_setting.rev = prev_rev
-        bis_prev_res = chkr.is_interesting(cpy, preprocess=False)
-        nice_print("Bisection test", ok_fail(bis_res and not bis_prev_res))
+            bis_res = chkr.is_interesting(cpy, preprocess=False)
+            cpy.bad_setting.rev = prev_rev
+            bis_prev_res = chkr.is_interesting(cpy, preprocess=False)
+            nice_print(
+                "Bisection test reduced code", ok_fail(bis_res and not bis_prev_res)
+            )
 
     if case.reduced_code:
         print(case.reduced_code)
