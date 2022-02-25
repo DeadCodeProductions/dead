@@ -54,13 +54,10 @@ Then run:
 # Create python environment
 python3 -m venv ./deadenv
 source ./deadenv/bin/activate
-python3 -m pip install -r requirements_hook.txt
+pip install requests
 
 # Initialize DEAD
 ./main.py init
-
-# For developers, setup pre-commit hook
-ln -s $PWD/git-hooks/pre-commit ./git/hooks/pre-commit
 ```
 `init.py` will:
 - create a config file located at `~/.config/dead/config.json`
