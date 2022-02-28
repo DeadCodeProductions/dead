@@ -4,6 +4,8 @@
 
 DEAD is a tool to find and process compiler regressions and other missed optimizations automatically to produce reports.
 
+For a list of reported bugs look at [bugs.md](./bugs.md).
+
 ## Setup
 ### Setup with Docker
 ```

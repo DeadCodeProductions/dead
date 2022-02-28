@@ -1,0 +1,104 @@
+### GCC
+- [99357](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99357)
+- [99373](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99373)
+- [99419](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99419)
+- [99428](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99428)
+- ~~[99776](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99776)~~ Fixed
+- [99788](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99788)
+- ~~[99793](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99793)~~ Fixed
+- [99834](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99834)
+- [99835](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99835)
+- ~~[99986](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99986)~~ Duplicate
+- [99987](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99987)
+- [99991](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99991)
+- [99993](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99993)
+- [100033](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100033)
+- [100034](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100034)
+- [100036](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100036)
+- ~~[100050](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100050)~~ Duplicate
+- ~~[100051](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100051)~~ Fixed
+- [100080](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100080)
+- [100082](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100082)
+- [100095](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100095)
+- [100100](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100100)
+- ~~[100112](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100112)~~ Fixed
+- [100113](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100113)
+- [100145](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100145)
+- [100162](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100162)
+- [100188](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100188)
+- [100191](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100191)
+- [100220](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100220)
+- [100221](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100221)
+- [100314](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100314)
+- [100315](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100315)
+- ~~[100359](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100359)~~ Fixed
+- [102540](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102540)
+- ~~[102546](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102546)~~ Fixed
+- ~~[102648](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102648)~~ Fixed
+- [102650](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102650)
+- ~~[102703](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102703)~~ Fixed
+- [102705](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102705)
+- [102879](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102879)
+- ~~[102880](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102880)~~ Fixed
+- ~~[102892](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102892)~~ Fixed
+- ~~[102895](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102895)~~ Duplicate
+- ~~[103280](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103280)~~ Duplicate
+- [103281](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103281)
+- [102950](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102950)
+- [102981](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102981)
+- [102982](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102982)
+- ~~[102983](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102983)~~ Fixed
+- ~~[103257](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103257)~~ Fixed
+- [103388](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103388)
+- ~~[103359](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103359)~~ Fixed
+- ~~[103648](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103648)~~ Fixed
+- ~~[104526](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=104526)~~ Fixed
+- [104530](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=104530)
+
+### LLVM
+- [49434](https://bugs.llvm.org/show_bug.cgi?id=49434)
+- [49436](https://bugs.llvm.org/show_bug.cgi?id=49436)
+- [49457](https://bugs.llvm.org/show_bug.cgi?id=49457)
+- ~~[49731](https://bugs.llvm.org/show_bug.cgi?id=49731)~~ Fixed
+- [49773](https://bugs.llvm.org/show_bug.cgi?id=49773)
+- [49775](https://bugs.llvm.org/show_bug.cgi?id=49775)
+- [49776](https://bugs.llvm.org/show_bug.cgi?id=49776)
+- [51090](https://bugs.llvm.org/show_bug.cgi?id=51090)
+- [51136](https://bugs.llvm.org/show_bug.cgi?id=51136)
+- [51137](https://bugs.llvm.org/show_bug.cgi?id=51137)
+- [51138](https://bugs.llvm.org/show_bug.cgi?id=51138)
+- ~~[52535](https://github.com/llvm/llvm-project/issues/51877)~~ Fixed
+- [51139](https://bugs.llvm.org/show_bug.cgi?id=51139)
+- [51140](https://bugs.llvm.org/show_bug.cgi?id=51140)
+- ~~[51141](https://bugs.llvm.org/show_bug.cgi?id=51141)~~ Fixed
+- ~~[52078](https://bugs.llvm.org/show_bug.cgi?id=52078)~~ Fixed
+- ~~[52102](https://bugs.llvm.org/show_bug.cgi?id=52102)~~ Fixed
+- ~~[52253](https://bugs.llvm.org/show_bug.cgi?id=52253)~~ Fixed
+- [52255](https://bugs.llvm.org/show_bug.cgi?id=52255)
+- ~~[52260](https://bugs.llvm.org/show_bug.cgi?id=52260)~~ Fixed
+- ~~[52261](https://bugs.llvm.org/show_bug.cgi?id=52261)~~ Fixed
+- ~~[52289](https://bugs.llvm.org/show_bug.cgi?id=52289)~~ Fixed
+- [52346](https://bugs.llvm.org/show_bug.cgi?id=52346)
+- [52347](https://bugs.llvm.org/show_bug.cgi?id=52347)
+- ~~[52543](https://bugs.llvm.org/show_bug.cgi?id=52543)~~ Fixed
+- [52580](https://bugs.llvm.org/show_bug.cgi?id=52580)
+- ~~[52592](https://bugs.llvm.org/show_bug.cgi?id=52592)~~ Fixed
+- [52965](https://github.com/llvm/llvm-project/issues/52965)
+- [53130](https://github.com/llvm/llvm-project/issues/53130)
+- [53131](https://github.com/llvm/llvm-project/issues/53131)
+- ~~[52525](https://github.com/llvm/llvm-project/issues/52525)~~ Fixed
+- [53131](https://github.com/llvm/llvm-project/issues/53131)
+- [53130](https://github.com/llvm/llvm-project/issues/53130)
+- [53316](https://github.com/llvm/llvm-project/issues/53316)
+- [53130](https://github.com/llvm/llvm-project/issues/53130)
+- [53320](https://github.com/llvm/llvm-project/issues/53320)
+- [53317](https://github.com/llvm/llvm-project/issues/53317)
+- [53318](https://github.com/llvm/llvm-project/issues/53318)
+- [53356](https://github.com/llvm/llvm-project/issues/53356)
+- [53322](https://github.com/llvm/llvm-project/issues/53322)
+- [53385](https://github.com/llvm/llvm-project/issues/53385)
+- [53384](https://github.com/llvm/llvm-project/issues/53384)
+- [51444](https://github.com/llvm/llvm-project/issues/51444)
+- [51688](https://github.com/llvm/llvm-project/issues/51688)
+- [53321](https://github.com/llvm/llvm-project/issues/53321)
+- ~~[53319](https://github.com/llvm/llvm-project/issues/53319)~~ Fixed
