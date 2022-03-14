@@ -85,7 +85,7 @@
 - ~~[52592](https://bugs.llvm.org/show_bug.cgi?id=52592)~~ Fixed
 - [52965](https://github.com/llvm/llvm-project/issues/52965)
 - [53130](https://github.com/llvm/llvm-project/issues/53130)
-- [53131](https://github.com/llvm/llvm-project/issues/53131)
+- ~~[53131](https://github.com/llvm/llvm-project/issues/53131)~~ Fixed
 - ~~[52525](https://github.com/llvm/llvm-project/issues/52525)~~ Fixed
 - [53131](https://github.com/llvm/llvm-project/issues/53131)
 - [53130](https://github.com/llvm/llvm-project/issues/53130)
