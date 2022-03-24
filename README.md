@@ -59,7 +59,7 @@ source ./deadenv/bin/activate
 pip install requests
 
 # Initialize DEAD
-./main.py init
+./init.py
 ```
 `init.py` will:
 - create a config file located at `~/.config/dead/config.json`
