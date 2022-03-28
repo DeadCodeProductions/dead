@@ -1,7 +1,5 @@
 # DEAD: Dead Code Elimination based Automatic Differential Testing
 
-*NOTE: This is 'Work in Progress'. Expect to encounter rough edges, especially with respect to the UX.*
-
 DEAD is a tool to find and process compiler regressions and other missed optimizations automatically to produce reports.
 
 For a list of reported bugs look at [bugs.md](./bugs.md).
