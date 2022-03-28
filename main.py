@@ -658,6 +658,7 @@ def _diagnose() -> None:
     if case.bisection:
         cpy = copy.deepcopy(case)
         nice_print("Bisection", case.bisection)
+        cpy.bad_setting.rev = case.bisection
         prev_rev = repo.rev_to_commit(case.bisection + "~")
         nice_print("Bisection prev commit", prev_rev)
         bis_res_og = chkr.is_interesting(cpy, preprocess=False)
@@ -670,6 +671,7 @@ def _diagnose() -> None:
         cpy = copy.deepcopy(case)
         if cpy.reduced_code:
             cpy.code = cpy.reduced_code
+            cpy.bad_setting.rev = case.bisection
             bis_res = chkr.is_interesting(cpy, preprocess=False)
             cpy.bad_setting.rev = prev_rev
             bis_prev_res = chkr.is_interesting(cpy, preprocess=False)
