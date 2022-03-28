@@ -51,7 +51,6 @@
 - ~~[103257](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103257)~~ Fixed
 - [103388](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103388)
 - ~~[103359](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103359)~~ Fixed
-- ~~[103648](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103648)~~ Fixed
 - ~~[104526](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=104526)~~ Fixed
 - [104530](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=104530)
 
