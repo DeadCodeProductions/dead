@@ -313,16 +313,19 @@ def _report() -> None:
         case.bad_setting.rev = cpy.bad_setting.rev
 
     # Check if bisection commit is what it should be
-    print("Checking bisection commit...")
+    print("Checking bisection commit...", file=sys.stderr)
+    marker_prefix = utils.get_marker_prefix(case.marker)
     bisection_setting = copy.deepcopy(cpy.bad_setting)
     bisection_setting.rev = cast(str, cpy.bisection)
     prebisection_setting = copy.deepcopy(bisection_setting)
     repo = repository.Repo.repo_from_setting(bisection_setting)
     prebisection_setting.rev = repo.rev_to_commit(f"{case.bisection}~")
 
-    bis_set = builder.find_alive_markers(cpy.code, bisection_setting, cpy.marker, bldr)
+    bis_set = builder.find_alive_markers(
+        cpy.code, bisection_setting, marker_prefix, bldr
+    )
     rebis_set = builder.find_alive_markers(
-        cpy.code, prebisection_setting, cpy.marker, bldr
+        cpy.code, prebisection_setting, marker_prefix, bldr
     )
 
     if not cpy.marker in bis_set or cpy.marker in rebis_set:
