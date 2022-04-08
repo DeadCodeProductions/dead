@@ -129,13 +129,13 @@ def _run() -> None:
                 if not bisect_worked:
                     continue
             except bisector.BisectionException as e:
-                print(f"BisectionException: '{e}'")
+                print(f"BisectionException: '{e}'", file=sys.stderr)
                 continue
             except AssertionError as e:
-                print(f"AssertionError: '{e}'")
+                print(f"AssertionError: '{e}'", file=sys.stderr)
                 continue
             except builder.BuildException as e:
-                print(f"BuildException: '{e}'")
+                print(f"BuildException: '{e}'", file=sys.stderr)
                 continue
 
         if args.reducer is not False:
@@ -1091,6 +1091,9 @@ def _unreported() -> None:
 
     res = ddb.con.execute(query).fetchall()
 
+    if not res:
+        return
+
     if res[-1][1] is None:
         res = res[:-1]
 
@@ -1110,7 +1113,7 @@ def _reported() -> None:
 
     query = """
     with rep as (	
-        select cases.case_id, bisection, bug_report_link from cases 
+        select cases.case_id, bisection, bug_report_link, compiler from cases 
         join compiler_setting on bad_setting_id = compiler_setting_id 
         left join reported_cases on cases.case_id = reported_cases.case_id  
         where bug_report_link is not null order by cases.case_id
@@ -1136,7 +1139,8 @@ def _reported() -> None:
 
     query += " order by rep.case_id"
 
-    res = ddb.con.execute(query).fetchall()
+    if not (res := ddb.con.execute(query).fetchall()):
+        return
 
     if args.id_only:
         for case_id, _, _ in res:

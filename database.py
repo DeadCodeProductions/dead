@@ -547,6 +547,11 @@ class CaseDatabase:
         Returns:
             Optional[Case]: Returns case if it exists
         """
+        if not (res := self.con.execute(
+            "SELECT * FROM cases WHERE case_id == ?", (case_id,)
+            ).fetchone()):
+            return None
+
         (
             _,
             code_sha1,
@@ -556,9 +561,7 @@ class CaseDatabase:
             bisection,
             reduced_code_sha1,
             timestamp,
-        ) = self.con.execute(
-            "SELECT * FROM cases WHERE case_id == ?", (case_id,)
-        ).fetchone()
+        ) = res
 
         good_settings_ids = self.con.execute(
             "SELECT compiler_setting_id FROM good_settings WHERE case_id == ?",
@@ -631,7 +634,7 @@ class CaseDatabase:
         scenario_id = self.record_scenario(case.scenario)
 
         with self.con:
-            # REPLACE is just an alias for INSERT OR RELACE
+            # REPLACE is just an alias for INSERT OR REPLACE
             self.con.execute(
                 "INSERT OR REPLACE INTO cases VALUES (?,?,?,?,?,?,?,?)",
                 (
