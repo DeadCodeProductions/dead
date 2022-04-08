@@ -104,6 +104,7 @@ def main() -> None:
 
     llvm["releases"] = [
         "trunk",
+        "llvmorg-13.0.1",
         "llvmorg-13.0.0",
         "llvmorg-12.0.1",
         "llvmorg-12.0.0",

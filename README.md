@@ -127,7 +127,7 @@ Finally, to find missed optimizations in `trunk`, run
           --cores $CORES\
           run --targets llvm trunk 1 2 3 s z\ 
               --additional-compilers\
-                   llvm llvmorg-13.0.0\
+                   llvm llvmorg-13.0.1\
                    llvm llvmorg-12.0.1\
                    llvm llvmorg-11.1.0\
                    llvm llvmorg-10.0.1\

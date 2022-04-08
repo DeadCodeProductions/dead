@@ -22,7 +22,7 @@ function run_llvm(){
     ./main.py -ll info --cores $CORES_PER_JOB run \
         --no-parallel-generation\
         -t llvm trunk 1 2 3 s z\
-        -ac llvm llvmorg-13.0.0\
+        -ac llvm llvmorg-13.0.1\
             llvm llvmorg-12.0.1\
             llvm llvmorg-11.1.0\
             llvm llvmorg-10.0.1\
