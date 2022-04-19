@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 import time
+from copy import copy
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
@@ -19,6 +20,7 @@ import generator
 import parsers
 import patchdatabase
 import preprocessing
+import repository
 import utils
 
 
@@ -78,7 +80,7 @@ class Reducer:
             return True
 
         case.reduced_code = self.reduce_code(
-            case.code, case.marker, case.bad_setting, case.good_settings
+            case.code, case.marker, case.bad_setting, case.good_settings, case.bisection
         )
         return bool(case.reduced_code)
 
@@ -88,6 +90,7 @@ class Reducer:
         marker: str,
         bad_setting: utils.CompilerSetting,
         good_settings: list[utils.CompilerSetting],
+        bisection: Optional[str] = None,
         preprocess: bool = True,
     ) -> Optional[str]:
         """Reduce given code w.r.t. `marker`
@@ -97,11 +100,23 @@ class Reducer:
             marker (str): Marker which exhibits the interesting behaviour.
             bad_setting (utils.CompilerSetting): Setting which can not eliminate the marker.
             good_settings (list[utils.CompilerSetting]): Settings which can eliminate the marker.
+            bisection (Optional[str]): if present the reducer will also check for the bisection
             preprocess (bool): Whether or not to run the code through preprocessing.
 
         Returns:
             Optional[str]: Reduced code, if successful.
         """
+
+        bad_settings = [bad_setting]
+        if bisection:
+            bad_settings.append(copy(bad_setting))
+            bad_settings[-1].rev = bisection
+            repo = repository.Repo(
+                bad_setting.compiler_config.repo,
+                bad_setting.compiler_config.main_branch,
+            )
+            good_settings = good_settings + [copy(bad_setting)]
+            good_settings[-1].rev = repo.parent(bisection)
 
         # creduce likes to kill unfinished processes with SIGKILL
         # so they can't clean up after themselves.
@@ -131,7 +146,9 @@ class Reducer:
             settings_path = tmpdir / "interesting_settings.json"
 
             int_settings: dict[str, Any] = {}
-            int_settings["bad_setting"] = bad_setting.to_jsonable_dict()
+            int_settings["bad_settings"] = [
+                bs.to_jsonable_dict() for bs in bad_settings
+            ]
             int_settings["good_settings"] = [
                 gs.to_jsonable_dict() for gs in good_settings
             ]
@@ -145,7 +162,7 @@ class Reducer:
                 print("TMPD=$(mktemp -d)", file=f)
                 print("trap '{ rm -rf \"$TMPD\"; }' INT TERM EXIT", file=f)
                 print(
-                    "timeout 10 "
+                    "timeout 15 "
                     f"{Path(__file__).parent.resolve()}/checker.py"
                     f" --dont-preprocess"
                     f" --config {self.config.config_path}"
@@ -278,6 +295,7 @@ if __name__ == "__main__":
                 case.marker,
                 case.bad_setting,
                 case.good_settings,
+                case.bisection,
                 preprocess=False,
             ):
                 case.reduced_code = reduce_code

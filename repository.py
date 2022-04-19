@@ -202,3 +202,10 @@ class Repo:
         if stderr.startswith("fatal:"):
             return None
         return stdout
+
+    @cache
+    def parent(self, rev: str) -> str:
+        request_str = f"git -C {self.path} rev-parse {rev}^@"
+        res = utils.run_cmd(request_str)
+        assert len(res.split("\n")) == 1
+        return res

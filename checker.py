@@ -551,10 +551,9 @@ if __name__ == "__main__":
         bad_settings = scenario.target_settings
         good_settings = scenario.attacker_settings
     elif args.interesting_settings:
-        tmp, good_settings = utils.get_interesting_settings(
+        bad_settings, good_settings = utils.get_interesting_settings(
             config, args.interesting_settings
         )
-        bad_settings = [tmp]
 
     if args.bad_settings:
         bad_settings = utils.get_compiler_settings(
