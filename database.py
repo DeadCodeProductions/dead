@@ -547,9 +547,11 @@ class CaseDatabase:
         Returns:
             Optional[Case]: Returns case if it exists
         """
-        if not (res := self.con.execute(
-            "SELECT * FROM cases WHERE case_id == ?", (case_id,)
-            ).fetchone()):
+        if not (
+            res := self.con.execute(
+                "SELECT * FROM cases WHERE case_id == ?", (case_id,)
+            ).fetchone()
+        ):
             return None
 
         (
