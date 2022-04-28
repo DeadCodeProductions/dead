@@ -279,3 +279,13 @@ Maybe `./main.py diagnose -ci $ID` can illuminate the situation.
 
 ### This case does not reduce but `diagnose` says everything is fine!
 Try throwing your whole machine at it (`./main.py reduce ID`).
+
+### The compilers should already be built and the logs just say `INFO:root: [...] is currently building; need to wait`.
+Stop DEAD, run `./main.py cache clean`, restart.
+What happened? The most likely scenario is that DEAD was interrupted while building a compiler and unable to run the clean-up procedure, confusing DEAD the next time the compiler has to be built.
+Do *not* run `cache clean` while DEAD is running.
+
+### A compiler I want to build has a build issue; where do I find the build-logs?
+The logs can be found in the path specified by the `logdir` entry of the `$HOME/.config/dead/config.json`.
+For an installation with `init.py`, this is `$PROJECTDIR/logs`.
+For a docker installation this is `/persistent/logs` in the container.
