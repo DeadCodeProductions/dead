@@ -1,4 +1,4 @@
-FROM archlinux:base-20220206.0.46909
+FROM archlinux:latest
 
 RUN pacman -Syyu --noconfirm --noprogressbar &&\
     pacman -S --noconfirm --needed --noprogressbar base-devel
