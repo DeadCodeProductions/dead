@@ -1,0 +1,2 @@
+dead-instrumenter>=0.0.2
+requests>=2.27.1

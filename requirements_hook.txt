@@ -1,6 +1,7 @@
 attrs>=21.4.0
 black>=21.12b0
 click>=8.0.3
+dead-instrumenter>=0.0.2
 importlab>=0.7
 libcst>=0.4.0
 mypy>=0.931
