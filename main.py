@@ -63,7 +63,11 @@ def _run() -> None:
     pipeline_components = (
         ["Generator<" + "parallel>" if args.parallel_generation else "single>"]
         + (["Bisector"] if args.bisector else [])
-        + (["Reducer"] if args.reducer else [])
+        + (
+            ["Reducer<Only New>"]
+            if args.reducer is None
+            else (["Reducer<Always>"] if args.reducer == True else [])
+        )
     )
 
     print("Pipeline:", " -> ".join(pipeline_components), file=sys.stderr)
