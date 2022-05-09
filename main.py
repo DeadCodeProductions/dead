@@ -16,19 +16,18 @@ from multiprocessing import Pool
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
+from ccbuildercached import Repo, BuilderWithCache, BuildException, PatchDB, get_compiler_config
+
 import requests
 
 import bisector
-import builder
 import checker
 import database
 import generator
 import init
 import parsers
-import patchdatabase
 import preprocessing
 import reducer
-import repository
 import utils
 
 
@@ -135,9 +134,7 @@ def _run() -> None:
                     known[cname].append(i)
 
                 for cname, l in known.items():
-                    repo = repository.Repo.repo_from_setting(
-                        scenario.target_settings[l[0]]
-                    )
+                    repo = scenario.target_settings[l[0]].compiler_config.repo
                     old_trunk_commit = repo.rev_to_commit("trunk")
                     repo.pull()
                     new_trunk_commit = repo.rev_to_commit("trunk")
@@ -177,7 +174,7 @@ def _run() -> None:
             except AssertionError as e:
                 print(f"AssertionError: '{e}'", file=sys.stderr)
                 continue
-            except builder.BuildException as e:
+            except BuildException as e:
                 print(f"BuildException: '{e}'", file=sys.stderr)
                 continue
 
@@ -192,7 +189,7 @@ def _run() -> None:
                     worked = rdcr.reduce_case(case)
                     time_end_reducer = time.perf_counter()
                     reducer_time = time_end_reducer - time_start_reducer
-                except builder.BuildException as e:
+                except BuildException as e:
                     print(f"BuildException: {e}")
                     continue
 
@@ -323,9 +320,7 @@ def _report() -> None:
         case.reduced_code = massaged_code
 
     bad_setting = case.bad_setting
-    bad_repo = repository.Repo(
-        bad_setting.compiler_config.repo, bad_setting.compiler_config.main_branch
-    )
+    bad_repo = bad_setting.compiler_config.repo
     is_gcc: bool = bad_setting.compiler_config.name == "gcc"
 
     # Last sanity check
@@ -361,13 +356,13 @@ def _report() -> None:
     bisection_setting = copy.deepcopy(cpy.bad_setting)
     bisection_setting.rev = cast(str, cpy.bisection)
     prebisection_setting = copy.deepcopy(bisection_setting)
-    repo = repository.Repo.repo_from_setting(bisection_setting)
+    repo = bisection_setting.compiler_config.repo
     prebisection_setting.rev = repo.rev_to_commit(f"{case.bisection}~")
 
-    bis_set = builder.find_alive_markers(
+    bis_set = utils.find_alive_markers(
         cpy.code, bisection_setting, marker_prefix, bldr
     )
-    rebis_set = builder.find_alive_markers(
+    rebis_set = utils.find_alive_markers(
         cpy.code, prebisection_setting, marker_prefix, bldr
     )
 
@@ -489,8 +484,8 @@ def _report() -> None:
     if is_gcc:
         case.bad_setting.add_flag("-emit-llvm")
         good_setting.add_flag("-emit-llvm")
-        asm_bad = builder.get_asm_str(source, case.bad_setting, bldr)
-        asm_good = builder.get_asm_str(source, good_setting, bldr)
+        asm_bad = utils.get_asm_str(source, case.bad_setting, bldr)
+        asm_good = utils.get_asm_str(source, good_setting, bldr)
 
         print_cody_str(f"{bad_setting_str} -S -o /dev/stdout case.c", is_gcc)
         print(prep_asm(asm_bad, is_gcc))
@@ -507,13 +502,13 @@ def _report() -> None:
         print("----- Build information -----")
         print(f"----- {bad_setting_tag}")
         print(
-            builder.get_verbose_compiler_info(bad_setting, bldr).split("lto-wrapper\n")[
+            utils.get_verbose_compiler_info(bad_setting, bldr).split("lto-wrapper\n")[
                 -1
             ]
         )
         print(f"\n----- {good_setting_tag}")
         print(
-            builder.get_verbose_compiler_info(good_setting, bldr).split(
+            utils.get_verbose_compiler_info(good_setting, bldr).split(
                 "lto-wrapper\n"
             )[-1]
         )
@@ -521,11 +516,11 @@ def _report() -> None:
     else:
 
         print("Target: `x86_64-unknown-linux-gnu`")
-        ir_bad = builder.get_llvm_IR(source, case.bad_setting, bldr)
-        ir_good = builder.get_llvm_IR(source, good_setting, bldr)
+        ir_bad = utils.get_llvm_IR(source, case.bad_setting, bldr)
+        ir_good = utils.get_llvm_IR(source, good_setting, bldr)
 
-        asm_bad = builder.get_asm_str(source, case.bad_setting, bldr)
-        asm_good = builder.get_asm_str(source, good_setting, bldr)
+        asm_bad = utils.get_asm_str(source, case.bad_setting, bldr)
+        asm_good = utils.get_asm_str(source, good_setting, bldr)
         print("\n------------------------------------------------\n")
         print_cody_str(
             f"{bad_setting_str} [-emit-llvm] -S -o /dev/stdout case.c", is_gcc
@@ -552,8 +547,8 @@ def _report() -> None:
         if author:
             print(f"Committed by: @{author}")
         print("\n------------------------------------------------\n")
-        bisection_asm = builder.get_asm_str(source, bisection_setting, bldr)
-        bisection_ir = builder.get_llvm_IR(source, bisection_setting, bldr)
+        bisection_asm = utils.get_asm_str(source, bisection_setting, bldr)
+        bisection_ir = utils.get_llvm_IR(source, bisection_setting, bldr)
         print(
             to_cody_str(
                 f"{bisection_setting.report_string()} [-emit-llvm] -S -o /dev/stdout case.c",
@@ -575,8 +570,8 @@ def _report() -> None:
                 is_gcc,
             )
         )
-        prebisection_asm = builder.get_asm_str(source, prebisection_setting, bldr)
-        prebisection_ir = builder.get_llvm_IR(source, prebisection_setting, bldr)
+        prebisection_asm = utils.get_asm_str(source, prebisection_setting, bldr)
+        prebisection_ir = utils.get_llvm_IR(source, prebisection_setting, bldr)
         print()
         print(prep_IR(prebisection_ir))
         print()
@@ -609,10 +604,7 @@ def _diagnose() -> None:
     else:
         case = utils.Case.from_file(config, Path(args.file))
 
-    repo = repository.Repo(
-        case.bad_setting.compiler_config.repo,
-        case.bad_setting.compiler_config.main_branch,
-    )
+    repo = case.bad_setting.compiler_config.repo
 
     if args.targets or args.additional_compilers:
         if not args.targets_default_opt_levels:
@@ -779,11 +771,11 @@ def _check_reduced() -> None:
     case = ddb.get_case_from_id_or_die(args.case_id)
 
     prefix = utils.get_marker_prefix(case.marker)
-    bad_alive = builder.find_alive_markers(new_code, case.bad_setting, prefix, bldr)
+    bad_alive = utils.find_alive_markers(new_code, case.bad_setting, prefix, bldr)
     nice_print(f"Bad {case.bad_setting}", ok_fail(case.marker in bad_alive))
 
     for gs in case.good_settings:
-        good_alive = builder.find_alive_markers(new_code, gs, prefix, bldr)
+        good_alive = utils.find_alive_markers(new_code, gs, prefix, bldr)
         nice_print(f"Good {gs}", ok_fail(case.marker not in good_alive))
 
     case.code = new_code
@@ -826,34 +818,31 @@ def _asm() -> None:
         print(f"Saving {name + '.s'}...")
 
     case = ddb.get_case_from_id_or_die(args.case_id)
-    bad_repo = repository.Repo(
-        case.bad_setting.compiler_config.repo,
-        case.bad_setting.compiler_config.main_branch,
-    )
+    bad_repo = case.bad_setting.compiler_config.repo
 
     same_opt = [
         gs for gs in case.good_settings if gs.opt_level == case.bad_setting.opt_level
     ]
     good_setting = utils.get_latest_compiler_setting_from_list(bad_repo, same_opt)
 
-    asmbad = builder.get_asm_str(case.code, case.bad_setting, bldr)
-    asmgood = builder.get_asm_str(case.code, good_setting, bldr)
+    asmbad = utils.get_asm_str(case.code, case.bad_setting, bldr)
+    asmgood = utils.get_asm_str(case.code, good_setting, bldr)
     save_wrapper("asmbad", asmbad)
     save_wrapper("asmgood", asmgood)
 
     if case.reduced_code:
-        reducedasmbad = builder.get_asm_str(case.reduced_code, case.bad_setting, bldr)
-        reducedasmgood = builder.get_asm_str(case.reduced_code, good_setting, bldr)
+        reducedasmbad = utils.get_asm_str(case.reduced_code, case.bad_setting, bldr)
+        reducedasmgood = utils.get_asm_str(case.reduced_code, good_setting, bldr)
         save_wrapper("reducedasmbad", reducedasmbad)
         save_wrapper("reducedasmgood", reducedasmgood)
     if case.bisection:
         bisection_setting = copy.deepcopy(case.bad_setting)
         bisection_setting.rev = case.bisection
 
-        asmbisect = builder.get_asm_str(case.code, bisection_setting, bldr)
+        asmbisect = utils.get_asm_str(case.code, bisection_setting, bldr)
         save_wrapper("asmbisect", asmbisect)
         if case.reduced_code:
-            reducedasmbisect = builder.get_asm_str(
+            reducedasmbisect = utils.get_asm_str(
                 case.reduced_code, bisection_setting, bldr
             )
             save_wrapper("reducedasmbisect", reducedasmbisect)
@@ -901,10 +890,8 @@ def _set() -> None:
     case_id: int = int(args.case_id)
     case = ddb.get_case_from_id_or_die(case_id)
     mcode, link, fixed = ddb.get_report_info_from_id(case_id)
-    repo = repository.Repo(
-        case.bad_setting.compiler_config.repo,
-        case.bad_setting.compiler_config.main_branch,
-    )
+
+    repo = case.bad_setting.compiler_config.repo
 
     if args.what == "ocode":
         with open(args.var, "r") as f:
@@ -1021,17 +1008,18 @@ def _set() -> None:
 
 
 def _build() -> None:
-    compiler_config = utils.get_compiler_config(config, args.project)
+    compiler_config = get_compiler_config(args.project, Path(config.cachedir))
     additional_patches: list[Path] = []
     if args.add_patches:
         additional_patches = [Path(patch).absolute() for patch in args.add_patches]
     for rev in args.rev:
         print(
-            bldr.build(
+            bldr.build_rev_with_config(
                 compiler_config,
                 rev,
                 additional_patches=additional_patches,
-                force=args.force,
+                # TODO: implement force
+                #force=args.force,
             )
         )
 
@@ -1119,8 +1107,8 @@ def _unreported() -> None:
         """
 
         if args.good_version:
-            gcc_repo = repository.Repo(config.gcc.repo, config.gcc.main_branch)
-            llvm_repo = repository.Repo(config.llvm.repo, config.llvm.main_branch)
+            gcc_repo = Repo(config.gcc.repo, config.gcc.main_branch)
+            llvm_repo = Repo(config.llvm.repo, config.llvm.main_branch)
 
             try:
                 rev = gcc_repo.rev_to_commit(args.good_version)
@@ -1218,8 +1206,8 @@ def _reported() -> None:
             print(case_id)
     elif args.good_settings:
 
-        gcc_repo = repository.Repo(config.gcc.repo, config.gcc.main_branch)
-        llvm_repo = repository.Repo(config.llvm.repo, config.llvm.main_branch)
+        gcc_repo = Repo(config.gcc.repo, config.gcc.main_branch)
+        llvm_repo = Repo(config.llvm.repo, config.llvm.main_branch)
         print(
             "{: <8} {: <45} {: <45} {}".format(
                 "ID", "Bisection", "Good Settings", "Link"
@@ -1332,8 +1320,8 @@ def _findby() -> None:
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
-    patchdb = patchdatabase.PatchDB(config.patchdb)
-    bldr = builder.Builder(config, patchdb, args.cores)
+    patchdb = PatchDB(config.patchdb)
+    bldr = BuilderWithCache(Path(config.cachedir), patchdb, args.cores)
     chkr = checker.Checker(config, bldr)
     gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
     rdcr = reducer.Reducer(config, bldr)

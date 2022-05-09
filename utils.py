@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import argparse
 import copy
 import functools
@@ -17,14 +18,14 @@ from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
 from types import SimpleNamespace
-from typing import IO, TYPE_CHECKING, Any, Optional, Sequence, TextIO, Union, cast
+from typing import IO, Any, Optional, Sequence, TextIO, Union, cast
+from types import TracebackType
+
+from ccbuildercached import Repo, BuilderWithCache, BuildException, CompilerConfig, get_compiler_config
 
 import parsers
-import repository
 import VERSIONS
 
-if TYPE_CHECKING:
-    import builder
 
 
 class Executable(object):
@@ -48,6 +49,7 @@ EXPECTED_ENTRIES = [
     (list,      ("llvm", "releases",),      "LLVM releases of interest"),
 
     (Path,      ("cachedir", ),             "Path where the cache should be"),
+    (Path,      ("repodir", ),              "Path where the repos should be"),
     (Executable,("csmith", "executable"),   "Path to executable or name in PATH for csmith"),
     (Path,      ("csmith", "include_path"), "Path to include directory of csmith"),
     (int,       ("csmith", "max_size"),     "Maximum size of csmith-generated candidate"),
@@ -335,7 +337,7 @@ def create_symlink(src: Path, dst: Path) -> None:
 
 @dataclass
 class CompilerSetting:
-    compiler_config: NestedNamespace
+    compiler_config: CompilerConfig
     rev: str
     opt_level: str
     additional_flags: Optional[list[str]] = None
@@ -361,7 +363,7 @@ class CompilerSetting:
         return f"{self.compiler_config.name}-{self.rev} -O{self.opt_level}"
 
     def to_jsonable_dict(self) -> dict[str, Any]:
-        d = {}
+        d: dict[str, Any] = {}
         d["compiler_config"] = self.compiler_config.name
         d["rev"] = self.rev
         d["opt_level"] = self.opt_level
@@ -376,7 +378,7 @@ class CompilerSetting:
         config: NestedNamespace, d: dict[str, Any]
     ) -> CompilerSetting:
         return CompilerSetting(
-            get_compiler_config(config, d["compiler_config"]),
+            get_compiler_config(d["compiler_config"], config.repodir),
             d["rev"],
             d["opt_level"],
             d["additional_flags"],
@@ -504,8 +506,8 @@ def run_cmd(
         cmd, cwd=str(working_dir), check=True, env=env, capture_output=True, **kwargs
     )
 
-    logging.debug(output.stdout.decode("utf-8").strip())
-    logging.debug(output.stderr.decode("utf-8").strip())
+    #logging.debug(output.stdout.decode("utf-8").strip())
+    #logging.debug(output.stderr.decode("utf-8").strip())
     res: str = output.stdout.decode("utf-8").strip()
     return res
 
@@ -553,24 +555,6 @@ def find_include_paths(clang: str, file: str, flags: str) -> list[str]:
     )
     end = next(i for i, line in enumerate(output) if "End of search list." in line)
     return [output[i].strip() for i in range(start, end)]
-
-
-def get_compiler_config(
-    config: NestedNamespace, arg: Union[list[str], str]
-) -> NestedNamespace:
-    if isinstance(arg, list):
-        compiler = arg[0]
-    else:
-        compiler = arg
-
-    if compiler == "gcc":
-        compiler_config: NestedNamespace = config.gcc
-    elif compiler == "llvm" or compiler == "clang":
-        compiler_config = config.llvm
-    else:
-        print(f"Unknown compiler project {compiler}")
-        exit(1)
-    return compiler_config
 
 
 def get_scenario(config: NestedNamespace, args: argparse.Namespace) -> Scenario:
@@ -626,8 +610,8 @@ def get_compiler_settings(
 
     pos = 0
     while len(args[pos:]) > 1:
-        compiler_config = get_compiler_config(config, args[pos:])
-        repo = repository.Repo(compiler_config.repo, compiler_config.main_branch)
+        compiler_config = get_compiler_config(args[pos], Path(config.repodir))
+        repo = compiler_config.repo
         rev = repo.rev_to_commit(args[pos + 1])
         pos += 2
 
@@ -854,7 +838,7 @@ class Case:
 
 
 def get_latest_compiler_setting_from_list(
-    repo: repository.Repo, l: list[CompilerSetting]
+    repo: Repo, l: list[CompilerSetting]
 ) -> CompilerSetting:
     """Finds and returns newest compiler setting wrt main branch
     in the list. Assumes all compilers to be of the same 'type' i.e. gcc, clang,...
@@ -876,3 +860,179 @@ def get_latest_compiler_setting_from_list(
             return 1
 
     return max(l, key=functools.cmp_to_key(cmp_func))
+
+# =================== Builder Helper ====================
+class CompileError(Exception):
+    """Exception raised when the compiler fails to compile something.
+
+    There are two common reasons for this to appear:
+    - Easy: The code file has is not present/disappeard.
+    - Hard: Internal compiler errors.
+    """
+
+    pass
+
+def find_alive_markers(
+    code: str,
+    compiler_setting: CompilerSetting,
+    marker_prefix: str,
+    bldr: BuilderWithCache,
+) -> set[str]:
+    """Return set of markers which are found in the assembly.
+
+    Args:
+        code (str): Code with markers
+        compiler_setting (utils.CompilerSetting): Compiler to use
+        marker_prefix (str): Prefix of markers (utils.get_marker_prefix)
+        bldr (Builder): Builder to get the compiler
+
+    Returns:
+        set[str]: Set of markers found in the assembly i.e. alive markers
+
+    Raises:
+        CompileError: Raised when code can't be compiled.
+    """
+    alive_markers = set()
+
+    # Extract alive markers
+    alive_regex = re.compile(f".*[call|jmp].*{marker_prefix}([0-9]+)_.*")
+
+    asm = get_asm_str(code, compiler_setting, bldr)
+
+    for line in asm.split("\n"):
+        line = line.strip()
+        m = alive_regex.match(line)
+        if m:
+            alive_markers.add(f"{marker_prefix}{m.group(1)}_")
+
+    return alive_markers
+
+class CompileContext:
+    def __init__(self, code: str):
+        self.code = code
+        self.fd_code: Optional[int] = None
+        self.fd_asm: Optional[int] = None
+        self.code_file: Optional[str] = None
+        self.asm_file: Optional[str] = None
+
+    def __enter__(self) -> tuple[str, str]:
+        self.fd_code, self.code_file = tempfile.mkstemp(suffix=".c")
+        self.fd_asm, self.asm_file = tempfile.mkstemp(suffix=".s")
+
+        with open(self.code_file, "w") as f:
+            f.write(self.code)
+
+        return (self.code_file, self.asm_file)
+
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        exc_traceback: Optional[TracebackType],
+    ) -> None:
+        if self.code_file and self.fd_code and self.asm_file and self.fd_asm:
+            os.remove(self.code_file)
+            os.close(self.fd_code)
+            # In case of a CompileError,
+            # the file itself might not exist.
+            if Path(self.asm_file).exists():
+                os.remove(self.asm_file)
+            os.close(self.fd_asm)
+        else:
+            raise BuildException("Compier context exited but was not entered")
+
+
+def get_asm_str(
+    code: str, compiler_setting: CompilerSetting, bldr: BuilderWithCache
+) -> str:
+    """Get assembly of `code` compiled by `compiler_setting`.
+
+    Args:
+        code (str): Code to compile to assembly
+        compiler_setting (utils.CompilerSetting): Compiler to use
+        bldr (Builder): Builder to get the compiler
+
+    Returns:
+        str: Assembly of `code`
+
+    Raises:
+        CompileError: Is raised when compilation failes i.e. has a non-zero exit code.
+    """
+    # Get the assembly output of `code` compiled with `compiler_setting` as str
+
+    compiler_exe = get_compiler_executable(compiler_setting, bldr)
+
+    with CompileContext(code) as context_res:
+        code_file, asm_file = context_res
+
+        cmd = f"{compiler_exe} -S {code_file} -o{asm_file} -O{compiler_setting.opt_level}".split(
+            " "
+        )
+        cmd += compiler_setting.get_flag_cmd()
+        try:
+            run_cmd(cmd)
+        except subprocess.CalledProcessError:
+            raise CompileError()
+
+        with open(asm_file, "r") as f:
+            return f.read()
+
+def get_compiler_executable(
+    compiler_setting: CompilerSetting, bldr: BuilderWithCache
+) -> Path:
+    """Get the path to the compiler *binary* i.e. [...]/bin/clang
+
+    Args:
+        compiler_setting (utils.CompilerSetting): Compiler to get the binary of
+        bldr (Builder): Builder to get/build the requested compiler.
+
+    Returns:
+        Path: Path to compiler binary
+    """
+    compiler_path = bldr.build_rev_with_config(compiler_setting.compiler_config, compiler_setting.rev)
+    compiler_exe = pjoin(compiler_path, "bin", compiler_setting.compiler_config.name)
+    return Path(compiler_exe)
+
+
+def get_verbose_compiler_info(
+    compiler_setting: CompilerSetting, bldr: BuilderWithCache
+) -> str:
+    cpath = get_compiler_executable(compiler_setting, bldr)
+
+    return (
+        subprocess.run(
+            f"{cpath} -v".split(),
+            stderr=subprocess.STDOUT,
+            stdout=subprocess.PIPE,
+        )
+        .stdout.decode("utf-8")
+        .strip()
+    )
+
+
+
+
+def get_llvm_IR(
+    code: str, compiler_setting: CompilerSetting, bldr: BuilderWithCache
+) -> str:
+    if compiler_setting.compiler_config.name != "clang":
+        raise CompileError("Requesting LLVM IR from non-clang compiler!")
+
+    compiler_exe = get_compiler_executable(compiler_setting, bldr)
+
+    with CompileContext(code) as context_res:
+        code_file, asm_file = context_res
+
+        cmd = f"{compiler_exe} -emit-llvm -S {code_file} -o{asm_file} -O{compiler_setting.opt_level}".split(
+            " "
+        )
+        cmd += compiler_setting.get_flag_cmd()
+        try:
+            run_cmd(cmd)
+        except subprocess.CalledProcessError:
+            raise CompileError()
+
+        with open(asm_file, "r") as f:
+            return f.read()
+
+

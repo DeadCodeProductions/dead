@@ -15,14 +15,12 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Optional
 
-import builder
 import generator
 import parsers
-import patchdatabase
 import preprocessing
-import repository
 import utils
 
+from ccbuildercached import Repo, BuilderWithCache, BuildException, CompilerConfig, get_compiler_config, PatchDB
 
 # ==================== Reducer ====================
 class TempDirEnv:
@@ -46,7 +44,7 @@ class TempDirEnv:
 @dataclass
 class Reducer:
     config: utils.NestedNamespace
-    bldr: builder.Builder
+    bldr: BuilderWithCache
 
     def reduce_file(self, file: Path, force: bool = False) -> bool:
         """Reduce a case given in the .tar format.
@@ -111,10 +109,7 @@ class Reducer:
         if bisection:
             bad_settings.append(copy(bad_setting))
             bad_settings[-1].rev = bisection
-            repo = repository.Repo(
-                bad_setting.compiler_config.repo,
-                bad_setting.compiler_config.main_branch,
-            )
+            repo = bad_setting.compiler_config.repo
             good_settings = good_settings + [copy(bad_setting)]
             good_settings[-1].rev = repo.parent(bisection)
 
@@ -212,8 +207,8 @@ class Reducer:
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.reducer_parser())
 
-    patchdb = patchdatabase.PatchDB(config.patchdb)
-    bldr = builder.Builder(config, patchdb, args.cores)
+    patchdb = PatchDB(config.patchdb)
+    bldr = BuilderWithCache(Path(config.cachedir), patchdb, args.cores)
     gnrtr = generator.CSmithCaseGenerator(config, patchdb)
     rdcr = Reducer(config, bldr)
 
@@ -236,7 +231,7 @@ if __name__ == "__main__":
             print(f"Processing {tf}")
             try:
                 rdcr.reduce_file(tf, args.force)
-            except builder.BuildException as e:
+            except BuildException as e:
                 print("{e}")
 
     # if (We want to generate something and not only reduce a file)
@@ -268,14 +263,14 @@ if __name__ == "__main__":
                 path = next(gen)
                 try:
                     rdcr.reduce_file(path)
-                except builder.BuildException as e:
+                except BuildException as e:
                     print(f"{e}")
         else:
             for i in range(args.amount):
                 path = next(gen)
                 try:
                     rdcr.reduce_file(path)
-                except builder.BuildException as e:
+                except BuildException as e:
                     print(f"{e}")
 
     elif not args.work_through:

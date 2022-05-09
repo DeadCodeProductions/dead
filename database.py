@@ -12,6 +12,7 @@ from typing import ClassVar, Optional
 import utils
 from utils import Case, CompilerSetting, NestedNamespace, Scenario
 
+from ccbuildercached import get_compiler_config
 
 class DatabaseError(Exception):
     pass
@@ -482,7 +483,7 @@ class CaseDatabase:
 
         compiler, rev, opt_level, flags = res
         return CompilerSetting(
-            utils.get_compiler_config(self.config, compiler),
+            get_compiler_config(compiler, self.config.repodir),
             rev,
             opt_level,
             flags.split("|"),

@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
 
 import copy
-import dataclasses
 import functools
 import logging
 import math
 import os
 import tarfile
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-import builder
+from ccbuildercached import Repo, BuilderWithCache, BuildException, CompilerConfig, get_compiler_config, PatchDB
+
 import checker
 import generator
 import parsers
-import patchdatabase
 import reducer
-import repository
 import utils
 
 
@@ -47,7 +44,7 @@ class Bisector:
     def __init__(
         self,
         config: utils.NestedNamespace,
-        bldr: builder.Builder,
+        bldr: BuilderWithCache,
         chkr: checker.Checker,
     ) -> None:
         self.config = config
@@ -152,9 +149,7 @@ class Bisector:
         )
 
         bad_compiler_config = case.bad_setting.compiler_config
-        repo = repository.Repo(
-            bad_compiler_config.repo, bad_compiler_config.main_branch
-        )
+        repo = bad_compiler_config.repo
 
         # ===== Get good and bad commits
         bad_commit = case.bad_setting.rev
@@ -242,7 +237,7 @@ class Bisector:
                     # )
                     # self._check(case, res, repo, interesting_is_bad=False)
                     # print(f"First good commit {res}")
-        except builder.CompileError:
+        except utils.CompileError:
             return None
 
         return res
@@ -251,7 +246,7 @@ class Bisector:
         self,
         case: utils.Case,
         rev: str,
-        repo: repository.Repo,
+        repo: Repo,
         interesting_is_bad: bool = True,
     ) -> None:
         """Sanity check, that the bisected commit is actually
@@ -283,7 +278,7 @@ class Bisector:
         good_rev: str,
         bad_rev: str,
         case: utils.Case,
-        repo: repository.Repo,
+        repo: Repo,
         interesting_is_bad: bool = True,
         max_build_fail: int = 2,
     ) -> str:
@@ -338,7 +333,7 @@ class Bisector:
             self.steps += 1
             try:
                 test: bool = self._is_interesting(case, midpoint)
-            except builder.CompileError:
+            except utils.CompileError:
                 logging.warning(
                     f"Failed to compile code with {case.bad_setting.compiler_config.name}-{midpoint}"
                 )
@@ -415,13 +410,13 @@ class Bisector:
 
             try:
                 test = self._is_interesting(case, midpoint)
-            except builder.BuildException:
+            except BuildException:
                 logging.warning(
                     f"Could not build {case.bad_setting.compiler_config.name} {midpoint}!"
                 )
                 failed_to_build_or_compile = True
                 continue
-            except builder.CompileError:
+            except utils.CompileError:
                 logging.warning(
                     f"Failed to compile code with {case.bad_setting.compiler_config.name}-{midpoint}"
                 )
@@ -447,8 +442,8 @@ class Bisector:
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.bisector_parser())
 
-    patchdb = patchdatabase.PatchDB(config.patchdb)
-    bldr = builder.Builder(config, patchdb, args.cores)
+    patchdb = PatchDB(config.patchdb)
+    bldr = BuilderWithCache(Path(config.cachedir), patchdb, args.cores)
     chkr = checker.Checker(config, bldr)
     gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
     rdcr = reducer.Reducer(config, bldr)
@@ -480,7 +475,7 @@ if __name__ == "__main__":
             except AssertionError as e:
                 print(f"AssertionError in {tf}: '{e}'")
                 continue
-            except builder.BuildException as e:
+            except BuildException as e:
                 print(f"BuildException in {tf}: '{e}'")
                 continue
 
@@ -515,7 +510,7 @@ if __name__ == "__main__":
                 if args.reducer:
                     try:
                         worked = rdcr.reduce_file(path)
-                    except builder.BuildException as e:
+                    except BuildException as e:
                         print(f"BuildException in {path}: {e}")
                         continue
 
@@ -528,7 +523,7 @@ if __name__ == "__main__":
                     except AssertionError as e:
                         print(f"AssertionError in {path}: '{e}'")
                         continue
-                    except builder.BuildException as e:
+                    except BuildException as e:
                         print(f"BuildException in {path}: '{e}'")
                         continue
         else:
@@ -538,7 +533,7 @@ if __name__ == "__main__":
                 if args.reducer:
                     try:
                         worked = rdcr.reduce_file(path)
-                    except builder.BuildException as e:
+                    except BuildException as e:
                         print(f"BuildException in {path}: {e}")
                         continue
                 if not args.reducer or worked:
@@ -550,7 +545,7 @@ if __name__ == "__main__":
                     except AssertionError as e:
                         print(f"AssertionError in {path}: '{e}'")
                         continue
-                    except builder.BuildException as e:
+                    except BuildException as e:
                         print(f"BuildException in {path}: '{e}'")
                         continue
 
