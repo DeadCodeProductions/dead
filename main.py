@@ -2,6 +2,7 @@
 
 import copy
 import hashlib
+import json
 import logging
 import os
 import random
@@ -10,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 from multiprocessing import Pool
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
@@ -40,6 +42,43 @@ def get_llvm_github_commit_author(rev: str) -> Optional[str]:
         if m := p.match(l):
             return m.group(1)
     return None
+
+
+def check_llvm_issues(rev: str) -> bool:
+    print(f"Looking for existing issues...", end="", file=sys.stderr)
+    url_pre = f"https://api.github.com/search/issues?q={rev} repo:llvm/llvm-project"
+    open_issues = json.loads(requests.get(url_pre + " is:open").content)
+    closed_issues = json.loads(requests.get(url_pre + " is:closed").content)
+    issues = open_issues["items"] + closed_issues["items"]
+    if issues:
+        print(
+            f"!!!\nWarning: The following issues already contain the revision {rev}!",
+            file=sys.stderr,
+        )
+        for issue in issues:
+            print(issue["html_url"], file=sys.stderr)
+        return False
+    print(f"found none", file=sys.stderr)
+    return True
+
+
+def check_gcc_issues(rev: str) -> bool:
+    print(f"Looking for existing issues...", end="", file=sys.stderr)
+    url_pre = f"https://gcc.gnu.org/bugzilla/rest/bug?quicksearch={rev}"
+    issues = json.loads(requests.get(url_pre).content)["bugs"]
+    if issues:
+        print(
+            f"!!!\nWarning: The following issues already contain the revision {rev}!",
+            file=sys.stderr,
+        )
+        for issue in issues:
+            print(
+                f"https://gcc.gnu.org/bugzilla/show_bug.cgi?id={issue['id']}",
+                file=sys.stderr,
+            )
+        return False
+    print(f"found none", file=sys.stderr)
+    return True
 
 
 def get_all_bisections(ddb: database.CaseDatabase) -> list[str]:
@@ -546,6 +585,11 @@ def _report() -> None:
     with open("case.txt", "w") as f:
         f.write(source)
     print("Saved case.txt...", file=sys.stderr)
+
+    if is_gcc:
+        check_gcc_issues(cast(str, case.bisection))
+    else:
+        check_llvm_issues(cast(str, case.bisection))
 
 
 def _diagnose() -> None:
