@@ -311,7 +311,7 @@ class Checker:
         )
         uninteresting = False
         if case.marker not in found_in_bad:
-            uninteresting = True
+            return False
         for good_setting in case.good_settings:
             found_in_good = builder.find_alive_markers(
                 case.code, good_setting, marker_prefix, self.builder
