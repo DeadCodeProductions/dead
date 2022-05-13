@@ -12,7 +12,14 @@ from pathlib import Path
 from types import TracebackType
 from typing import Optional
 
-from ccbuildercached import Repo, BuilderWithCache, BuildException, CompilerConfig, get_compiler_config, PatchDB
+from ccbuildercached import (
+    BuilderWithCache,
+    BuildException,
+    CompilerConfig,
+    PatchDB,
+    Repo,
+    get_compiler_config,
+)
 from dead_instrumenter.instrumenter import annotate_with_static
 
 import parsers
@@ -375,7 +382,9 @@ class Checker:
         for line in case.code.split("\n"):
             m = p.match(line)
             if m:
-                empty_body_code += f"\nvoid {marker_prefix}{m.group(1)}(void){{}}\n{m.group(2)}"
+                empty_body_code += (
+                    f"\nvoid {marker_prefix}{m.group(1)}(void){{}}\n{m.group(2)}"
+                )
             else:
                 empty_body_code += f"\n{line}"
 

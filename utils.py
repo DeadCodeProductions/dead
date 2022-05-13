@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import re
 import argparse
 import copy
 import functools
 import json
 import logging
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -17,15 +17,20 @@ from dataclasses import dataclass
 from functools import reduce
 from os.path import join as pjoin
 from pathlib import Path
-from types import SimpleNamespace
+from types import SimpleNamespace, TracebackType
 from typing import IO, Any, Optional, Sequence, TextIO, Union, cast
-from types import TracebackType
 
-from ccbuildercached import Repo, BuilderWithCache, BuildException, CompilerConfig, get_compiler_config
+import ccbuildercached
+from ccbuildercached import (
+    BuilderWithCache,
+    BuildException,
+    CompilerConfig,
+    Repo,
+    get_compiler_config,
+)
 
 import parsers
 import VERSIONS
-
 
 
 class Executable(object):
@@ -378,7 +383,7 @@ class CompilerSetting:
         config: NestedNamespace, d: dict[str, Any]
     ) -> CompilerSetting:
         return CompilerSetting(
-            get_compiler_config(d["compiler_config"], config.repodir),
+            get_compiler_config(d["compiler_config"], Path(config.repodir)),
             d["rev"],
             d["opt_level"],
             d["additional_flags"],
@@ -506,8 +511,6 @@ def run_cmd(
         cmd, cwd=str(working_dir), check=True, env=env, capture_output=True, **kwargs
     )
 
-    #logging.debug(output.stdout.decode("utf-8").strip())
-    #logging.debug(output.stderr.decode("utf-8").strip())
     res: str = output.stdout.decode("utf-8").strip()
     return res
 
@@ -861,6 +864,7 @@ def get_latest_compiler_setting_from_list(
 
     return max(l, key=functools.cmp_to_key(cmp_func))
 
+
 # =================== Builder Helper ====================
 class CompileError(Exception):
     """Exception raised when the compiler fails to compile something.
@@ -871,6 +875,7 @@ class CompileError(Exception):
     """
 
     pass
+
 
 def find_alive_markers(
     code: str,
@@ -906,6 +911,7 @@ def find_alive_markers(
             alive_markers.add(f"{marker_prefix}{m.group(1)}_")
 
     return alive_markers
+
 
 class CompileContext:
     def __init__(self, code: str):
@@ -977,6 +983,7 @@ def get_asm_str(
         with open(asm_file, "r") as f:
             return f.read()
 
+
 def get_compiler_executable(
     compiler_setting: CompilerSetting, bldr: BuilderWithCache
 ) -> Path:
@@ -989,9 +996,9 @@ def get_compiler_executable(
     Returns:
         Path: Path to compiler binary
     """
-    compiler_path = bldr.build_rev_with_config(compiler_setting.compiler_config, compiler_setting.rev)
-    compiler_exe = pjoin(compiler_path, "bin", compiler_setting.compiler_config.name)
-    return Path(compiler_exe)
+    return ccbuildercached.get_compiler_executable_from_revision_with_config(
+        compiler_setting.compiler_config, compiler_setting.rev, bldr
+    )
 
 
 def get_verbose_compiler_info(
@@ -1008,8 +1015,6 @@ def get_verbose_compiler_info(
         .stdout.decode("utf-8")
         .strip()
     )
-
-
 
 
 def get_llvm_IR(
@@ -1034,5 +1039,3 @@ def get_llvm_IR(
 
         with open(asm_file, "r") as f:
             return f.read()
-
-
