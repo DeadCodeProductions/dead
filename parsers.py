@@ -621,6 +621,42 @@ def main_parser() -> argparse.ArgumentParser:
         help="Path to case to work with",
     )
 
+    diagnose_parser.add_argument(
+        "-t",
+        "--targets",
+        help="Option to override the bad setting/target of the case. Only the first specified target will be used!",
+        nargs="+",
+        type=str,
+    )
+
+    diagnose_parser.add_argument(
+        "-tdol",
+        "--targets-default-opt-levels",
+        help="Default optimization levels for the target that override the targets of the case.",
+        nargs="+",
+        default=[],
+        type=str,
+    )
+
+    diagnose_parser.add_argument(
+        "-ac",
+        "--additional-compilers",
+        help="Override the attacking compilers of the case.",
+        nargs="*",
+        type=str,
+    )
+
+    diagnose_parser.add_argument(
+        "-acdol",
+        "--additional-compilers-default-opt-levels",
+        help="Default optimization levels for the overriding attacking compilers.",
+        nargs="+",
+        default=[],
+        type=str,
+    )
+
+    diagnose_parser.add_argument("-s", "--scenario", help="", type=str)
+
     checkreduced_parser = subparser.add_parser(
         "checkreduced",
         help="Check if code outside of the database passes the checks of a specified case.",

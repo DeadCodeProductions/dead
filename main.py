@@ -614,6 +614,21 @@ def _diagnose() -> None:
         case.bad_setting.compiler_config.main_branch,
     )
 
+    if args.targets or args.additional_compilers:
+        if not args.targets_default_opt_levels:
+            args.targets_default_opt_levels = [case.bad_setting.opt_level]
+        if not args.additional_compilers_default_opt_levels:
+            args.additional_compilers_default_opt_levels = [case.bad_setting.opt_level]
+
+        scenario = utils.get_scenario(config, args)
+
+        if scenario.target_settings:
+            case.bad_setting = scenario.target_settings[0]
+        if scenario.attacker_settings:
+            case.good_settings = scenario.attacker_settings
+
+    # Replace
+
     def sanitize_values(
         config: utils.NestedNamespace,
         case: utils.Case,
