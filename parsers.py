@@ -667,7 +667,7 @@ def main_parser() -> argparse.ArgumentParser:
 
     get_parser.add_argument(
         "what",
-        choices=("link", "fixed", "mcode", "rcode", "ocode", "bisection"),
+        choices=("link", "fixed", "mcode", "rcode", "ocode", "bisection", "marker"),
         type=str,
         help="What you want to get. `ocode` is the original code. `rcode` is the reduced code. `mcode` is the massaged code. fixed is the commit the commit the case was `fixed` with and `link` the link to the bug report.",
     )

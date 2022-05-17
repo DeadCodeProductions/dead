@@ -843,7 +843,7 @@ def _asm() -> None:
 def _get() -> None:
     # Why are you printing code with end=""?
     case_id: int = int(args.case_id)
-    if args.what in ["ocode", "rcode", "bisection"]:
+    if args.what in ["ocode", "rcode", "bisection", "marker"]:
         case = ddb.get_case_from_id_or_die(args.case_id)
         if args.what == "ocode":
             print(case.code, end="")
@@ -853,6 +853,9 @@ def _get() -> None:
             return
         elif args.what == "bisection":
             print(case.bisection, end="")
+            return
+        elif args.what == "marker":
+            print(case.marker, end="")
             return
     else:
         mcode, link, fixed = ddb.get_report_info_from_id(case_id)
