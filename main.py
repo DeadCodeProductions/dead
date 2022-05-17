@@ -623,8 +623,13 @@ def _diagnose() -> None:
         scenario = utils.get_scenario(config, args)
 
         if scenario.target_settings:
+            scenario.target_settings[
+                0
+            ].additional_flags = case.bad_setting.additional_flags
             case.bad_setting = scenario.target_settings[0]
         if scenario.attacker_settings:
+            for gs in scenario.attacker_settings:
+                gs.additional_flags = case.good_settings[0].additional_flags
             case.good_settings = scenario.attacker_settings
 
     # Replace

@@ -441,8 +441,8 @@ def get_asm_str(
         cmd += compiler_setting.get_flag_cmd()
         try:
             utils.run_cmd(cmd)
-        except subprocess.CalledProcessError:
-            raise CompileError()
+        except subprocess.CalledProcessError as e:
+            raise CompileError(f"CompileError: {e}")
 
         with open(asm_file, "r") as f:
             return f.read()
