@@ -75,35 +75,43 @@ def preprocess_csmith_file(
             "-E",
         ] + additional_flags
         lines = utils.run_cmd(cmd).split("\n")
-        marker_range = find_marker_decl_range(lines, marker_prefix)
-        platform_main_end_line = find_platform_main_end(lines)
-        if not platform_main_end_line:
-            raise PreprocessError("Couldn't find 'platform_main_end'")
-        marker_decls = lines[marker_range[0] : marker_range[1]]
 
-        lines = lines[platform_main_end_line + 1 :]
-        lines = remove_print_hash_value(remove_platform_main_begin(lines))
-        lines = (
-            marker_decls
-            + [
-                "typedef unsigned int size_t;",
-                "typedef signed char int8_t;",
-                "typedef short int int16_t;",
-                "typedef int int32_t;",
-                "typedef long long int int64_t;",
-                "typedef unsigned char uint8_t;",
-                "typedef unsigned short int uint16_t;",
-                "typedef unsigned int uint32_t;",
-                "typedef unsigned long long int uint64_t;",
-                "int printf (const char *, ...);",
-                "void __assert_fail (const char *__assertion, const char *__file, unsigned int __line, const char *__function);",
-                "static void",
-                "platform_main_end(uint32_t crc, int flag)",
-            ]
-            + list(lines)
-        )
+        start_patterns = [
+            re.compile("^extern.*"),
+            re.compile("^typedef.*"),
+            re.compile("^struct.*"),
+        ]
+        taint_patterns = [
+            re.compile(".*__access__.*"),  # LLVM doesn't know about this
+            re.compile(".*__malloc__.*"),  # LLVM doesn't know about this
+            re.compile(".*_Float128.*"),  # LLVM doesn't know about this
+            re.compile(".*_Float64.*"),  # LLVM doesn't know about this
+            re.compile(".*_Float32.*"),  # LLVM doesn't know about this
+            re.compile(".*__asm__.*"),  # CompCert has problems
+        ]
+        final_code: list[str] = []
+        linepos_in_code = 0
+        run = 0
+        tainted = False
+        for line in lines:
+            for p in start_patterns:
+                if p.match(line):
+                    if not tainted:
+                        final_code.extend(
+                            lines[linepos_in_code : linepos_in_code + run]
+                        )
+                    linepos_in_code += run
+                    run = 0
+                    tainted = False
+            for p in taint_patterns:
+                if p.match(line):
+                    tainted = True
 
-        return "\n".join(lines)
+            run += 1
+        if not tainted:
+            final_code.extend(lines[linepos_in_code:])
+
+        return "\n".join(final_code)
 
 
 def preprocess_csmith_code(
