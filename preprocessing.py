@@ -83,10 +83,10 @@ def preprocess_csmith_file(
         ]
         taint_patterns = [
             re.compile(".*__access__.*"),  # LLVM doesn't know about this
-            re.compile(".*__malloc__.*"),  # LLVM doesn't know about this
-            re.compile(".*_Float128.*"),  # LLVM doesn't know about this
-            re.compile(".*_Float64.*"),  # LLVM doesn't know about this
-            re.compile(".*_Float32.*"),  # LLVM doesn't know about this
+            re.compile(".*__malloc__.*"),
+            re.compile(
+                ".*_[F|f]loat[0-9]{1,3}x{0,1}.*"
+            ),  # https://gcc.gnu.org/onlinedocs/gcc/Floating-Types.html#Floating-Types
             re.compile(".*__asm__.*"),  # CompCert has problems
         ]
         final_code: list[str] = []
