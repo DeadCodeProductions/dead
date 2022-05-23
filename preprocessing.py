@@ -80,6 +80,11 @@ def preprocess_csmith_file(
             re.compile("^extern.*"),
             re.compile("^typedef.*"),
             re.compile("^struct.*"),
+            # The following patterns are to catch if the last of the previous
+            # patterns in the file was tainted and we'd otherwise mark the rest
+            # of the file as tainted, as we'll find no end in this case.
+            re.compile("^static.*"),
+            re.compile("^void.*"),
         ]
         taint_patterns = [
             re.compile(".*__access__.*"),  # LLVM doesn't know about this
