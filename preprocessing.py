@@ -89,35 +89,35 @@ def preprocess_csmith_file(
             ),  # https://gcc.gnu.org/onlinedocs/gcc/Floating-Types.html#Floating-Types
             re.compile(".*__asm__.*"),  # CompCert has problems
         ]
-        final_code: list[str] = []
-        linepos_in_code = 0
-        run = 0
-        tainted = False
-        for line in lines:
-            for p in start_patterns:
-                if p.match(line):
-                    # A new run/declaration has started i.e.
-                    # the previous one ended, thus we need to process it.
-                    if not tainted:
-                        final_code.extend(
-                            lines[linepos_in_code : linepos_in_code + run]
-                        )
-                    linepos_in_code += run
-                    run = 0
-                    tainted = False
-            # See if current region/declaration is tainted i.e.
-            # has to be removed.
+
+        def is_start(l: str) -> bool:
+            return any([p_start.match(l) for p_start in start_patterns])
+
+        lines_to_skip: list[int] = []
+        for i, line in enumerate(lines):
             for p in taint_patterns:
                 if p.match(line):
-                    tainted = True
+                    # Searching for start of tainted region
+                    up_i = i
+                    up_line = lines[up_i]
+                    while up_i >= 0 and not is_start(up_line):
+                        if up_i == 0:
+                            break
+                        up_i -= 1
+                        up_line = lines[up_i]
 
-            run += 1
-        # The last run/declaration is not handeled in the loop
-        # because there's no new run starting, so we check here.
-        if not tainted:
-            final_code.extend(lines[linepos_in_code:])
+                    # Searching for end of tainted region
+                    down_i = i + 1
+                    down_line = lines[down_i]
+                    while down_i < len(lines) and not is_start(down_line):
+                        down_i += 1
+                        down_line = lines[down_i]
 
-        return "\n".join(final_code)
+                    lines_to_skip.extend(list(range(up_i, down_i)))
+
+        return "\n".join(
+            [line for i, line in enumerate(lines) if i not in lines_to_skip]
+        )
 
 
 def preprocess_csmith_code(
