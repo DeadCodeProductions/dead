@@ -96,6 +96,8 @@ def preprocess_csmith_file(
         for line in lines:
             for p in start_patterns:
                 if p.match(line):
+                    # A new run/declaration has started i.e.
+                    # the previous one ended, thus we need to process it.
                     if not tainted:
                         final_code.extend(
                             lines[linepos_in_code : linepos_in_code + run]
@@ -103,11 +105,15 @@ def preprocess_csmith_file(
                     linepos_in_code += run
                     run = 0
                     tainted = False
+            # See if current region/declaration is tainted i.e.
+            # has to be removed.
             for p in taint_patterns:
                 if p.match(line):
                     tainted = True
 
             run += 1
+        # The last run/declaration is not handeled in the loop
+        # because there's no new run starting, so we check here.
         if not tainted:
             final_code.extend(lines[linepos_in_code:])
 
