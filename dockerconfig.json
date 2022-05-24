@@ -64,8 +64,7 @@
         "executable": "csmith",
         "include_path": "/usr/include/csmith-2.3.0"
     },
-    "dcei": "./dce_instrumenter/build/bin/dcei",
-    "static_annotator": "./dce_instrumenter/build/bin/static-annotator",
+    "dcei": "dead-instrument",
     "ccc": "./callchain_checker/build/bin/ccc",
     "patchdb": "/persistent/patchdb.json",
     "logdir": "/persistent/logs",

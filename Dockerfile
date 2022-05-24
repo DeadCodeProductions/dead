@@ -40,24 +40,21 @@ RUN yay -S --noconfirm --noprogressbar python\
                                         boost\
                                         ninja\
                                         entr
-RUN python3 -m pip install requests
 
-
-COPY --chown=dead *.py ./
-COPY --chown=dead dce_instrumenter/ ./dce_instrumenter/
 COPY --chown=dead callchain_checker/ ./callchain_checker/
-
-RUN mkdir /home/dead/dce_instrumenter/build/ &&\
-    cd /home/dead/dce_instrumenter/build/ &&\
-    cmake .. &&\
-    make -j
 
 RUN mkdir /home/dead/callchain_checker/build/ &&\
     cd /home/dead/callchain_checker/build/ &&\
     cmake .. &&\
     make -j
 
+COPY requirements.txt .
+RUN python3 -m pip install -r requirements.txt
+
 RUN mkdir /home/dead/.config/dead/
+
+RUN python3 -c 'from pathlib import Path; from dead_instrumenter import utils; utils.make_config(Path.home() / ".config/dead/instrumenter.json", True)'
+
 COPY dockerconfig.json /home/dead/.config/dead/config.json
 
 COPY --chown=dead patches/ /home/dead/patches/

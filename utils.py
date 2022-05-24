@@ -59,7 +59,6 @@ EXPECTED_ENTRIES = [
     (Path,      ("logdir", ),               "Where build log files should be saved to"),
     (str,       ("cache_group", ),          "Name of group owning the cache"),
     (Executable,("ccc",),                   "Path to executable or name in PATH for the callchain checker"),
-    (Executable,("static_annotator",),      "Path to executable or name in PATH for the static annotator"),
     (Path,      ("casedb", ),               "Path to the database holding the cases."),
 ]
 # fmt: on

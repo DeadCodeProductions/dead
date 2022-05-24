@@ -10,6 +10,8 @@ from typing import Any
 
 import utils
 
+from dead_instrumenter.utils import find_binary, Binary
+
 
 def main() -> None:
     print(
@@ -152,15 +154,8 @@ def main() -> None:
 
     # ====== Cpp programs ======
 
-    print("Compiling instrumenter...")
-    os.makedirs("./dce_instrumenter/build", exist_ok=True)
-    utils.run_cmd(
-        "cmake .. -DLT_LLVM_INSTALL_DIR=/usr",
-        working_dir=Path("./dce_instrumenter/build/"),
-    )
-    utils.run_cmd("make -j", working_dir=Path("./dce_instrumenter/build/"))
-    config["dcei"] = "./dce_instrumenter/build/bin/dcei"
-    config["static_annotator"] = "./dce_instrumenter/build/bin/static-annotator"
+    find_binary(Binary.INSTRUMENTER, no_questions=True)
+    config["dcei"] = "dead-instrument"
 
     print("Compiling callchain checker (ccc)...")
     os.makedirs("./callchain_checker/build", exist_ok=True)

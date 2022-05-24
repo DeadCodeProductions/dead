@@ -13,6 +13,7 @@ from pathlib import Path
 from random import randint
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Generator, Optional, Union
+from dead_instrumenter.instrumenter import instrument_program
 
 import builder
 import checker
@@ -81,24 +82,6 @@ def run_csmith(csmith: str) -> str:
                 raise Exception("CSmith failed 10 times in a row!")
 
 
-def instrument_program(dcei: Path, file: Path, include_paths: list[str]) -> str:
-    """Instrument a given file i.e. put markers in the file.
-
-    Args:
-        dcei (Path): Path to dcei executable.
-        file (Path): Path to code file to be instrumented.
-        include_paths (list[str]):
-
-    Returns:
-        str: Marker prefix. Here: 'DCEMarker'
-    """
-    cmd = [str(dcei), str(file)]
-    for path in include_paths:
-        cmd.append(f"--extra-arg=-isystem{str(path)}")
-    utils.run_cmd(cmd)
-    return "DCEMarker"
-
-
 def generate_file(
     config: utils.NestedNamespace, additional_flags: str
 ) -> tuple[str, str]:
@@ -133,13 +116,9 @@ def generate_file(
                     additional_flags,
                 ):
                     continue
-                include_paths = utils.find_include_paths(
-                    config.llvm.sane_version, ntf.name, additional_flags
-                )
-                include_paths.append(config.csmith.include_path)
                 logging.debug("Instrumenting candidate...")
                 marker_prefix = instrument_program(
-                    config.dcei, Path(ntf.name), include_paths
+                    Path(ntf.name), [f"-I{config.csmith.include_path}"]
                 )
                 with open(ntf.name, "r") as f:
                     return marker_prefix, f.read()
