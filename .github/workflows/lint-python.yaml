@@ -19,12 +19,12 @@ jobs:
       - run: pip3 install -r requirements_hook.txt
       - name: Check formating with black
         run: python3 -m black --check *.py
-  pytype:
+  pytest:
     runs-on: ubuntu-latest
     container:
       image: python:3.9
     steps:
       - uses: actions/checkout@v2
       - run: pip3 install -r requirements_hook.txt
-      - name: run pytype
-        run: python3 -m pytype *.py
+      - name: run pytest
+        run: python3 -m pytest 
