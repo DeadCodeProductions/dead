@@ -54,7 +54,7 @@ Then run:
 # Create python environment
 python3 -m venv ./deadenv
 source ./deadenv/bin/activate
-pip install requests
+pip install -r requirements.txt
 
 # Initialize DEAD
 ./init.py
