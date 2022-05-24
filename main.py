@@ -16,9 +16,14 @@ from multiprocessing import Pool
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
-from ccbuildercached import Repo, BuilderWithCache, BuildException, PatchDB, get_compiler_config
-
 import requests
+from ccbuildercached import (
+    BuilderWithCache,
+    BuildException,
+    PatchDB,
+    Repo,
+    get_compiler_config,
+)
 
 import bisector
 import checker
@@ -359,9 +364,7 @@ def _report() -> None:
     repo = bisection_setting.compiler_config.repo
     prebisection_setting.rev = repo.rev_to_commit(f"{case.bisection}~")
 
-    bis_set = utils.find_alive_markers(
-        cpy.code, bisection_setting, marker_prefix, bldr
-    )
+    bis_set = utils.find_alive_markers(cpy.code, bisection_setting, marker_prefix, bldr)
     rebis_set = utils.find_alive_markers(
         cpy.code, prebisection_setting, marker_prefix, bldr
     )
@@ -508,9 +511,9 @@ def _report() -> None:
         )
         print(f"\n----- {good_setting_tag}")
         print(
-            utils.get_verbose_compiler_info(good_setting, bldr).split(
-                "lto-wrapper\n"
-            )[-1]
+            utils.get_verbose_compiler_info(good_setting, bldr).split("lto-wrapper\n")[
+                -1
+            ]
         )
 
     else:
@@ -1008,7 +1011,7 @@ def _set() -> None:
 
 
 def _build() -> None:
-    compiler_config = get_compiler_config(args.project, Path(config.cachedir))
+    compiler_config = get_compiler_config(args.project, Path(config.repodir))
     additional_patches: list[Path] = []
     if args.add_patches:
         additional_patches = [Path(patch).absolute() for patch in args.add_patches]
@@ -1019,7 +1022,7 @@ def _build() -> None:
                 rev,
                 additional_patches=additional_patches,
                 # TODO: implement force
-                #force=args.force,
+                # force=args.force,
             )
         )
 
