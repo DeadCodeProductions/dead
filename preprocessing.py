@@ -19,7 +19,7 @@ class PreprocessError(Exception):
 
 
 def find_marker_decl_range(lines: list[str], marker_prefix: str) -> tuple[int, int]:
-    p = re.compile(f"void {marker_prefix}(.*)\(void\);")
+    p = re.compile(rf"void {marker_prefix}(.*)\(void\);")
     first = 0
     for i, line in enumerate(lines):
         if p.match(line):
@@ -36,7 +36,7 @@ def find_marker_decl_range(lines: list[str], marker_prefix: str) -> tuple[int, i
 
 
 def find_platform_main_end(lines: Iterable[str]) -> Optional[int]:
-    p = re.compile(".*platform_main_end.*")
+    p = re.compile(r".*platform_main_end.*")
     for i, line in enumerate(lines):
         if p.match(line):
             return i
@@ -44,33 +44,33 @@ def find_platform_main_end(lines: Iterable[str]) -> Optional[int]:
 
 
 def remove_platform_main_begin(lines: Iterable[str]) -> list[str]:
-    p = re.compile(".*platform_main_begin.*")
+    p = re.compile(r".*platform_main_begin.*")
     return [line for line in lines if not p.match(line)]
 
 
 def remove_print_hash_value(lines: Iterable[str]) -> list[str]:
-    p = re.compile(".*print_hash_value = 1.*")
+    p = re.compile(r".*print_hash_value = 1.*")
     return [line for line in lines if not p.match(line)]
 
 
 def preprocess_lines(lines: list[str]) -> str:
     start_patterns = [
-        re.compile("^extern.*"),
-        re.compile("^typedef.*"),
-        re.compile("^struct.*"),
+        re.compile(r"^extern.*"),
+        re.compile(r"^typedef.*"),
+        re.compile(r"^struct.*"),
         # The following patterns are to catch if the last of the previous
         # patterns in the file was tainted and we'd otherwise mark the rest
         # of the file as tainted, as we'll find no end in this case.
-        re.compile("^static.*"),
-        re.compile("^void.*"),
+        re.compile(r"^static.*"),
+        re.compile(r"^void.*"),
     ]
     taint_patterns = [
-        re.compile(".*__access__.*"),  # LLVM doesn't know about this
-        re.compile(".*__malloc__.*"),
+        re.compile(r".*__access__.*"),  # LLVM doesn't know about this
+        re.compile(r".*__malloc__.*"),
         re.compile(
-            ".*_[F|f]loat[0-9]{1,3}x{0,1}.*"
+            r".*_[F|f]loat[0-9]{1,3}x{0,1}.*"
         ),  # https://gcc.gnu.org/onlinedocs/gcc/Floating-Types.html#Floating-Types
-        re.compile(".*__asm__.*"),  # CompCert has problems
+        re.compile(r".*__asm__.*"),  # CompCert has problems
     ]
 
     def is_start(l: str) -> bool:
