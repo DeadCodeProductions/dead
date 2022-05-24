@@ -13,13 +13,21 @@ from pathlib import Path
 from random import randint
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Generator, Optional, Union
+
+from ccbuilder import (
+    BuilderWithCache,
+    BuildException,
+    CompilerConfig,
+    PatchDB,
+    Repo,
+    get_compiler_config,
+)
 from dead_instrumenter.instrumenter import instrument_program
 
 import checker
 import parsers
 import utils
 
-from ccbuildercached import Repo, BuilderWithCache, BuildException, CompilerConfig, get_compiler_config, PatchDB
 
 def run_csmith(csmith: str) -> str:
     """Generate random code with csmith.
@@ -132,7 +140,9 @@ class CSmithCaseGenerator:
         cores: Optional[int] = None,
     ):
         self.config: utils.NestedNamespace = config
-        self.builder: BuilderWithCache = BuilderWithCache(Path(config.cachedir), patchdb, cores)
+        self.builder: BuilderWithCache = BuilderWithCache(
+            Path(config.cachedir), patchdb, cores
+        )
         self.chkr: checker.Checker = checker.Checker(config, self.builder)
         self.procs: list[Process] = []
         self.try_counter: int = 0
@@ -187,7 +197,6 @@ class CSmithCaseGenerator:
             target_alive_markers = set()
             for _, marker_set in target_alive_marker_list:
                 target_alive_markers.update(marker_set)
-
 
             # Extract reduce cases
             logging.debug("Extracting reduce cases...")

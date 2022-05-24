@@ -20,8 +20,8 @@ from pathlib import Path
 from types import SimpleNamespace, TracebackType
 from typing import IO, Any, Optional, Sequence, TextIO, Union, cast
 
-import ccbuildercached
-from ccbuildercached import (
+import ccbuilder
+from ccbuilder import (
     BuilderWithCache,
     BuildException,
     CompilerConfig,
@@ -996,7 +996,7 @@ def get_compiler_executable(
     Returns:
         Path: Path to compiler binary
     """
-    return ccbuildercached.get_compiler_executable_from_revision_with_config(
+    return ccbuilder.get_compiler_executable_from_revision_with_config(
         compiler_setting.compiler_config, compiler_setting.rev, bldr
     )
 

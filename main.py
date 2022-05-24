@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
 import requests
-from ccbuildercached import (
+from ccbuilder import (
     BuilderWithCache,
     BuildException,
     PatchDB,

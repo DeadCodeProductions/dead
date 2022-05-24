@@ -9,7 +9,14 @@ import tarfile
 from pathlib import Path
 from typing import Optional
 
-from ccbuildercached import Repo, BuilderWithCache, BuildException, CompilerConfig, get_compiler_config, PatchDB
+from ccbuilder import (
+    BuilderWithCache,
+    BuildException,
+    CompilerConfig,
+    PatchDB,
+    Repo,
+    get_compiler_config,
+)
 
 import checker
 import generator

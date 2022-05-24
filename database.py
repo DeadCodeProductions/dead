@@ -9,10 +9,11 @@ from itertools import chain
 from pathlib import Path
 from typing import ClassVar, Optional
 
+from ccbuilder import get_compiler_config
+
 import utils
 from utils import Case, CompilerSetting, NestedNamespace, Scenario
 
-from ccbuildercached import get_compiler_config
 
 class DatabaseError(Exception):
     pass

@@ -12,7 +12,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Optional
 
-from ccbuildercached import (
+from ccbuilder import (
     BuilderWithCache,
     BuildException,
     CompilerConfig,

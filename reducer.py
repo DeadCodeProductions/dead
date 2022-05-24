@@ -15,12 +15,20 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Optional
 
+from ccbuilder import (
+    BuilderWithCache,
+    BuildException,
+    CompilerConfig,
+    PatchDB,
+    Repo,
+    get_compiler_config,
+)
+
 import generator
 import parsers
 import preprocessing
 import utils
 
-from ccbuildercached import Repo, BuilderWithCache, BuildException, CompilerConfig, get_compiler_config, PatchDB
 
 # ==================== Reducer ====================
 class TempDirEnv:
