@@ -245,6 +245,8 @@ class CaseDatabase:
                     case.timestamp,
                 ),
             )
+            if not cur.lastrowid:
+                raise DatabaseError("No last row id was returned")
             case_id = RowID(cur.lastrowid)
             cur.executemany(
                 "INSERT INTO good_settings VALUES (?,?)",
@@ -276,6 +278,8 @@ class CaseDatabase:
                     compiler_setting.get_flag_str(),
                 ),
             )
+            if not cur.lastrowid:
+                raise DatabaseError("No last row id was returned")
             ns_id = RowID(cur.lastrowid)
 
         return ns_id
@@ -339,6 +343,8 @@ class CaseDatabase:
         cur.execute("INSERT INTO scenario_ids VALUES (NULL)")
         if not no_commit:
             self.con.commit()
+        if not cur.lastrowid:
+            raise DatabaseError("No row id was returned")
         return RowID(cur.lastrowid)
 
     def get_scenario_id(self, scenario: Scenario) -> Optional[RowID]:
