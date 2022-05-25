@@ -8,9 +8,9 @@ import stat
 from pathlib import Path
 from typing import Any
 
-import utils
+from dead_instrumenter.utils import Binary, find_binary
 
-from dead_instrumenter.utils import find_binary, Binary
+import utils
 
 
 def main() -> None:
@@ -64,6 +64,8 @@ def main() -> None:
 
     gcc["releases"] = [
         "trunk",
+        "releases/gcc-12.1.0",
+        "releases/gcc-11.3.0",
         "releases/gcc-11.2.0",
         "releases/gcc-11.1.0",
         "releases/gcc-10.3.0",
@@ -106,6 +108,10 @@ def main() -> None:
 
     llvm["releases"] = [
         "trunk",
+        "llvmorg-14.0.3",
+        "llvmorg-14.0.2",
+        "llvmorg-14.0.1",
+        "llvmorg-14.0.0",
         "llvmorg-13.0.1",
         "llvmorg-13.0.0",
         "llvmorg-12.0.1",
@@ -132,6 +138,8 @@ def main() -> None:
     ]
 
     config["llvm"] = llvm
+
+    config["repodir"] = str(Path(os.getcwd()).absolute())
     # ====== CSmith ======
     csmith: dict[str, Any] = {}
     csmith["max_size"] = 50000
@@ -139,8 +147,7 @@ def main() -> None:
     if shutil.which("csmith"):
         csmith["executable"] = "csmith"
         res = utils.run_cmd("csmith --version")
-        # $ csmith --version
-        # csmith 2.3.0
+        # $ csmith --version csmith 2.3.0
         # Git version: 30dccd7
         version = res.split("\n")[0].split()[1]
         csmith["include_path"] = "/usr/include/csmith-" + version
@@ -154,6 +161,7 @@ def main() -> None:
 
     # ====== Cpp programs ======
 
+    print("Building instrumenter...")
     find_binary(Binary.INSTRUMENTER, no_questions=True)
     config["dcei"] = "dead-instrument"
 
