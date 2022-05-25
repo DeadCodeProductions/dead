@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
 
 import copy
-import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
-from contextlib import contextmanager
 from pathlib import Path
 from types import TracebackType
 from typing import Optional
 
+from ccbuilder import (
+    BuilderWithCache,
+    BuildException,
+    CompilerConfig,
+    PatchDB,
+    Repo,
+    get_compiler_config,
+)
 from dead_instrumenter.instrumenter import annotate_with_static
 
-import builder
 import parsers
-import patchdatabase
 import preprocessing
 import utils
 
@@ -265,7 +268,7 @@ def sanitize(
 
 
 class Checker:
-    def __init__(self, config: utils.NestedNamespace, bldr: builder.Builder):
+    def __init__(self, config: utils.NestedNamespace, bldr: BuilderWithCache):
         self.config = config
         self.builder = bldr
         return
@@ -288,14 +291,14 @@ class Checker:
         # all the good settings do not.
 
         marker_prefix = utils.get_marker_prefix(case.marker)
-        found_in_bad = builder.find_alive_markers(
+        found_in_bad = utils.find_alive_markers(
             case.code, case.bad_setting, marker_prefix, self.builder
         )
         uninteresting = False
         if case.marker not in found_in_bad:
             return False
         for good_setting in case.good_settings:
-            found_in_good = builder.find_alive_markers(
+            found_in_good = utils.find_alive_markers(
                 case.code, good_setting, marker_prefix, self.builder
             )
             if case.marker in found_in_good:
@@ -361,12 +364,12 @@ class Checker:
             with open(tf.name, "r") as annotated_file:
                 static_code = annotated_file.read()
 
-            asm_bad = builder.get_asm_str(static_code, case.bad_setting, self.builder)
+            asm_bad = utils.get_asm_str(static_code, case.bad_setting, self.builder)
             uninteresting = False
             if case.marker not in asm_bad:
                 uninteresting = True
             for good_setting in case.good_settings:
-                asm_good = builder.get_asm_str(static_code, good_setting, self.builder)
+                asm_good = utils.get_asm_str(static_code, good_setting, self.builder)
                 if case.marker in asm_good:
                     uninteresting = True
                     break
@@ -374,12 +377,14 @@ class Checker:
 
     def _emtpy_marker_code_str(self, case: utils.Case) -> str:
         marker_prefix = utils.get_marker_prefix(case.marker)
-        p = re.compile(f"void {marker_prefix}(.*)\(void\);")
+        p = re.compile(rf"void {marker_prefix}(.*)\(void\);(.*)")
         empty_body_code = ""
         for line in case.code.split("\n"):
             m = p.match(line)
             if m:
-                empty_body_code += f"\nvoid {marker_prefix}{m.group(1)}(void){{}}"
+                empty_body_code += (
+                    rf"\nvoid {marker_prefix}{m.group(1)}(void){{}}\n{m.group(2)}"
+                )
             else:
                 empty_body_code += f"\n{line}"
 
@@ -485,8 +490,8 @@ def override_good(
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.checker_parser())
 
-    patchdb = patchdatabase.PatchDB(config.patchdb)
-    bldr = builder.Builder(config, patchdb, args.cores)
+    patchdb = PatchDB(config.patchdb)
+    bldr = BuilderWithCache(Path(config.cachedir), patchdb, args.cores)
     chkr = Checker(config, bldr)
 
     file = Path(args.file)

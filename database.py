@@ -9,6 +9,8 @@ from itertools import chain
 from pathlib import Path
 from typing import ClassVar, Optional
 
+from ccbuilder import get_compiler_config
+
 import utils
 from utils import Case, CompilerSetting, NestedNamespace, Scenario
 
@@ -482,7 +484,7 @@ class CaseDatabase:
 
         compiler, rev, opt_level, flags = res
         return CompilerSetting(
-            utils.get_compiler_config(self.config, compiler),
+            get_compiler_config(compiler, Path(self.config.repodir)),
             rev,
             opt_level,
             flags.split("|"),

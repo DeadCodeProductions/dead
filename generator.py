@@ -13,16 +13,20 @@ from pathlib import Path
 from random import randint
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Generator, Optional, Union
+
+from ccbuilder import (
+    BuilderWithCache,
+    BuildException,
+    CompilerConfig,
+    PatchDB,
+    Repo,
+    get_compiler_config,
+)
 from dead_instrumenter.instrumenter import instrument_program
 
-import builder
 import checker
 import parsers
-import patchdatabase
 import utils
-
-if TYPE_CHECKING:
-    from patchdatabase import PatchDB
 
 
 def run_csmith(csmith: str) -> str:
@@ -136,7 +140,9 @@ class CSmithCaseGenerator:
         cores: Optional[int] = None,
     ):
         self.config: utils.NestedNamespace = config
-        self.builder: builder.Builder = builder.Builder(config, patchdb, cores)
+        self.builder: BuilderWithCache = BuilderWithCache(
+            Path(config.cachedir), patchdb, cores
+        )
         self.chkr: checker.Checker = checker.Checker(config, self.builder)
         self.procs: list[Process] = []
         self.try_counter: int = 0
@@ -169,7 +175,7 @@ class CSmithCaseGenerator:
                 target_alive_marker_list = [
                     (
                         tt,
-                        builder.find_alive_markers(
+                        utils.find_alive_markers(
                             candidate_code, tt, marker_prefix, self.builder
                         ),
                     )
@@ -179,13 +185,13 @@ class CSmithCaseGenerator:
                 tester_alive_marker_list = [
                     (
                         tt,
-                        builder.find_alive_markers(
+                        utils.find_alive_markers(
                             candidate_code, tt, marker_prefix, self.builder
                         ),
                     )
                     for tt in scenario.attacker_settings
                 ]
-            except builder.CompileError:
+            except utils.CompileError:
                 continue
 
             target_alive_markers = set()
@@ -229,7 +235,7 @@ class CSmithCaseGenerator:
                                         f"Try {self.try_counter}: Found case! LENGTH: {len(candidate_code)}"
                                     )
                                     return case
-                            except builder.CompileError:
+                            except utils.CompileError:
                                 continue
             else:
                 logging.debug(
@@ -361,7 +367,7 @@ if __name__ == "__main__":
 
     cores = args.cores
 
-    patchdb = patchdatabase.PatchDB(config.patchdb)
+    patchdb = PatchDB(config.patchdb)
     case_generator = CSmithCaseGenerator(config, patchdb, cores)
 
     if args.interesting:
