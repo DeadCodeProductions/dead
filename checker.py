@@ -377,13 +377,13 @@ class Checker:
 
     def _emtpy_marker_code_str(self, case: utils.Case) -> str:
         marker_prefix = utils.get_marker_prefix(case.marker)
-        p = re.compile(f"void {marker_prefix}(.*)\(void\);(.*)")
+        p = re.compile(rf"void {marker_prefix}(.*)\(void\);(.*)")
         empty_body_code = ""
         for line in case.code.split("\n"):
             m = p.match(line)
             if m:
                 empty_body_code += (
-                    f"\nvoid {marker_prefix}{m.group(1)}(void){{}}\n{m.group(2)}"
+                    rf"\nvoid {marker_prefix}{m.group(1)}(void){{}}\n{m.group(2)}"
                 )
             else:
                 empty_body_code += f"\n{line}"
