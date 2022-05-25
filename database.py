@@ -484,7 +484,7 @@ class CaseDatabase:
 
         compiler, rev, opt_level, flags = res
         return CompilerSetting(
-            get_compiler_config(compiler, self.config.repodir),
+            get_compiler_config(compiler, Path(self.config.repodir)),
             rev,
             opt_level,
             flags.split("|"),
