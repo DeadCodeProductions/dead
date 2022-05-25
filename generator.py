@@ -141,7 +141,7 @@ class CSmithCaseGenerator:
     ):
         self.config: utils.NestedNamespace = config
         self.builder: BuilderWithCache = BuilderWithCache(
-            Path(config.cachedir), patchdb, cores
+            Path(config.cachedir), patchdb, cores, logdir=Path(config.logdir)
         )
         self.chkr: checker.Checker = checker.Checker(config, self.builder)
         self.procs: list[Process] = []
