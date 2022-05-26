@@ -1324,7 +1324,9 @@ if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
     patchdb = PatchDB(config.patchdb)
-    bldr = BuilderWithCache(Path(config.cachedir), patchdb, args.cores)
+    bldr = BuilderWithCache(
+        Path(config.cachedir), patchdb, args.cores, logdir=Path(config.logdir)
+    )
     chkr = checker.Checker(config, bldr)
     gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
     rdcr = reducer.Reducer(config, bldr)

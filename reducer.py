@@ -216,7 +216,9 @@ if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.reducer_parser())
 
     patchdb = PatchDB(config.patchdb)
-    bldr = BuilderWithCache(Path(config.cachedir), patchdb, args.cores)
+    bldr = BuilderWithCache(
+        Path(config.cachedir), patchdb, args.cores, logdir=Path(config.logdir)
+    )
     gnrtr = generator.CSmithCaseGenerator(config, patchdb)
     rdcr = Reducer(config, bldr)
 
