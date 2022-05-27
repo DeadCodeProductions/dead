@@ -1320,6 +1320,15 @@ def _findby() -> None:
     return
 
 
+def _unbisected() -> None:
+    res = ddb.con.execute(
+        "SELECT case_id FROM cases WHERE bisection IS NULL",
+    ).fetchall()
+
+    for (i,) in res:
+        print(i)
+
+
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
@@ -1374,5 +1383,7 @@ if __name__ == "__main__":
         _findby()
     elif args.sub == "init":
         init.main()
+    elif args.sub == "unbisected":
+        _unbisected()
 
     gnrtr.terminate_processes()

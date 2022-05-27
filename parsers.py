@@ -788,6 +788,10 @@ def main_parser() -> argparse.ArgumentParser:
         help="Whether or not to force another bisection. This will override the old bisection.",
     )
 
+    unbisected = subparser.add_parser(
+        "unbisected", help="List all case ids which have not been bisected."
+    )
+
     edit_parser = subparser.add_parser("edit", help="Open DEADs config in $EDITOR.")
 
     unreported_parser = subparser.add_parser(
