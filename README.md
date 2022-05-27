@@ -2,9 +2,14 @@
 
 DEAD is a tool to find and process compiler regressions and other missed optimizations automatically to produce reports.
 
+It is based on the paper [Finding missed optimizations through the lens of dead code elimination](https://dl.acm.org/doi/10.1145/3503222.3507764) and was first written during a [master thesis](https://doi.org/10.3929/ethz-b-000547786) at the [AST Lab](https://ast.ethz.ch/).
+
 For a list of reported bugs look at [bugs.md](./bugs.md).
 
 ## Setup
+Clone the latest release with, for example, `git clone -b v0.0.1 https://github.com/DeadCodeProductions/dead`.
+
+After navigating into the cloned repository, choose if you want to run DEAD [locally](#local-setup) or in a [Docker container](#setup-with-docker).
 ### Setup with Docker
 ```
 ./build_docker.sh 
@@ -12,7 +17,7 @@ For a list of reported bugs look at [bugs.md](./bugs.md).
 # Enter the container
 docker run -it -v deadpersistent:/persistent deaddocker
 ```
-Continue by reading the [Run Section](##Run).
+Continue by reading the [Run Section](#run).
 
 ### Local Setup
 The following programs or libraries must be installed:
