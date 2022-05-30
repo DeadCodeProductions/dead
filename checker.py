@@ -383,7 +383,10 @@ class Checker:
             m = p.match(line)
             if m:
                 empty_body_code += (
-                    rf"\nvoid {marker_prefix}{m.group(1)}(void){{}}\n{m.group(2)}"
+                    "\n"
+                    + rf"void {marker_prefix}{m.group(1)}(void){{}}"
+                    + "\n"
+                    + rf"{m.group(2)}"
                 )
             else:
                 empty_body_code += f"\n{line}"
