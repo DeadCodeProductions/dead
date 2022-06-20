@@ -111,4 +111,7 @@
 - ~~[56046](https://github.com/llvm/llvm-project/issues/56046)~~ Fixed
 - ~~[56048](https://github.com/llvm/llvm-project/issues/56048)~~ Fixed
 - [56049](https://github.com/llvm/llvm-project/issues/56049)
+- [56118](https://github.com/llvm/llvm-project/issues/56118)
+- [56119](https://github.com/llvm/llvm-project/issues/56119)
+- [56120](https://github.com/llvm/llvm-project/issues/56120)
 
