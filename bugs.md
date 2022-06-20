@@ -54,6 +54,11 @@
 - ~~[104526](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=104526)~~ Fixed
 - [104530](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=104530)
 - [105086](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105086)
+- [105832](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105832)
+- [105833](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105833)
+- [105834](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105834)
+- [105835](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105835)
+
 
 ### LLVM
 - [49434](https://bugs.llvm.org/show_bug.cgi?id=49434)
@@ -103,3 +108,7 @@
 - [53321](https://github.com/llvm/llvm-project/issues/53321)
 - ~~[53319](https://github.com/llvm/llvm-project/issues/53319)~~ Fixed
 - ~~[54980](https://github.com/llvm/llvm-project/issues/54980)~~ Fixed
+- ~~[56046](https://github.com/llvm/llvm-project/issues/56046)~~ Fixed
+- ~~[56048](https://github.com/llvm/llvm-project/issues/56048)~~ Fixed
+- [56049](https://github.com/llvm/llvm-project/issues/56049)
+
