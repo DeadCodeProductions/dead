@@ -57,7 +57,7 @@
 - [105832](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105832)
 - [105833](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105833)
 - [105834](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105834)
-- [105835](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105835)
+- ~~[105835](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105835)~~ Fixed
 
 
 ### LLVM
