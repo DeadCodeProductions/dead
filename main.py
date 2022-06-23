@@ -280,6 +280,7 @@ def _rereduce() -> None:
         case.marker,
         case.bad_setting,
         case.good_settings,
+        bisection=case.bisection,
         preprocess=False,
     )
 
@@ -783,6 +784,26 @@ def _check_reduced() -> None:
 
     case.code = new_code
     case.reduced_code = new_code
+
+    if case.bisection:
+        prev_rev = case.bad_setting.compiler_config.repo.rev_to_commit(
+            f"{case.bisection}~"
+        )
+        cpy = copy.deepcopy(case)
+        cpy.bad_setting.rev = case.bisection
+        bis_res_og = case.marker in utils.find_alive_markers(
+            new_code, cpy.bad_setting, prefix, bldr
+        )
+        cpy.bad_setting.rev = prev_rev
+        bis_prev_res_og = case.marker in utils.find_alive_markers(
+            new_code, cpy.bad_setting, prefix, bldr
+        )
+
+        nice_print("Bisection test", ok_fail(bis_res_og and not bis_prev_res_og))
+        cpy = copy.deepcopy(case)
+    else:
+        print("No bisection found! Please bisect the case first.")
+
     nice_print("Check", ok_fail(chkr.is_interesting(case, preprocess=False)))
     # Useful when working with watch -n 0 to see that something happened
     print(random.randint(0, 1000))
