@@ -187,7 +187,7 @@ def _run() -> None:
             if (
                 args.reducer
                 or case.bisection
-                and case.bisection in get_all_bisections(ddb)
+                and not case.bisection in get_all_bisections(ddb)
             ):
                 try:
                     time_start_reducer = time.perf_counter()
