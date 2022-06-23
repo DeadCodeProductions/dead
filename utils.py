@@ -1020,7 +1020,10 @@ def get_verbose_compiler_info(
 def get_llvm_IR(
     code: str, compiler_setting: CompilerSetting, bldr: BuilderWithCache
 ) -> str:
-    if compiler_setting.compiler_config.name != "clang":
+    if (
+        compiler_setting.compiler_config.name != "clang"
+        and compiler_setting.compiler_config.name != "llvm"
+    ):
         raise CompileError("Requesting LLVM IR from non-clang compiler!")
 
     compiler_exe = get_compiler_executable(compiler_setting, bldr)
