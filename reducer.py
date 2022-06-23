@@ -119,7 +119,7 @@ class Reducer:
             bad_settings[-1].rev = bisection
             repo = bad_setting.compiler_config.repo
             good_settings = good_settings + [copy(bad_setting)]
-            good_settings[-1].rev = repo.parent(bisection)
+            good_settings[-1].rev = repo.rev_to_commit(f"{bisection}~")
 
         # creduce likes to kill unfinished processes with SIGKILL
         # so they can't clean up after themselves.
