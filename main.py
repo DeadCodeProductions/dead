@@ -1372,7 +1372,5 @@ if __name__ == "__main__":
         _reported()
     elif args.sub == "findby":
         _findby()
-    elif args.sub == "init":
-        init.main()
 
     gnrtr.terminate_processes()
