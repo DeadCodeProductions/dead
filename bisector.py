@@ -5,6 +5,7 @@ import functools
 import logging
 import math
 import os
+import subprocess
 import tarfile
 from pathlib import Path
 from typing import Optional
@@ -74,11 +75,14 @@ class Bisector:
         """
         case_cpy = copy.deepcopy(case)
         case_cpy.bad_setting.rev = rev
-        if case_cpy.reduced_code:
-            case_cpy.code = case_cpy.reduced_code
-            return self.chkr.is_interesting(case_cpy, preprocess=False)
-        else:
-            return self.chkr.is_interesting(case_cpy, preprocess=True)
+        try:
+            if case_cpy.reduced_code:
+                case_cpy.code = case_cpy.reduced_code
+                return self.chkr.is_interesting(case_cpy, preprocess=False)
+            else:
+                return self.chkr.is_interesting(case_cpy, preprocess=True)
+        except subprocess.CalledProcessError as e:
+            raise utils.CompileError(e)
 
     def bisect_file(self, file: Path, force: bool = False) -> bool:
         """Bisect case found in `file`.
