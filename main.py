@@ -526,21 +526,15 @@ def _report() -> None:
         asm_bad = utils.get_asm_str(source, case.bad_setting, bldr)
         asm_good = utils.get_asm_str(source, good_setting, bldr)
         print("\n------------------------------------------------\n")
-        print_cody_str(
-            f"{bad_setting_str} [-emit-llvm] -S -o /dev/stdout case.c", is_gcc
-        )
+        print_cody_str(f"{bad_setting_str} -emit-llvm -S -o /dev/stdout case.c", is_gcc)
         print(prep_IR(ir_bad))
-        print()
-        print(prep_asm(asm_bad, is_gcc))
         print()
         print("\n------------------------------------------------\n")
         print_cody_str(
-            f"{good_setting_str} [-emit-llvm] -S -o /dev/stdout case.c", is_gcc
+            f"{good_setting_str} -emit-llvm -S -o /dev/stdout case.c", is_gcc
         )
         print()
         print(prep_IR(ir_good))
-        print()
-        print(prep_asm(asm_good, is_gcc))
 
         print("\n------------------------------------------------\n")
         print("### Bisection")
@@ -551,17 +545,14 @@ def _report() -> None:
         if author:
             print(f"Committed by: @{author}")
         print("\n------------------------------------------------\n")
-        bisection_asm = utils.get_asm_str(source, bisection_setting, bldr)
         bisection_ir = utils.get_llvm_IR(source, bisection_setting, bldr)
         print(
             to_cody_str(
-                f"{bisection_setting.report_string()} [-emit-llvm] -S -o /dev/stdout case.c",
+                f"{bisection_setting.report_string()} -emit-llvm -S -o /dev/stdout case.c",
                 is_gcc,
             )
         )
         print(prep_IR(bisection_ir))
-        print()
-        print(prep_asm(bisection_asm, is_gcc))
 
         print("\n------------------------------------------------\n")
         prebisection_setting = copy.deepcopy(bisection_setting)
@@ -570,16 +561,13 @@ def _report() -> None:
         print(
             "\n"
             + to_cody_str(
-                f"{prebisection_setting.report_string()} [-emit-llvm] -S -o /dev/stdout case.c",
+                f"{prebisection_setting.report_string()} -emit-llvm -S -o /dev/stdout case.c",
                 is_gcc,
             )
         )
-        prebisection_asm = utils.get_asm_str(source, prebisection_setting, bldr)
         prebisection_ir = utils.get_llvm_IR(source, prebisection_setting, bldr)
         print()
         print(prep_IR(prebisection_ir))
-        print()
-        print(prep_asm(prebisection_asm, is_gcc))
 
     with open("case.txt", "w") as f:
         f.write(source)
