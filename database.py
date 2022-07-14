@@ -9,7 +9,7 @@ from itertools import chain
 from pathlib import Path
 from typing import ClassVar, Optional
 
-from ccbuilder import get_compiler_config
+import ccbuilder
 
 import utils
 from utils import Case, CompilerSetting, NestedNamespace, Scenario
@@ -272,7 +272,7 @@ class CaseDatabase:
             cur.execute(
                 "INSERT INTO compiler_setting VALUES (NULL,?,?,?,?)",
                 (
-                    compiler_setting.compiler_config.name,
+                    compiler_setting.compiler_project.name,
                     compiler_setting.rev,
                     compiler_setting.opt_level,
                     compiler_setting.get_flag_str(),
@@ -451,7 +451,7 @@ class CaseDatabase:
             "FROM compiler_setting "
             "WHERE compiler == ? AND rev == ? AND opt_level == ? AND additional_flags == ?",
             (
-                compiler_setting.compiler_config.name,
+                compiler_setting.compiler_project.name,
                 compiler_setting.rev,
                 compiler_setting.opt_level,
                 "|".join(compiler_setting.get_flag_cmd()),
@@ -489,11 +489,15 @@ class CaseDatabase:
             return None
 
         compiler, rev, opt_level, flags = res
+        project, repo = ccbuilder.get_compiler_info(
+            compiler.lower(), Path(self.config.repodir)
+        )
         return CompilerSetting(
-            get_compiler_config(compiler, Path(self.config.repodir)),
-            rev,
-            opt_level,
-            flags.split("|"),
+            compiler_project=project,
+            repo=repo,
+            rev=rev,
+            opt_level=opt_level,
+            additional_flags=[s for s in flags.split("|") if s],
         )
 
     @cache

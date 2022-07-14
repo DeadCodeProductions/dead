@@ -21,7 +21,7 @@ Continue by reading the [Run Section](#run).
 
 ### Local Setup
 The following programs or libraries must be installed:
-- `python >= 3.9`
+- `python >= 3.10`
 - `gcc`
 - `clang`
 - `csmith`
