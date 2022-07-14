@@ -22,11 +22,11 @@ from typing import IO, Any, Optional, Sequence, TextIO, Union, cast
 
 import ccbuilder
 from ccbuilder import (
-    BuilderWithCache,
+    Builder,
     BuildException,
-    CompilerConfig,
+    CompilerProject,
     Repo,
-    get_compiler_config,
+    get_compiler_project,
 )
 
 import parsers
@@ -342,17 +342,18 @@ def create_symlink(src: Path, dst: Path) -> None:
 
 @dataclass
 class CompilerSetting:
-    compiler_config: CompilerConfig
+    compiler_project: CompilerProject
+    repo: Repo
     rev: str
     opt_level: str
     additional_flags: Optional[list[str]] = None
 
     def __str__(self) -> str:
         if self.additional_flags is None:
-            return f"{self.compiler_config.name} {self.rev} {self.opt_level}"
+            return f"{self.compiler_project.name} {self.rev} {self.opt_level}"
         else:
             return (
-                f"{self.compiler_config.name} {self.rev} {self.opt_level} "
+                f"{self.compiler_project.name} {self.rev} {self.opt_level} "
                 + " ".join(self.additional_flags)
             )
 
@@ -365,11 +366,11 @@ class CompilerSetting:
             str: String to use in the report
         """
 
-        return f"{self.compiler_config.name}-{self.rev} -O{self.opt_level}"
+        return f"{self.compiler_project.name}-{self.rev} -O{self.opt_level}"
 
     def to_jsonable_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {}
-        d["compiler_config"] = self.compiler_config.name
+        d["compiler_project"] = self.compiler_project.to_string()
         d["rev"] = self.rev
         d["opt_level"] = self.opt_level
         d["additional_flags"] = (
@@ -382,11 +383,15 @@ class CompilerSetting:
     def from_jsonable_dict(
         config: NestedNamespace, d: dict[str, Any]
     ) -> CompilerSetting:
+        project, repo = ccbuilder.get_compiler_info(
+            d["compiler_project"], config.repodir
+        )
         return CompilerSetting(
-            get_compiler_config(d["compiler_config"], Path(config.repodir)),
-            d["rev"],
-            d["opt_level"],
-            d["additional_flags"],
+            compiler_project=project,
+            repo=repo,
+            rev=d["rev"],
+            opt_level=d["opt_level"],
+            additional_flags=list(d["additional_flags"]),
         )
 
     def add_flag(self, flag: str) -> None:
@@ -417,14 +422,8 @@ class CompilerSetting:
         rev = parts[1]
         opt_level = parts[2]
         additional_flags = parts[3:]
-        if compiler == "gcc":
-            compiler_config = config.gcc
-        elif compiler == "llvm" or compiler == "clang":
-            compiler_config = config.llvm
-        else:
-            raise Exception(f"Unknown compiler project {compiler}")
-
-        return CompilerSetting(compiler_config, rev, opt_level, additional_flags)
+        project, repo = ccbuilder.get_compiler_info(compiler, config.repodir)  # type: ignore
+        return CompilerSetting(project, repo, rev, opt_level, additional_flags)
 
 
 class Scenario:
@@ -613,8 +612,7 @@ def get_compiler_settings(
 
     pos = 0
     while len(args[pos:]) > 1:
-        compiler_config = get_compiler_config(args[pos], Path(config.repodir))
-        repo = compiler_config.repo
+        project, repo = ccbuilder.get_compiler_info(args[pos], Path(config.repodir))  # type: ignore
         rev = repo.rev_to_commit(args[pos + 1])
         pos += 2
 
@@ -624,7 +622,7 @@ def get_compiler_settings(
             pos += 1
 
         settings.extend(
-            [CompilerSetting(compiler_config, rev, lvl) for lvl in opt_levels]
+            [CompilerSetting(project, repo, rev, lvl) for lvl in opt_levels]
         )
 
     if len(args[pos:]) != 0:
@@ -881,7 +879,7 @@ def find_alive_markers(
     code: str,
     compiler_setting: CompilerSetting,
     marker_prefix: str,
-    bldr: BuilderWithCache,
+    bldr: Builder,
 ) -> set[str]:
     """Return set of markers which are found in the assembly.
 
@@ -948,9 +946,7 @@ class CompileContext:
             raise BuildException("Compier context exited but was not entered")
 
 
-def get_asm_str(
-    code: str, compiler_setting: CompilerSetting, bldr: BuilderWithCache
-) -> str:
+def get_asm_str(code: str, compiler_setting: CompilerSetting, bldr: Builder) -> str:
     """Get assembly of `code` compiled by `compiler_setting`.
 
     Args:
@@ -984,9 +980,7 @@ def get_asm_str(
             return f.read()
 
 
-def get_compiler_executable(
-    compiler_setting: CompilerSetting, bldr: BuilderWithCache
-) -> Path:
+def get_compiler_executable(compiler_setting: CompilerSetting, bldr: Builder) -> Path:
     """Get the path to the compiler *binary* i.e. [...]/bin/clang
 
     Args:
@@ -996,14 +990,14 @@ def get_compiler_executable(
     Returns:
         Path: Path to compiler binary
     """
-    return ccbuilder.get_compiler_executable_from_revision_with_config(
-        compiler_setting.compiler_config, compiler_setting.rev, bldr
+    return bldr.build(
+        project=compiler_setting.compiler_project,
+        rev=compiler_setting.rev,
+        get_executable=True,
     )
 
 
-def get_verbose_compiler_info(
-    compiler_setting: CompilerSetting, bldr: BuilderWithCache
-) -> str:
+def get_verbose_compiler_info(compiler_setting: CompilerSetting, bldr: Builder) -> str:
     cpath = get_compiler_executable(compiler_setting, bldr)
 
     return (
@@ -1017,12 +1011,10 @@ def get_verbose_compiler_info(
     )
 
 
-def get_llvm_IR(
-    code: str, compiler_setting: CompilerSetting, bldr: BuilderWithCache
-) -> str:
+def get_llvm_IR(code: str, compiler_setting: CompilerSetting, bldr: Builder) -> str:
     if (
-        compiler_setting.compiler_config.name != "clang"
-        and compiler_setting.compiler_config.name != "llvm"
+        compiler_setting.compiler_project.name != "clang"
+        and compiler_setting.compiler_project.name != "llvm"
     ):
         raise CompileError("Requesting LLVM IR from non-clang compiler!")
 

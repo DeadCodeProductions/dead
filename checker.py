@@ -12,14 +12,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Optional
 
-from ccbuilder import (
-    BuilderWithCache,
-    BuildException,
-    CompilerConfig,
-    PatchDB,
-    Repo,
-    get_compiler_config,
-)
+from ccbuilder import Builder, BuildException, PatchDB, Repo
 from dead_instrumenter.instrumenter import annotate_with_static
 
 import parsers
@@ -268,7 +261,7 @@ def sanitize(
 
 
 class Checker:
-    def __init__(self, config: utils.NestedNamespace, bldr: BuilderWithCache):
+    def __init__(self, config: utils.NestedNamespace, bldr: Builder):
         self.config = config
         self.builder = bldr
         return
@@ -494,8 +487,15 @@ if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.checker_parser())
 
     patchdb = PatchDB(config.patchdb)
-    bldr = BuilderWithCache(
-        Path(config.cachedir), patchdb, args.cores, logdir=Path(config.logdir)
+    gcc_repo = Repo.gcc_repo(config.gcc.repo)
+    llvm_repo = Repo.llvm_repo(config.llvm.repo)
+    bldr = Builder(
+        cache_prefix=Path(config.cachedir),
+        gcc_repo=gcc_repo,
+        llvm_repo=llvm_repo,
+        patchdb=patchdb,
+        jobs=args.cores,
+        logdir=Path(config.logdir),
     )
     chkr = Checker(config, bldr)
 

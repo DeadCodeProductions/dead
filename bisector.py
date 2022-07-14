@@ -10,14 +10,7 @@ import tarfile
 from pathlib import Path
 from typing import Optional
 
-from ccbuilder import (
-    BuilderWithCache,
-    BuildException,
-    CompilerConfig,
-    PatchDB,
-    Repo,
-    get_compiler_config,
-)
+from ccbuilder import Builder, BuildException, PatchDB, Repo
 
 import checker
 import generator
@@ -52,7 +45,7 @@ class Bisector:
     def __init__(
         self,
         config: utils.NestedNamespace,
-        bldr: BuilderWithCache,
+        bldr: Builder,
         chkr: checker.Checker,
     ) -> None:
         self.config = config
@@ -159,8 +152,8 @@ class Bisector:
             None,
         )
 
-        bad_compiler_config = case.bad_setting.compiler_config
-        repo = bad_compiler_config.repo
+        bad_compiler_config = case.bad_setting.compiler_project
+        repo = bad_setting.repo
 
         # ===== Get good and bad commits
         bad_commit = case.bad_setting.rev
@@ -169,7 +162,7 @@ class Bisector:
             gs.rev
             for gs in case.good_settings
             if gs.opt_level == case.bad_setting.opt_level
-            and gs.compiler_config.name == bad_compiler_config.name
+            and gs.compiler_project.name == bad_compiler_config.name
         ]
 
         if len(possible_good_commits) == 0:
@@ -311,7 +304,7 @@ class Bisector:
         # check cache
         possible_revs = repo.direct_first_parent_path(good_rev, bad_rev)
         cached_revs = find_cached_revisions(
-            case.bad_setting.compiler_config.name, self.config
+            case.bad_setting.compiler_project.name, self.config
         )
         cached_revs = [r for r in cached_revs if r in possible_revs]
 
@@ -346,7 +339,7 @@ class Bisector:
                 test: bool = self._is_interesting(case, midpoint)
             except utils.CompileError:
                 logging.warning(
-                    f"Failed to compile code with {case.bad_setting.compiler_config.name}-{midpoint}"
+                    f"Failed to compile code with {case.bad_setting.compiler_project.name}-{midpoint}"
                 )
                 failed_to_compile = True
                 continue
@@ -423,13 +416,13 @@ class Bisector:
                 test = self._is_interesting(case, midpoint)
             except BuildException:
                 logging.warning(
-                    f"Could not build {case.bad_setting.compiler_config.name} {midpoint}!"
+                    f"Could not build {case.bad_setting.compiler_project.name} {midpoint}!"
                 )
                 failed_to_build_or_compile = True
                 continue
             except utils.CompileError:
                 logging.warning(
-                    f"Failed to compile code with {case.bad_setting.compiler_config.name}-{midpoint}"
+                    f"Failed to compile code with {case.bad_setting.compiler_project.name}-{midpoint}"
                 )
                 failed_to_build_or_compile = True
                 continue
@@ -454,8 +447,15 @@ if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.bisector_parser())
 
     patchdb = PatchDB(config.patchdb)
-    bldr = BuilderWithCache(
-        Path(config.cachedir), patchdb, args.cores, logdir=Path(config.logdir)
+    gcc_repo = Repo.gcc_repo(config.gcc.repo)
+    llvm_repo = Repo.llvm_repo(config.llvm.repo)
+    bldr = Builder(
+        cache_prefix=Path(config.cachedir),
+        gcc_repo=gcc_repo,
+        llvm_repo=llvm_repo,
+        patchdb=patchdb,
+        jobs=args.cores,
+        logdir=Path(config.logdir),
     )
     chkr = checker.Checker(config, bldr)
     gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
@@ -513,7 +513,7 @@ if __name__ == "__main__":
             scenario.attacker_settings = tmp.attacker_settings
 
         gen = gnrtr.parallel_interesting_case_file(
-            config, scenario, bldr.cores, output_dir, start_stop=True
+            config, scenario, bldr.jobs, output_dir, start_stop=True
         )
 
         if args.amount == 0:
