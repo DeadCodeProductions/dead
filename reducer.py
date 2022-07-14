@@ -15,14 +15,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Optional
 
-from ccbuilder import (
-    BuilderWithCache,
-    BuildException,
-    CompilerConfig,
-    PatchDB,
-    Repo,
-    get_compiler_config,
-)
+from ccbuilder import Builder, BuildException, PatchDB, Repo
 
 import generator
 import parsers
@@ -52,7 +45,7 @@ class TempDirEnv:
 @dataclass
 class Reducer:
     config: utils.NestedNamespace
-    bldr: BuilderWithCache
+    bldr: Builder
 
     def reduce_file(self, file: Path, force: bool = False) -> bool:
         """Reduce a case given in the .tar format.
@@ -117,7 +110,7 @@ class Reducer:
         if bisection:
             bad_settings.append(copy(bad_setting))
             bad_settings[-1].rev = bisection
-            repo = bad_setting.compiler_config.repo
+            repo = bad_setting.repo
             good_settings = good_settings + [copy(bad_setting)]
             good_settings[-1].rev = repo.rev_to_commit(f"{bisection}~")
 
@@ -181,7 +174,7 @@ class Reducer:
             creduce_cmd = [
                 self.config.creduce,
                 "--n",
-                f"{self.bldr.cores}",
+                f"{self.bldr.jobs}",
                 str(script_path.name),
                 str(pp_code_path.name),
             ]
@@ -216,8 +209,15 @@ if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.reducer_parser())
 
     patchdb = PatchDB(config.patchdb)
-    bldr = BuilderWithCache(
-        Path(config.cachedir), patchdb, args.cores, logdir=Path(config.logdir)
+    gcc_repo = Repo.gcc_repo(config.gcc.repo)
+    llvm_repo = Repo.llvm_repo(config.llvm.repo)
+    bldr = Builder(
+        cache_prefix=Path(config.cachedir),
+        gcc_repo=gcc_repo,
+        llvm_repo=llvm_repo,
+        patchdb=patchdb,
+        jobs=args.cores,
+        logdir=Path(config.logdir),
     )
     gnrtr = generator.CSmithCaseGenerator(config, patchdb)
     rdcr = Reducer(config, bldr)
@@ -266,7 +266,7 @@ if __name__ == "__main__":
             scenario.attacker_settings = tmp.attacker_settings
 
         gen = gnrtr.parallel_interesting_case_file(
-            config, scenario, bldr.cores, output_dir, start_stop=True
+            config, scenario, bldr.jobs, output_dir, start_stop=True
         )
         if args.amount == 0:
             while True:

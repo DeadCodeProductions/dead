@@ -13,3 +13,4 @@ gcc/
 llvm-project/
 compiler_cache/
 logs/
+venv*/

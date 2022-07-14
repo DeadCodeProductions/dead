@@ -14,14 +14,7 @@ from random import randint
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Generator, Optional, Union
 
-from ccbuilder import (
-    BuilderWithCache,
-    BuildException,
-    CompilerConfig,
-    PatchDB,
-    Repo,
-    get_compiler_config,
-)
+from ccbuilder import Builder, BuildException, PatchDB, Repo
 from dead_instrumenter.instrumenter import instrument_program
 
 import checker
@@ -140,8 +133,16 @@ class CSmithCaseGenerator:
         cores: Optional[int] = None,
     ):
         self.config: utils.NestedNamespace = config
-        self.builder: BuilderWithCache = BuilderWithCache(
-            Path(config.cachedir), patchdb, cores, logdir=Path(config.logdir)
+
+        gcc_repo = Repo.gcc_repo(config.gcc.repo)
+        llvm_repo = Repo.llvm_repo(config.llvm.repo)
+        self.builder = Builder(
+            cache_prefix=Path(config.cachedir),
+            gcc_repo=gcc_repo,
+            llvm_repo=llvm_repo,
+            patchdb=patchdb,
+            jobs=cores,
+            logdir=Path(config.logdir),
         )
         self.chkr: checker.Checker = checker.Checker(config, self.builder)
         self.procs: list[Process] = []
