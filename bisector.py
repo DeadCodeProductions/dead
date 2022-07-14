@@ -4,18 +4,13 @@ import copy
 import functools
 import logging
 import math
-import os
 import subprocess
-import tarfile
 from pathlib import Path
 from typing import Optional
 
-from ccbuilder import Builder, BuildException, PatchDB, Repo
+from ccbuilder import Builder, BuildException, Repo
 
 import checker
-import generator
-import parsers
-import reducer
 import utils
 
 
@@ -441,129 +436,3 @@ class Bisector:
                     bad_rev = midpoint
 
         return bad_rev
-
-
-if __name__ == "__main__":
-    config, args = utils.get_config_and_parser(parsers.bisector_parser())
-
-    patchdb = PatchDB(config.patchdb)
-    gcc_repo = Repo.gcc_repo(config.gcc.repo)
-    llvm_repo = Repo.llvm_repo(config.llvm.repo)
-    bldr = Builder(
-        cache_prefix=Path(config.cachedir),
-        gcc_repo=gcc_repo,
-        llvm_repo=llvm_repo,
-        patchdb=patchdb,
-        jobs=args.cores,
-        logdir=Path(config.logdir),
-    )
-    chkr = checker.Checker(config, bldr)
-    gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
-    rdcr = reducer.Reducer(config, bldr)
-    bsctr = Bisector(config, bldr, chkr)
-
-    # TODO: This is duplicate code
-    if args.work_through:
-        if args.output_directory is None:
-            print("Missing output/work-through directory!")
-            exit(1)
-        else:
-            output_dir = Path(os.path.abspath(args.output_directory))
-            os.makedirs(output_dir, exist_ok=True)
-
-        tars = [
-            output_dir / d
-            for d in os.listdir(output_dir)
-            if tarfile.is_tarfile(output_dir / d)
-        ]
-
-        print(f"Processing {len(tars)} tars")
-        for tf in tars:
-            print(f"Processing {tf}")
-            try:
-                bsctr.bisect_file(tf, force=args.force)
-            except BisectionException as e:
-                print(f"BisectionException in {tf}: '{e}'")
-                continue
-            except AssertionError as e:
-                print(f"AssertionError in {tf}: '{e}'")
-                continue
-            except BuildException as e:
-                print(f"BuildException in {tf}: '{e}'")
-                continue
-
-    if args.generate:
-        if args.output_directory is None:
-            print("Missing output directory!")
-            exit(1)
-        else:
-            output_dir = os.path.abspath(args.output_directory)
-            os.makedirs(output_dir, exist_ok=True)
-
-        scenario = utils.Scenario([], [])
-        # When file is specified, use scenario of file as base
-        if args.file:
-            file = Path(args.file).absolute()
-            scenario = utils.Case.from_file(config, file).scenario
-
-        tmp = utils.get_scenario(config, args)
-        if len(tmp.target_settings) > 0:
-            scenario.target_settings = tmp.target_settings
-        if len(tmp.attacker_settings) > 0:
-            scenario.attacker_settings = tmp.attacker_settings
-
-        gen = gnrtr.parallel_interesting_case_file(
-            config, scenario, bldr.jobs, output_dir, start_stop=True
-        )
-
-        if args.amount == 0:
-            while True:
-                path = next(gen)
-                worked = False
-                if args.reducer:
-                    try:
-                        worked = rdcr.reduce_file(path)
-                    except BuildException as e:
-                        print(f"BuildException in {path}: {e}")
-                        continue
-
-                if not args.reducer or worked:
-                    try:
-                        bsctr.bisect_file(path, force=args.force)
-                    except BisectionException as e:
-                        print(f"BisectionException in {path}: '{e}'")
-                        continue
-                    except AssertionError as e:
-                        print(f"AssertionError in {path}: '{e}'")
-                        continue
-                    except BuildException as e:
-                        print(f"BuildException in {path}: '{e}'")
-                        continue
-        else:
-            for i in range(args.amount):
-                path = next(gen)
-                worked = False
-                if args.reducer:
-                    try:
-                        worked = rdcr.reduce_file(path)
-                    except BuildException as e:
-                        print(f"BuildException in {path}: {e}")
-                        continue
-                if not args.reducer or worked:
-                    try:
-                        bsctr.bisect_file(path, force=args.force)
-                    except BisectionException as e:
-                        print(f"BisectionException in {path}: '{e}'")
-                        continue
-                    except AssertionError as e:
-                        print(f"AssertionError in {path}: '{e}'")
-                        continue
-                    except BuildException as e:
-                        print(f"BuildException in {path}: '{e}'")
-                        continue
-
-    elif args.file:
-        file = Path(args.file)
-        bsctr.bisect_file(file, force=args.force)
-
-    gnrtr.terminate_processes()

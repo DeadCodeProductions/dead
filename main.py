@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import copy
+import functools
 import hashlib
 import json
 import logging
@@ -17,10 +18,11 @@ from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
 import ccbuilder
+import diopter
 import requests
 from ccbuilder import Builder, BuildException, PatchDB, Repo
 
-import bisector
+import bisectorfunctions
 import checker
 import database
 import generator
@@ -161,13 +163,20 @@ def _run() -> None:
         if args.bisector:
             try:
                 time_start_bisector = time.perf_counter()
-                bisect_worked = bsctr.bisect_case(case)
+                case.bisection = bsctr.bisect(
+                    state=(chkr, case),
+                    test=bisectorfunctions.test_bisection,
+                    bad_rev=case.bad_setting.rev,
+                    good_rev=case.good_settings[0].rev,
+                    project=case.bad_setting.compiler_project,
+                    repo=case.bad_setting.repo,
+                )
                 time_end_bisector = time.perf_counter()
                 bisector_time = time_end_bisector - time_start_bisector
-                bisector_steps = bsctr.steps
-                if not bisect_worked:
+                bisector_steps = -1
+                if not case.bisection:
                     continue
-            except bisector.BisectionException as e:
+            except diopter.bisector.BisectionException as e:
                 print(f"BisectionException: '{e}'", file=sys.stderr)
                 continue
             except AssertionError as e:
@@ -292,13 +301,20 @@ def _report() -> None:
     if not case.bisection:
         print("Case is not bisected. Starting bisection...", file=sys.stderr)
         start_time = time.perf_counter()
-        worked = bsctr.bisect_case(case)
+        worked = bsctr.bisect(
+            state=(chkr, case),
+            test=bisectorfunctions.test_bisection,
+            bad_rev=case.bad_setting.rev,
+            good_rev=case.good_settings[0].rev,
+            project=case.bad_setting.compiler_project,
+            repo=case.bad_setting.repo,
+        )
         bisector_time = time.perf_counter() - start_time
         if worked:
             ddb.update_case(args.case_id, case)
             g_time, gtc, b_time, b_steps, r_time = ddb.get_timing_from_id(args.case_id)
             b_time = bisector_time
-            b_steps = bsctr.steps
+            b_steps = -1
             ddb.record_timing(args.case_id, g_time, gtc, b_time, b_steps, r_time)
 
         else:
@@ -988,7 +1004,15 @@ def _set() -> None:
         case.code = new_mcode
         if chkr.is_interesting(case):
             print("Checking bisection...")
-            if not bsctr.bisect_case(case, force=True):
+            case.bisection = bsctr.bisect(
+                state=(chkr, case),
+                test=bisectorfunctions.test_bisection,
+                bad_rev=case.bad_setting.rev,
+                good_rev=case.good_settings[0].rev,
+                project=case.bad_setting.compiler_project,
+                repo=case.bad_setting.repo,
+            )
+            if not case.bisection:
                 logging.critical("Checking bisection failed...")
                 exit(1)
             if case.bisection != old_bisection:
@@ -1070,16 +1094,43 @@ def _bisect() -> None:
         else:
             case = pre_case
         start_time = time.perf_counter()
-        if bsctr.bisect_case(case, force=args.force):
+
+        def cmp_func(x: tuple[str, str], y: tuple[str, str]) -> bool:
+            return case.bad_setting.repo.is_ancestor(x[1], y[1])
+
+        possible_good_commits_t = [
+            (
+                gs.rev,
+                case.bad_setting.repo.get_best_common_ancestor(
+                    case.bad_setting.rev, gs.rev
+                ),
+            )
+            for gs in case.good_settings
+        ]
+
+        good_commit, _ = min(
+            possible_good_commits_t,
+            key=functools.cmp_to_key(cmp_func),
+        )
+
+        bisection = bsctr.bisect(
+            state=(chkr, case),
+            test=bisectorfunctions.test_bisection,
+            bad_rev=case.bad_setting.rev,
+            # good_rev = case.good_settings[0].rev,
+            good_rev=good_commit,
+            project=case.bad_setting.compiler_project,
+            repo=case.bad_setting.repo,
+        )
+        if bisection:
+            case.bisection = bisection
             ddb.update_case(case_id, case)
             bisector_time = time.perf_counter() - start_time
             # if the bisection took less than 5 seconds
             # we can assume that it was already bisected
             if bisector_time > 5.0:
                 gtime, gtc, _, _, rtime = ddb.get_timing_from_id(case_id)
-                ddb.record_timing(
-                    case_id, gtime, gtc, bisector_time, bsctr.steps, rtime
-                )
+                ddb.record_timing(case_id, gtime, gtc, bisector_time, -1, rtime)
         else:
             print(f"{case_id} failed...", file=sys.stderr)
     print("Done", file=sys.stderr)
@@ -1321,10 +1372,53 @@ def _findby() -> None:
     return
 
 
+def _test_bisector() -> None:
+    successes = 0
+    for i, case_id in enumerate(args.number):
+        success_rate = 100 * successes / i if i > 0 else 100
+        print(
+            f"Testing {case_id}. Done {i}/{len(args.number)}. Rate: {success_rate}%",
+            file=sys.stderr,
+        )
+        cse = ddb.get_case_from_id_or_die(case_id)
+
+        def cmp_func(x: tuple[str, str], y: tuple[str, str]) -> bool:
+            return cse.bad_setting.repo.is_ancestor(x[1], y[1])
+
+        possible_good_commits_t = [
+            (
+                gs.rev,
+                cse.bad_setting.repo.get_best_common_ancestor(
+                    cse.bad_setting.rev, gs.rev
+                ),
+            )
+            for gs in cse.good_settings
+        ]
+
+        good_commit, _ = min(
+            possible_good_commits_t,
+            key=functools.cmp_to_key(cmp_func),
+        )
+        res = bsctr.bisect(
+            state=(chkr, cse),
+            test=bisectorfunctions.test_bisection,
+            bad_rev=cse.bad_setting.rev,
+            good_rev=good_commit,
+            project=cse.bad_setting.compiler_project,
+            repo=cse.bad_setting.repo,
+        )
+        if res:
+            successes += 1
+    print(
+        f"{successes}/{len(args.number)} Rate: {100*successes/len(args.number)}%",
+        file=sys.stderr,
+    )
+
+
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
-    patchdb = PatchDB(config.patchdb)
+    patchdb = PatchDB(Path(config.patchdb))
     gcc_repo = Repo.gcc_repo(config.gcc.repo)
     llvm_repo = Repo.llvm_repo(config.llvm.repo)
     bldr = Builder(
@@ -1338,8 +1432,7 @@ if __name__ == "__main__":
     chkr = checker.Checker(config, bldr)
     gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
     rdcr = reducer.Reducer(config, bldr)
-    bsctr = bisector.Bisector(config, bldr, chkr)
-
+    bsctr = diopter.bisector.Bisector(bldr)
     ddb = database.CaseDatabase(config, config.casedb)
 
     if args.sub == "run":
@@ -1380,5 +1473,7 @@ if __name__ == "__main__":
         _reported()
     elif args.sub == "findby":
         _findby()
+    elif args.sub == "test-bisector":
+        _test_bisector()
 
     gnrtr.terminate_processes()

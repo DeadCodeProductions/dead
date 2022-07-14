@@ -333,84 +333,6 @@ def reducer_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def bisector_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(add_help=False)
-
-    parser.add_argument("-f", "--file", help="Which file to work on.", type=str)
-
-    parser.add_argument(
-        "-d", "--output-directory", help="Where the cases should be saved to.", type=str
-    )
-
-    parser.add_argument(
-        "-a", "--amount", help="How many cases to find and reduce.", type=int, default=0
-    )
-
-    parser.add_argument(
-        "-g",
-        "--generate",
-        help="Whether or not to generate, reduce and bisect cases",
-        action="store_true",
-    )
-
-    parser.add_argument("-s", "--scenario", help="Which scenario to work on.", type=str)
-
-    parser.add_argument(
-        "-t",
-        "--targets",
-        help="Project name and revision of compiler to use.",
-        nargs="+",
-        type=str,
-    )
-
-    parser.add_argument(
-        "-tdol",
-        "--targets-default-opt-levels",
-        help="Default optimization levels for the target to be checked against.",
-        nargs="+",
-        default=[],
-        type=str,
-    )
-
-    parser.add_argument(
-        "-ac",
-        "--additional-compilers",
-        help="Additional compiler to compare the target against.",
-        nargs="*",
-        type=str,
-    )
-
-    parser.add_argument(
-        "-acdol",
-        "--additional-compilers-default-opt-levels",
-        help="Default optimization levels for the additional compilers to be checked against.",
-        nargs="+",
-        default=[],
-        type=str,
-    )
-
-    parser.add_argument(
-        "--work-through",
-        help="Look at all cases found in directory specified in --output-directory and bisect them when they are not.",
-        action="store_true",
-    )
-
-    parser.add_argument(
-        "--force",
-        help="Force another bisection even if they already exist",
-        action="store_true",
-    )
-
-    parser.add_argument(
-        "--reducer",
-        help="If the generated case should be reduced or not.",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-    )
-
-    return parser
-
-
 def debugtool_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
 
@@ -890,5 +812,9 @@ def main_parser() -> argparse.ArgumentParser:
         metavar="VAR",
         help="Is a string, when choosing link or fixed, is a path when choosing case or code.",
     )
+
+    test_bisector_parser = subparser.add_parser("test-bisector")
+
+    test_bisector_parser.add_argument("number", type=int, nargs="+")
 
     return parser
