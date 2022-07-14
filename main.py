@@ -16,20 +16,14 @@ from multiprocessing import Pool
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
+import ccbuilder
 import requests
-from ccbuilder import (
-    BuilderWithCache,
-    BuildException,
-    PatchDB,
-    Repo,
-    get_compiler_config,
-)
+from ccbuilder import Builder, BuildException, PatchDB, Repo
 
 import bisector
 import checker
 import database
 import generator
-import init
 import parsers
 import preprocessing
 import reducer
@@ -133,13 +127,13 @@ def _run() -> None:
 
                 known: Dict[str, list[int]] = dict()
                 for i, s in enumerate(scenario.target_settings):
-                    cname = s.compiler_config.name
+                    cname = s.compiler_project.name
                     if cname not in known:
                         known[cname] = []
                     known[cname].append(i)
 
                 for cname, l in known.items():
-                    repo = scenario.target_settings[l[0]].compiler_config.repo
+                    repo = scenario.target_settings[l[0]].repo
                     old_trunk_commit = repo.rev_to_commit("trunk")
                     repo.pull()
                     new_trunk_commit = repo.rev_to_commit("trunk")
@@ -326,8 +320,8 @@ def _report() -> None:
         case.reduced_code = massaged_code
 
     bad_setting = case.bad_setting
-    bad_repo = bad_setting.compiler_config.repo
-    is_gcc: bool = bad_setting.compiler_config.name == "gcc"
+    bad_repo = bad_setting.repo
+    is_gcc: bool = bad_setting.compiler_project.name == "gcc"
 
     # Last sanity check
     cpy = copy.deepcopy(case)
@@ -362,7 +356,7 @@ def _report() -> None:
     bisection_setting = copy.deepcopy(cpy.bad_setting)
     bisection_setting.rev = cast(str, cpy.bisection)
     prebisection_setting = copy.deepcopy(bisection_setting)
-    repo = bisection_setting.compiler_config.repo
+    repo = bisection_setting.repo
     prebisection_setting.rev = repo.rev_to_commit(f"{case.bisection}~")
 
     bis_set = utils.find_alive_markers(cpy.code, bisection_setting, marker_prefix, bldr)
@@ -389,14 +383,14 @@ def _report() -> None:
     )
 
     bad_setting_tag = bad_setting.rev + " (trunk)"
-    bad_setting_str = f"{bad_setting.compiler_config.name}-{bad_setting_tag} -O{bad_setting.opt_level}"
+    bad_setting_str = f"{bad_setting.compiler_project.name}-{bad_setting_tag} -O{bad_setting.opt_level}"
 
     tmp = bad_repo.rev_to_tag(good_setting.rev)
     if not tmp:
         good_setting_tag = good_setting.rev
     else:
         good_setting_tag = tmp
-    good_setting_str = f"{good_setting.compiler_config.name}-{good_setting_tag} -O{good_setting.opt_level}"
+    good_setting_str = f"{good_setting.compiler_project.name}-{good_setting_tag} -O{good_setting.opt_level}"
 
     def to_collapsed(
         s: str, is_gcc: bool, summary: str = "Output", open: bool = False
@@ -596,7 +590,7 @@ def _diagnose() -> None:
     else:
         case = utils.Case.from_file(config, Path(args.file))
 
-    repo = case.bad_setting.compiler_config.repo
+    repo = case.bad_setting.repo
 
     if args.targets or args.additional_compilers:
         if not args.targets_default_opt_levels:
@@ -774,9 +768,7 @@ def _check_reduced() -> None:
     case.reduced_code = new_code
 
     if case.bisection:
-        prev_rev = case.bad_setting.compiler_config.repo.rev_to_commit(
-            f"{case.bisection}~"
-        )
+        prev_rev = case.bad_setting.repo.rev_to_commit(f"{case.bisection}~")
         cpy = copy.deepcopy(case)
         cpy.bad_setting.rev = case.bisection
         bis_res_og = case.marker in utils.find_alive_markers(
@@ -830,7 +822,7 @@ def _asm() -> None:
         print(f"Saving {name + '.s'}...")
 
     case = ddb.get_case_from_id_or_die(args.case_id)
-    bad_repo = case.bad_setting.compiler_config.repo
+    bad_repo = case.bad_setting.repo
 
     same_opt = [
         gs for gs in case.good_settings if gs.opt_level == case.bad_setting.opt_level
@@ -903,7 +895,7 @@ def _set() -> None:
     case = ddb.get_case_from_id_or_die(case_id)
     mcode, link, fixed = ddb.get_report_info_from_id(case_id)
 
-    repo = case.bad_setting.compiler_config.repo
+    repo = case.bad_setting.repo
 
     if args.what == "ocode":
         with open(args.var, "r") as f:
@@ -1020,16 +1012,16 @@ def _set() -> None:
 
 
 def _build() -> None:
-    compiler_config = get_compiler_config(args.project, Path(config.repodir))
+    project, repo = ccbuilder.get_compiler_info(args.project, Path(config.repodir))
     additional_patches: list[Path] = []
     if args.add_patches:
         additional_patches = [Path(patch).absolute() for patch in args.add_patches]
     for rev in args.rev:
         print(
-            bldr.build_rev_with_config(
-                compiler_config,
-                rev,
-                additional_patches=additional_patches,
+            bldr.build(
+                project=project,
+                rev=rev,
+                additional_patches=additional_patches
                 # TODO: implement force
                 # force=args.force,
             )
@@ -1333,8 +1325,15 @@ if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
     patchdb = PatchDB(config.patchdb)
-    bldr = BuilderWithCache(
-        Path(config.cachedir), patchdb, args.cores, logdir=Path(config.logdir)
+    gcc_repo = Repo.gcc_repo(config.gcc.repo)
+    llvm_repo = Repo.llvm_repo(config.llvm.repo)
+    bldr = Builder(
+        cache_prefix=Path(config.cachedir),
+        gcc_repo=gcc_repo,
+        llvm_repo=llvm_repo,
+        patchdb=patchdb,
+        jobs=args.cores,
+        logdir=Path(config.logdir),
     )
     chkr = checker.Checker(config, bldr)
     gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
