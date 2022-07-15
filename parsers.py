@@ -817,4 +817,8 @@ def main_parser() -> argparse.ArgumentParser:
 
     test_bisector_parser.add_argument("number", type=int, nargs="+")
 
+    test_reducer_parser = subparser.add_parser("test-reducer")
+
+    test_reducer_parser.add_argument("number", type=int, nargs="+")
+
     return parser

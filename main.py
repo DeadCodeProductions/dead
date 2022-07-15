@@ -28,7 +28,7 @@ import database
 import generator
 import parsers
 import preprocessing
-import reducer
+import reducerfunction
 import utils
 
 
@@ -194,7 +194,7 @@ def _run() -> None:
             ):
                 try:
                     time_start_reducer = time.perf_counter()
-                    worked = rdcr.reduce_case(case)
+                    _ = reducerfunction.reduce_case(config, bldr, case, jobs=args.cores)
                     time_end_reducer = time.perf_counter()
                     reducer_time = time_end_reducer - time_start_reducer
                 except BuildException as e:
@@ -278,13 +278,16 @@ def _rereduce() -> None:
 
     case = ddb.get_case_from_id_or_die(args.case_id)
     print(f"Re-reducing code with respect to Case {args.case_id}", file=sys.stderr)
-    res = rdcr.reduce_code(
-        rereduce_code,
-        case.marker,
-        case.bad_setting,
-        case.good_settings,
+    res = reducerfunction.reduce_code(
+        config=config,
+        bldr=bldr,
+        code=rereduce_code,
+        marker=case.marker,
+        bad_setting=case.bad_setting,
+        good_settings=case.good_settings,
         bisection=case.bisection,
         preprocess=False,
+        jobs=args.cores,
     )
 
     print(res)
@@ -324,7 +327,7 @@ def _report() -> None:
     # check for reduced and massaged code
     if not case.reduced_code:
         print("Case is not reduced. Starting reduction...", file=sys.stderr)
-        if rdcr.reduce_case(case):
+        if reducerfunction.reduce_case(config, bldr, case):
             ddb.update_case(args.case_id, case)
         else:
             print("Could not reduce case. Aborting...", file=sys.stderr)
@@ -1067,7 +1070,7 @@ def _reduce() -> None:
         else:
             case = pre_case
         start_time = time.perf_counter()
-        if rdcr.reduce_case(case, force=args.force):
+        if reducerfunction.reduce_case(config, bldr, case, force=args.force):
             ddb.update_case(case_id, case)
             reducer_time = time.perf_counter() - start_time
             # If the reduction takes less than 5 seconds,
@@ -1415,6 +1418,69 @@ def _test_bisector() -> None:
     )
 
 
+
+def _test_reducer() -> None:
+    successes = 0
+    new_red = diopter.reducer.Reducer()
+    for i, case_id in enumerate(args.number):
+        success_rate = 100 * successes / i if i > 0 else 100
+        print(
+            f"Testing {case_id}. Done {i}/{len(args.number)}. Rate: {success_rate}%",
+            file=sys.stderr,
+        )
+        cse = ddb.get_case_from_id_or_die(case_id)
+        if not chkr.is_interesting(cse):
+            logging.critical("CASE IS NOT INTERESTING")
+        else:
+            logging.info("Case is interesting")
+
+        if cse.bisection:
+            # script = diopter.reduction_checks.make_interestingness_check(reducerfunction.reduction_check, sanitize=False, sanitize_flags="-I/usr/include/csmith-2.3.0/", add_args={"state": inputs})
+            bad_settings = [cse.bad_setting]
+            good_settings = copy.deepcopy(cse.good_settings)
+            if cse.bisection:
+                bad_settings.append(copy.deepcopy(cse.bad_setting))
+                bad_settings[-1].rev = cse.bisection
+                repo = cse.bad_setting.repo
+                good_settings = good_settings + [copy.deepcopy(cse.bad_setting)]
+                good_settings[-1].rev = repo.rev_to_commit(f"{cse.bisection}~")
+            int_settings: dict[str, Any] = {}
+            int_settings["bad_settings"] = [
+                bs.to_jsonable_dict() for bs in bad_settings
+            ]
+            int_settings["good_settings"] = [
+                gs.to_jsonable_dict() for gs in good_settings
+            ]
+
+            script = (
+                "#/bin/sh\n"
+                "TMPD=$(mktemp -d)\n"
+                "trap '{ rm -rf \"$TMPD\"; }' INT TERM EXIT\n"
+                "timeout 15 "
+                f"{Path(__file__).parent.resolve()}/checker.py"
+                f" --dont-preprocess"
+                f" --config {config.config_path}"
+                f" --marker {cse.marker}"
+                f" --interesting-settings '{json.dumps(int_settings)}'"
+                f" --file code.c"
+            )
+
+            code_pp = preprocessing.preprocess_csmith_code(
+                cse.code, utils.get_marker_prefix(cse.marker), cse.bad_setting, bldr
+            )
+            if not code_pp:
+                raise Exception()
+
+            if reduced_code_str := new_red.reduce(code_pp, script, jobs=args.cores):
+                with open(f"reduced_code_{case_id}.c", "w") as f:
+                    f.write(reduced_code_str)
+                cse.code = reduced_code_str
+                if chkr.is_interesting(cse):
+                    successes += 1
+        else:
+            print("Bisection required")
+
+
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
@@ -1431,7 +1497,6 @@ if __name__ == "__main__":
     )
     chkr = checker.Checker(config, bldr)
     gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
-    rdcr = reducer.Reducer(config, bldr)
     bsctr = diopter.bisector.Bisector(bldr)
     ddb = database.CaseDatabase(config, config.casedb)
 
@@ -1475,5 +1540,7 @@ if __name__ == "__main__":
         _findby()
     elif args.sub == "test-bisector":
         _test_bisector()
+    elif args.sub == "test-reducer":
+        _test_reducer()
 
     gnrtr.terminate_processes()

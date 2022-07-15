@@ -659,18 +659,22 @@ def check_and_get(tf: tarfile.TarFile, member: str) -> str:
 
 
 def get_interesting_settings(
-    config: NestedNamespace, file: Path
+    config: NestedNamespace, fileorjson: Union[Path, str]
 ) -> tuple[list[CompilerSetting], list[CompilerSetting]]:
-    with open(file, "r") as f:
-        d = json.load(f)
-        bad_settings = [
-            CompilerSetting.from_jsonable_dict(config, bs) for bs in d["bad_settings"]
-        ]
-        good_settings = [
-            CompilerSetting.from_jsonable_dict(config, gs) for gs in d["good_settings"]
-        ]
+    if isinstance(fileorjson, Path) or Path(fileorjson).exists():
+        with open(fileorjson, "r") as f:
+            d = json.load(f)
+    else:
+        d = json.loads(fileorjson)
 
-        return bad_settings, good_settings
+    bad_settings = [
+        CompilerSetting.from_jsonable_dict(config, bs) for bs in d["bad_settings"]
+    ]
+    good_settings = [
+        CompilerSetting.from_jsonable_dict(config, gs) for gs in d["good_settings"]
+    ]
+
+    return bad_settings, good_settings
 
 
 @dataclass
