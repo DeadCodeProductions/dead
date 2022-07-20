@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(callchain_checker CXX)
+project(callchain_checker C CXX)
 
 find_package(Boost REQUIRED)
 message(STATUS "Found Boost ${Boost_VERSION_STRING}")
