@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Generator, Optional, Union
 
 from ccbuilder import Builder, BuildException, PatchDB, Repo
 from dead_instrumenter.instrumenter import instrument_program
+from diopter import sanitizer
 
 import checker
 import parsers
@@ -105,7 +106,7 @@ def generate_file(
                 with open(ntf.name, "w") as f:
                     print(candidate, file=f)
                 logging.debug("Checking if program is sane...")
-                if not checker.sanitize(
+                if not sanitizer.sanitize_file(
                     config.gcc.sane_version,
                     config.llvm.sane_version,
                     config.ccomp,

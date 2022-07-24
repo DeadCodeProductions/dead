@@ -641,7 +641,7 @@ def _diagnose() -> None:
         with tempfile.NamedTemporaryFile(suffix=".c") as tf:
             with open(tf.name, "w") as f:
                 f.write(empty_body_code)
-                res_comp_warnings = checker.check_compiler_warnings(
+                res_comp_warnings = diopter.sanitizer.check_compiler_warnings(
                     config.gcc.sane_version,
                     config.llvm.sane_version,
                     Path(tf.name),
@@ -652,7 +652,7 @@ def _diagnose() -> None:
                     prefix + "Sanity: compiler warnings",
                     ok_fail(res_comp_warnings),
                 )
-                res_use_ub_san = checker.use_ub_sanitizers(
+                res_use_ub_san = diopter.sanitizer.use_ub_sanitizers(
                     config.llvm.sane_version,
                     Path(tf.name),
                     case.bad_setting.get_flag_str(),
@@ -662,7 +662,7 @@ def _diagnose() -> None:
                 nice_print(
                     prefix + "Sanity: undefined behaviour", ok_fail(res_use_ub_san)
                 )
-                res_ccomp = checker.verify_with_ccomp(
+                res_ccomp = diopter.sanitizer.verify_with_ccomp(
                     config.ccomp,
                     Path(tf.name),
                     case.bad_setting.get_flag_str(),
@@ -1416,7 +1416,6 @@ def _test_bisector() -> None:
         f"{successes}/{len(args.number)} Rate: {100*successes/len(args.number)}%",
         file=sys.stderr,
     )
-
 
 
 def _test_reducer() -> None:
