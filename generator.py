@@ -16,123 +16,29 @@ from typing import TYPE_CHECKING, Generator, Optional, Union
 
 from ccbuilder import Builder, BuildException, PatchDB, Repo
 from dead_instrumenter.instrumenter import instrument_program
-from diopter import sanitizer
+from diopter import generator, sanitizer
 
 import checker
 import parsers
 import utils
 
 
-def run_csmith(csmith: str) -> str:
-    """Generate random code with csmith.
-
-    Args:
-        csmith (str): Path to executable or name in $PATH to csmith.
-
-    Returns:
-        str: csmith generated program.
-    """
-    tries = 0
-    while True:
-        options = [
-            "arrays",
-            "bitfields",
-            "checksum",
-            "comma-operators",
-            "compound-assignment",
-            "consts",
-            "divs",
-            "embedded-assigns",
-            "jumps",
-            "longlong",
-            "force-non-uniform-arrays",
-            "math64",
-            "muls",
-            "packed-struct",
-            "paranoid",
-            "pointers",
-            "structs",
-            "inline-function",
-            "return-structs",
-            "arg-structs",
-            "dangling-global-pointers",
-        ]
-
-        cmd = [
-            csmith,
-            "--no-unions",
-            "--safe-math",
-            "--no-argc",
-            "--no-volatiles",
-            "--no-volatile-pointers",
-        ]
-        for option in options:
-            if randint(0, 1):
-                cmd.append(f"--{option}")
-            else:
-                cmd.append(f"--no-{option}")
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        if result.returncode == 0:
-            return result.stdout.decode("utf-8")
-        else:
-            tries += 1
-            if tries > 10:
-                raise Exception("CSmith failed 10 times in a row!")
-
-
-def generate_file(
-    config: utils.NestedNamespace, additional_flags: str
-) -> tuple[str, str]:
-    """Generate an instrumented csmith program.
-
-    Args:
-        config (utils.NestedNamespace): THE config
-        additional_flags (str): Additional flags to use when
-            compiling the program when checking.
-
-    Returns:
-        tuple[str, str]: Marker prefix and instrumented code.
-    """
-    additional_flags += f" -I {config.csmith.include_path}"
-    while True:
-        try:
-            logging.debug("Generating new candidate...")
-            candidate = run_csmith(config.csmith.executable)
-            if len(candidate) > config.csmith.max_size:
-                continue
-            if len(candidate) < config.csmith.min_size:
-                continue
-            with NamedTemporaryFile(suffix=".c") as ntf:
-                with open(ntf.name, "w") as f:
-                    print(candidate, file=f)
-                logging.debug("Checking if program is sane...")
-                if not sanitizer.sanitize_file(
-                    config.gcc.sane_version,
-                    config.llvm.sane_version,
-                    config.ccomp,
-                    Path(ntf.name),
-                    additional_flags,
-                ):
-                    continue
-                logging.debug("Instrumenting candidate...")
-                marker_prefix = instrument_program(
-                    Path(ntf.name), [f"-I{config.csmith.include_path}"]
-                )
-                with open(ntf.name, "r") as f:
-                    return marker_prefix, f.read()
-
-            return marker_prefix, candidate
-        except subprocess.TimeoutExpired:
-            pass
-
-
-class CSmithCaseGenerator:
+class CSmithCaseGenerator(generator.CSmithGenerator):
     def __init__(
         self,
         config: utils.NestedNamespace,
         patchdb: PatchDB,
         cores: Optional[int] = None,
     ):
+        super().__init__(
+            csmith=config.csmith.executable,
+            include_path=config.csmith.include_path,
+            minimum_length=config.csmith.min_size,
+            maximum_length=config.csmith.max_size,
+            clang=config.llvm.sane_version,
+            gcc=config.gcc.sane_version,
+            ccomp=config.ccomp,
+        )
         self.config: utils.NestedNamespace = config
 
         gcc_repo = Repo.gcc_repo(config.gcc.repo)
@@ -148,6 +54,29 @@ class CSmithCaseGenerator:
         self.chkr: checker.Checker = checker.Checker(config, self.builder)
         self.procs: list[Process] = []
         self.try_counter: int = 0
+
+    def generate_code(self, additional_flags: str = "") -> str:
+        additional_flags += f" -I {self.config.csmith.include_path}"
+        while True:
+            uninstrumented_code = super().generate_code()
+            with NamedTemporaryFile(suffix=".c") as ntf:
+                with open(ntf.name, "w") as f:
+                    print(uninstrumented_code, file=f)
+                logging.debug("Checking if program is sane...")
+                if not sanitizer.sanitize_file(
+                    self.config.gcc.sane_version,
+                    self.config.llvm.sane_version,
+                    self.config.ccomp,
+                    Path(ntf.name),
+                    additional_flags,
+                ):
+                    continue
+                logging.debug("Instrumenting candidate...")
+                _ = instrument_program(
+                    Path(ntf.name), [f"-I{self.config.csmith.include_path}"]
+                )
+                with open(ntf.name, "r") as f:
+                    return f.read()
 
     def generate_interesting_case(self, scenario: utils.Scenario) -> utils.Case:
         """Generate a case which is interesting i.e. has one compiler which does
@@ -169,7 +98,8 @@ class CSmithCaseGenerator:
         while True:
             self.try_counter += 1
             logging.debug("Generating new candidate...")
-            marker_prefix, candidate_code = generate_file(self.config, "")
+            marker_prefix = "DCEMarker"
+            candidate_code = self.generate_code()
 
             # Find alive markers
             logging.debug("Getting alive markers...")
@@ -369,7 +299,7 @@ if __name__ == "__main__":
 
     cores = args.cores
 
-    patchdb = PatchDB(config.patchdb)
+    patchdb = PatchDB(Path(config.patchdb))
     case_generator = CSmithCaseGenerator(config, patchdb, cores)
 
     if args.interesting:
