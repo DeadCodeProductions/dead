@@ -83,28 +83,25 @@
 - ~~[52260](https://bugs.llvm.org/show_bug.cgi?id=52260)~~ Fixed
 - ~~[52261](https://bugs.llvm.org/show_bug.cgi?id=52261)~~ Fixed
 - ~~[52289](https://bugs.llvm.org/show_bug.cgi?id=52289)~~ Fixed
-- [52346](https://bugs.llvm.org/show_bug.cgi?id=52346)
 - [52347](https://bugs.llvm.org/show_bug.cgi?id=52347)
 - ~~[52543](https://bugs.llvm.org/show_bug.cgi?id=52543)~~ Fixed
 - [52580](https://bugs.llvm.org/show_bug.cgi?id=52580)
 - ~~[52592](https://bugs.llvm.org/show_bug.cgi?id=52592)~~ Fixed
-- [52965](https://github.com/llvm/llvm-project/issues/52965)
+- ~~[51444](https://github.com/llvm/llvm-project/issues/51444)~~ Fixed
+- [51688](https://github.com/llvm/llvm-project/issues/51688)
+- ~~[52525](https://github.com/llvm/llvm-project/issues/52525)~~ Fixed
+- ~~[52965](https://github.com/llvm/llvm-project/issues/52965)~~ Fixed
 - [53130](https://github.com/llvm/llvm-project/issues/53130)
 - ~~[53131](https://github.com/llvm/llvm-project/issues/53131)~~ Fixed
-- ~~[52525](https://github.com/llvm/llvm-project/issues/52525)~~ Fixed
-- [53131](https://github.com/llvm/llvm-project/issues/53131)
-- [53130](https://github.com/llvm/llvm-project/issues/53130)
-- [53316](https://github.com/llvm/llvm-project/issues/53316)
-- [53130](https://github.com/llvm/llvm-project/issues/53130)
+- ~~[53130](https://github.com/llvm/llvm-project/issues/53130)~~ Fixed
+- ~~[53131](https://github.com/llvm/llvm-project/issues/53131)~~ Fixed
+- ~~[53316](https://github.com/llvm/llvm-project/issues/53316)~~ Fixed
 - [53320](https://github.com/llvm/llvm-project/issues/53320)
-- [53317](https://github.com/llvm/llvm-project/issues/53317)
+- ~~[53317](https://github.com/llvm/llvm-project/issues/53317)~~ Fixed
 - [53318](https://github.com/llvm/llvm-project/issues/53318)
-- [53356](https://github.com/llvm/llvm-project/issues/53356)
 - [53322](https://github.com/llvm/llvm-project/issues/53322)
-- [53385](https://github.com/llvm/llvm-project/issues/53385)
 - [53384](https://github.com/llvm/llvm-project/issues/53384)
-- [51444](https://github.com/llvm/llvm-project/issues/51444)
-- [51688](https://github.com/llvm/llvm-project/issues/51688)
+- [53385](https://github.com/llvm/llvm-project/issues/53385)
 - [53321](https://github.com/llvm/llvm-project/issues/53321)
 - ~~[53319](https://github.com/llvm/llvm-project/issues/53319)~~ Fixed
 - ~~[54980](https://github.com/llvm/llvm-project/issues/54980)~~ Fixed
@@ -112,6 +109,7 @@
 - ~~[56048](https://github.com/llvm/llvm-project/issues/56048)~~ Fixed
 - [56049](https://github.com/llvm/llvm-project/issues/56049)
 - [56118](https://github.com/llvm/llvm-project/issues/56118)
-- [56119](https://github.com/llvm/llvm-project/issues/56119)
+- ~~[56119](https://github.com/llvm/llvm-project/issues/56119)~~ Fixed
 - [56120](https://github.com/llvm/llvm-project/issues/56120)
-
+- [56761](https://github.com/llvm/llvm-project/issues/56761)
+- [56762](https://github.com/llvm/llvm-project/issues/56762)
