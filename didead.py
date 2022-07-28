@@ -107,16 +107,17 @@ class DeadGenerator(diopter.generator.CSmithGenerator):
 class Marker(Base):
     __tablename__ = "marker"
 
-    id = Column(
-        Integer(), sqlalchemy.Sequence("maker_seq"), unique=True, primary_key=True
-    )  # duckdb
-    # id = Column(Integer(), primary_key=True) # sqlite
+    # id = Column(
+    #    Integer(), sqlalchemy.Sequence("maker_seq"), unique=True, primary_key=True
+    # )  # duckdb
+    id = Column(Integer(), nullable=True, primary_key=True)  # sqlite
 
     number: Mapped[int] = Column(Integer(), primary_key=True)
 
     setting_id = Column(
         Integer(),
         ForeignKey("compiler_setting.id"),
+        nullable=True,
         primary_key=True,
         server_default=FetchedValue(),
     )
@@ -164,8 +165,8 @@ case_attacker_setting_assoc_table = Table(
 
 class Case(Base):
     __tablename__ = "cases"
-    id = Column(Integer(), sqlalchemy.Sequence("case_seq"), primary_key=True)
-    # id = Column(Integer(), primary_key=True) # Sqlite
+    # id = Column(Integer(), sqlalchemy.Sequence("case_seq"), primary_key=True)
+    id = Column(Integer(), primary_key=True)  # Sqlite
 
     code_id = Column(String(40), ForeignKey("code.id"), nullable=False)
     original: Mapped[Code] = relationship(
@@ -425,10 +426,10 @@ if __name__ == "__main__":
     logging.basicConfig(level=num_lvl)
 
     engine = sqlalchemy.create_engine(
-        "duckdb:///cases.db", echo=True, future=True, poolclass=sqlalchemy.pool.NullPool
+        "sqlite:///cases.db", echo=True, future=True, poolclass=sqlalchemy.pool.NullPool
     )
     # Create all tables in the database
-    # event.listen(Base.metadata, "after_create", diopter.database.Trigger)
+    event.listen(Base.metadata, "after_create", diopter.database.Trigger)
     Base.metadata.create_all(engine)
 
     jobs = 128
@@ -521,7 +522,7 @@ if __name__ == "__main__":
                 cse.bisection = bis
                 session.merge(cse)
                 session.commit()
-    # gen_pipeline(0)
+    gen_pipeline(0)
     exit(0)
     num_lvl = getattr(logging, "INFO")
     logging.basicConfig(level=num_lvl)
