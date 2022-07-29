@@ -358,21 +358,24 @@ def get_script_args(
     bisection_commit: Commit, pre_bisection_commit: Commit, cse: Case, bldr: Builder
 ) -> list[tuple[str, int, bool]]:
     pairs: list[tuple[str, int, bool]] = []
-    for m in cse.target_marker:
-        okproject = ccbuilder.get_compiler_project(m.setting.compiler_name)
-        exe_string = f"{bldr.build(okproject, m.setting.rev, get_executable=True)} -S {m.setting.get_flag_string()}"
-        bis_exe_string = f"{bldr.build(okproject, bisection_commit, get_executable=True)} -S {m.setting.get_flag_string()}"
 
+    tm = cse.target_marker[0]
+    okproject = ccbuilder.get_compiler_project(tm.setting.compiler_name)
+    for m in cse.target_marker:
+        exe_string = f"{bldr.build(okproject, m.setting.rev, get_executable=True)} -S {m.setting.get_flag_string()}"
         pairs.append((exe_string, m.number, m.alive))
-        pairs.append((bis_exe_string, m.number, m.alive))
+
+    bis_exe_string = f"{bldr.build(okproject, bisection_commit, get_executable=True)} -S {tm.setting.get_flag_string()}"
+    pairs.append((bis_exe_string, tm.number, True))
 
     for m in cse.attacker_marker:
         okproject = ccbuilder.get_compiler_project(m.setting.compiler_name)
         exe_string = f"{bldr.build(okproject, m.setting.rev, get_executable=True)} -S {m.setting.get_flag_string()}"
-        pre_bis_exe_string = f"{bldr.build(okproject, pre_bisection_commit, get_executable=True)} -S {m.setting.get_flag_string()}"
 
         pairs.append((exe_string, m.number, m.alive))
-        pairs.append((pre_bis_exe_string, m.number, m.alive))
+
+    pre_bis_exe_string = f"{bldr.build(okproject, pre_bisection_commit, get_executable=True)} -S {cse.attacker_marker[0].setting.get_flag_string()}"
+    pairs.append((pre_bis_exe_string, tm.number, False))
     return pairs
 
 
@@ -468,9 +471,9 @@ if __name__ == "__main__":
             c for c in session.scalars(select(Case).where(Case.reduced_id.is_(None)))
         ]
         for cse in scalars:
-            if cse.bisection and False:
-                with open("code.c", "w") as f:
-                    f.write(cse.original.code)
+            if cse.bisection:
+                # with open("code.c", "w") as f:
+                #    f.write(cse.original.code)
                 pre_bisection = llvm_repo.rev_to_commit(f"{cse.bisection}~")
                 pairs = get_script_args(
                     bisection_commit=cse.bisection,
@@ -485,7 +488,8 @@ if __name__ == "__main__":
                     sanitize_flags="-I/usr/include/csmith-2.3.0/",
                     add_args={"pairs": pairs},
                 )
-                print(script)
+                # with open("check.py", "w") as f:
+                #    f.write(script)
 
                 if res := rdcr.reduce(cse.original.code, script, jobs):
                     cse.reduced = Code.make(res)
