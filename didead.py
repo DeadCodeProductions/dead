@@ -110,22 +110,16 @@ class Marker(Base):
     # id = Column(
     #    Integer(), sqlalchemy.Sequence("maker_seq"), unique=True, primary_key=True
     # )  # duckdb
-    id = Column(Integer(), nullable=True, primary_key=True)  # sqlite
+    id = Column(Integer(), primary_key=True)  # sqlite
 
-    number: Mapped[int] = Column(Integer(), primary_key=True)
+    number: Mapped[int] = Column(Integer(), nullable=False)
 
-    setting_id = Column(
-        Integer(),
-        ForeignKey("compiler_setting.id"),
-        nullable=True,
-        primary_key=True,
-        server_default=FetchedValue(),
-    )
+    setting_id = Column(Integer(), ForeignKey("compiler_setting.id"), nullable=False)
     setting: Mapped[CompilerSetting] = relationship(
         "CompilerSetting", foreign_keys=[setting_id], cascade="merge, save-update"
     )
 
-    code_id = Column(String(40), ForeignKey("code.id"), primary_key=True)
+    code_id = Column(String(40), ForeignKey("code.id"), nullable=False)
     original: Mapped[Code] = relationship(
         "Code", foreign_keys=[code_id], cascade="merge, save-update"
     )
@@ -134,7 +128,7 @@ class Marker(Base):
     alive: Mapped[bool] = Column(Boolean(), nullable=False)
 
     def __repr__(self) -> str:
-        return f"Marker({self.number}, {self.setting_id})"
+        return f"Marker({self.number}, {self.setting_id}, {self.alive})"
 
 
 case_target_marker_assoc_table = Table(
@@ -173,12 +167,10 @@ class Case(Base):
         "Code", foreign_keys=[code_id], cascade="merge, save-update"
     )
 
-    reduced_id = Column(String(40), nullable=True)
-    # reduced_id = Column(String(40), ForeignKey("code.id"), nullable=True)
-    # reduced: Mapped[Optional[Code]] = relationship(
-    #    "Code", foreign_keys=[reduced_id]
-    #    , cascade="merge, save-update"
-    # )
+    reduced_id = Column(String(40), ForeignKey("code.id"), nullable=True)
+    reduced: Mapped[Optional[Code]] = relationship(
+        "Code", foreign_keys=[reduced_id], cascade="merge, save-update"
+    )
 
     bisection: Mapped[Optional[Commit]] = Column(String(40))
 
@@ -364,7 +356,7 @@ def bisection_test(
 
 def get_script_args(
     bisection_commit: Commit, pre_bisection_commit: Commit, cse: Case, bldr: Builder
-):
+) -> list[tuple[str, int, bool]]:
     pairs: list[tuple[str, int, bool]] = []
     for m in cse.target_marker:
         okproject = ccbuilder.get_compiler_project(m.setting.compiler_name)
@@ -404,21 +396,20 @@ def reduction_test(code: str, pairs: list[tuple[str, int, bool]]) -> bool:
 def gen_pipeline(_: int) -> None:
     iteration = 0
     while True:
-        # print(f"{iteration=}")
+        print(f"{iteration=}")
         iteration += 1
-        # code = Code.make(gen.generate_case())
-        with open("knowncode.c", "r") as f:
-            code = Code.make(f.read())
+        code = Code.make(gen.generate_case())
+        # with open("knowncode.c", "r") as f:
+        #    code = Code.make(f.read())
         if cse := interestingness_test_to_case(
             code, llvm_targets, llvm_attackers, bldr
         ):
 
             with Session(engine) as session:
-                session.add(cse)
+                session.merge(cse)
                 session.commit()
-                print(cse.id)
         else:
-            logging.info("Failed interestingness test")
+            logging.debug("Failed interestingness test")
 
 
 if __name__ == "__main__":
@@ -426,10 +417,13 @@ if __name__ == "__main__":
     logging.basicConfig(level=num_lvl)
 
     engine = sqlalchemy.create_engine(
-        "sqlite:///cases.db", echo=True, future=True, poolclass=sqlalchemy.pool.NullPool
+        "sqlite:///cases.db",
+        echo=False,
+        future=True,
+        poolclass=sqlalchemy.pool.NullPool,
     )
     # Create all tables in the database
-    event.listen(Base.metadata, "after_create", diopter.database.Trigger)
+    diopter.database.prepare_base_before_creation()
     Base.metadata.create_all(engine)
 
     jobs = 128
@@ -453,16 +447,15 @@ if __name__ == "__main__":
 
     llvm_attackers = diopter.utils.create_compiler_settings(
         project=CompilerProject.LLVM,
-        # revs=MajorCompilerReleases[CompilerProject.LLVM],
-        revs=["16c3143105594e5e58690ab8285b62d409b8af9a"],
-        opt_levels=["z"],
+        revs=MajorCompilerReleases[CompilerProject.LLVM],
+        opt_levels=["3"],
         additional_flags=[HashableStringList(["-I/usr/include/csmith-2.3.0/"])],
         repo=llvm_repo,
     )
     llvm_targets = diopter.utils.create_compiler_settings(
         project=CompilerProject.LLVM,
-        revs=["2fde26dfcabe6a8270d54569b970767b4773bc66"],
-        opt_levels=["z"],
+        revs=["trunk"],
+        opt_levels=["3"],
         additional_flags=[HashableStringList(["-I/usr/include/csmith-2.3.0/"])],
         repo=llvm_repo,
     )
@@ -475,10 +468,7 @@ if __name__ == "__main__":
             c for c in session.scalars(select(Case).where(Case.reduced_id.is_(None)))
         ]
         for cse in scalars:
-            if cse.bisection:
-                import pdb
-
-                pdb.set_trace()
+            if cse.bisection and False:
                 with open("code.c", "w") as f:
                     f.write(cse.original.code)
                 pre_bisection = llvm_repo.rev_to_commit(f"{cse.bisection}~")
@@ -497,17 +487,10 @@ if __name__ == "__main__":
                 )
                 print(script)
 
-                cse.original = Code.make("dkajslkfj")
-                with Session(engine) as session:
-                    cse = session.merge(cse)
+                if res := rdcr.reduce(cse.original.code, script, jobs):
+                    cse.reduced = Code.make(res)
+                    session.merge(cse)
                     session.commit()
-                # if res := rdcr.reduce(cse.original.code, script, jobs):
-                #    cse.reduced = Code.make(res)
-                #    session.merge(cse)
-                #    session.commit()
-                import pdb
-
-                pdb.set_trace()
 
     with Session(engine) as session:
         for cse in session.scalars(select(Case).where(Case.bisection.is_(None))):
@@ -515,19 +498,21 @@ if __name__ == "__main__":
                 cse.target_marker,
                 bisection_test,
                 bad_rev=cse.target_settings[0].rev,
-                good_rev=cse.attacker_settings[0].rev,
+                good_rev=next(
+                    (am for am in cse.attacker_marker if not am.alive)
+                ).setting.rev,
                 project=CompilerProject.LLVM,
                 repo=llvm_repo,
             ):
                 cse.bisection = bis
                 session.merge(cse)
                 session.commit()
-    gen_pipeline(0)
-    exit(0)
+    # gen_pipeline(0)
+    # exit(0)
     num_lvl = getattr(logging, "INFO")
     logging.basicConfig(level=num_lvl)
 
-    def initializer():
+    def initializer() -> None:
         engine.dispose()
 
     with multiprocessing.Pool(jobs, initializer=initializer) as p:
