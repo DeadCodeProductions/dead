@@ -21,7 +21,7 @@ from ccbuilder import (
     MajorCompilerReleases,
     Repo,
 )
-from dead_instrumenter.instrumenter import instrument_program
+from dead_instrumenter.instrumenter import annotate_with_static, instrument_program
 from diopter.database import (
     Base,
     Code,
@@ -100,6 +100,9 @@ class DeadGenerator(diopter.generator.CSmithGenerator):
             with open(tfile.name, "w") as f:
                 f.write(csmith_code)
             instrument_program(Path(tfile.name), flags=["-I/usr/include/csmith-2.3.0/"])
+            annotate_with_static(
+                Path(tfile.name), flags=["-I/usr/include/csmith-2.3.0/"]
+            )
             with open(tfile.name, "r") as f:
                 return f.read()
 
@@ -383,14 +386,31 @@ def reduction_test(code: str, pairs: list[tuple[str, int, bool]]) -> bool:
     with diopter.utils.TempDirEnv(change_dir=True):
         with open("code.c", "w") as f:
             f.write(code)
+
+        # Sadly broken for preprocessed code
+        annotate_with_static(Path("code.c"), flags=["-I/usr/include/csmith-2.3.0/"])
         for comp, number, exp_res in pairs:
             asm = diopter.utils.run_cmd(comp + " -o/dev/stdout code.c")
 
             alive_markers = extract_markers_from_asm(asm)
 
             if exp_res != (number in alive_markers):
+                logging.warning(f"{comp} FAILED")
                 return False
+            logging.warning(f"{comp} OK")
         return True
+
+
+def preprocess(setting: CompilerSetting, code: Code, bldr: Builder) -> str:
+    import preprocessing
+
+    with diopter.utils.TempDirEnv(change_dir=True):
+        with open("code.c", "w") as f:
+            f.write(code.code)
+        project = ccbuilder.get_compiler_project(setting.compiler_name)
+        exe_string = f"{bldr.build(project, setting.rev, get_executable=True)} -E -P {setting.get_flag_string()} code.c -o/dev/stdout"
+        lines = diopter.utils.run_cmd(exe_string).splitlines()
+        return preprocessing.preprocess_lines(lines)
 
 
 # =====================
@@ -489,9 +509,18 @@ if __name__ == "__main__":
                     add_args={"pairs": pairs},
                 )
                 # with open("check.py", "w") as f:
-                #    f.write(script)
-
+                #   f.write(script)
+                # pp_code = preprocess(cse.target_settings[0], cse.original, bldr)
+                # with open("code.c", "w") as f:
+                #   f.write(pp_code)
                 if res := rdcr.reduce(cse.original.code, script, jobs):
+                    with open("code.c", "w") as f:
+                        f.write(res)
+                    annotate_with_static(
+                        Path("code.c"), flags=["-I/usr/include/csmith-2.3.0/"]
+                    )
+                    with open("code.c", "r") as f:
+                        res = f.read()
                     cse.reduced = Code.make(res)
                     session.merge(cse)
                     session.commit()
