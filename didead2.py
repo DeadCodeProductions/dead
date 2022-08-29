@@ -4,17 +4,18 @@ import pickle
 import logging
 import copy
 import tempfile
+from dataclasses import dataclass
 from typing import Optional
 from concurrent.futures import ProcessPoolExecutor, as_completed, Future, wait
 from pathlib import Path
 
 import ccbuilder
 from dead_instrumenter.instrumenter import instrument_program
+from diopter.preprocessor import preprocess_csmith_code
 from diopter.compiler import CompilationSetting, CompilerExe, OptLevel, ClangTool
 from diopter.generator import CSmithGenerator
-from diopter.reducer import Reducer
-from diopter.reduction_checks import make_interestingness_check
-from diopter.bisector import Bisector
+from diopter.reducer import Reducer, ReductionCallback
+from diopter.bisector import Bisector, BisectionCallback
 
 from dead.checker import Checker, find_alive_markers
 
@@ -35,12 +36,12 @@ class DeadGenerator(CSmithGenerator):
 def create_compilation_settings(
     bldr: ccbuilder.Builder,
     project: ccbuilder.CompilerProject,
+    repo: ccbuilder.Repo,
     revs: list[ccbuilder.Revision],
     opt_levels: list[OptLevel],
-    flags: list[str],
-    include_paths: list[str],
-    system_include_paths: list[str],
-    repo: ccbuilder.Repo
+    flags: list[str] = [],
+    include_paths: list[str] = [],
+    system_include_paths: list[str] = [],
     # DiopterContext should have a dict[CompilerProject,Repo]
 ) -> list[CompilationSetting]:
 
@@ -74,86 +75,98 @@ def check_interestingness(
     return candidate, markers
 
 
-def reduction_check(
-    code: str,
-    clang: str,
-    gcc: str,
-    ccc: str,
-    marker: str,
-    bad_setting: str,
-    good_setting: str,
-) -> bool:
-    checker = Checker(
-        CompilerExe.from_str(clang),
-        CompilerExe.from_str(gcc),
-        ClangTool.from_str(ccc),
-        "ccomp",
-    )
-    return checker.is_interesting_marker(
-        code,
-        marker,
-        CompilationSetting.from_str(bad_setting),
-        [CompilationSetting.from_str(good_setting)],
-    )
+class DeadReductionCallback(ReductionCallback):
+    def __init__(
+        self,
+        marker: str,
+        bad_setting: CompilationSetting,
+        good_setting: CompilationSetting,
+        checker: Checker,
+    ):
+        self.marker = marker
+        self.bad_setting = bad_setting
+        self.good_setting = good_setting
+        self.checker = checker
 
-
-def bisection_test(
-    new_commit: ccbuilder.Commit,
-    codemarkersetting: tuple[str, str, CompilationSetting],
-    bldr: ccbuilder.Builder,
-) -> Optional[bool]:
-    try:
-        code, marker, setting = codemarkersetting
-        setting = copy.deepcopy(setting)
-        cproject = setting.compiler.project
-        setting.compiler = CompilerExe(
-            cproject, bldr.build(cproject, new_commit, True), new_commit
+    def test(self, code: str) -> bool:
+        return self.checker.is_interesting_marker(
+            code, self.marker, self.bad_setting, [self.good_setting], preprocess=False
         )
-        return marker in find_alive_markers(code, setting, "DCEMarker")
 
-    except Exception as e:
+
+def get_setting_with_commit(
+    commit: ccbuilder.Commit, setting: CompilationSetting, bldr: ccbuilder.Builder
+) -> CompilationSetting:
+    return CompilationSetting(
+        CompilerExe(
+            setting.compiler.project,
+            bldr.build(setting.compiler.project, commit, True),
+            commit,
+        ),
+        setting.opt_level,
+        setting.flags,
+        setting.include_paths,
+        setting.system_include_paths,
+    )
+
+
+class DeadBisectionCallback(BisectionCallback):
+    def __init__(
+        self,
+        code: str,
+        setting: CompilationSetting,
+        marker: str,
+        bldr: ccbuilder.Builder,
+    ):
+        self.code = code
+        self.setting = setting
+        self.marker = marker
+        self.bldr = bldr
+
+    def check(self, commit: ccbuilder.Commit) -> Optional[bool]:
+        # try:
+        return self.marker in find_alive_markers(
+            self.code,
+            get_setting_with_commit(commit, self.setting, self.bldr),
+            "DCEMarker",
+        )
+        # except Exception as e:
         logging.warning(f"Test failed with: '{e}'. Continuing...")
         return None
 
 
 if __name__ == "__main__":
-    # num_lvl = getattr(logging, "DEBUG")
-    # logging.basicConfig(level=num_lvl)
+    num_lvl = getattr(logging, "DEBUG")
+    logging.basicConfig(level=num_lvl)
 
     # All the default paths and standard objects, e.g., the repos,
     # should be part of DiopterContext
 
-    llvm_repo = ccbuilder.get_repo(
-        ccbuilder.CompilerProject.LLVM,
-        Path("/home/theo/.cache/ccbuilder-repos/llvm-project/"),
+    llvm_repo = ccbuilder.get_llvm_repo()
+    gcc_repo = ccbuilder.get_gcc_repo()
+    bldr = ccbuilder.Builder(
+        Path("/zdata/compiler_cache"),
+        gcc_repo,
+        llvm_repo,
+        logdir=Path("didead2log").absolute(),
     )
-
-    gcc_repo = ccbuilder.get_repo(
-        ccbuilder.CompilerProject.GCC,
-        Path("/home/theo/.cache/ccbuilder-repos/gcc/"),
-    )
-    bldr = ccbuilder.Builder(Path("/zdata/compiler_cache"), gcc_repo, llvm_repo)
 
     attackers = create_compilation_settings(
         bldr,
-        project=ccbuilder.CompilerProject.LLVM,
-        revs=ccbuilder.MajorCompilerReleases[ccbuilder.CompilerProject.LLVM][:4],
+        project=ccbuilder.CompilerProject.GCC,
+        revs=ccbuilder.MajorCompilerReleases[ccbuilder.CompilerProject.GCC][:4],
         opt_levels=[OptLevel.O3, OptLevel.O2],
-        flags=[],
-        include_paths=[],
         system_include_paths=["/usr/include/csmith-2.3.0/"],
-        repo=llvm_repo,
+        repo=gcc_repo,
     )
 
     target = create_compilation_settings(
         bldr,
-        project=ccbuilder.CompilerProject.LLVM,
+        project=ccbuilder.CompilerProject.GCC,
         revs=["trunk"],
         opt_levels=[OptLevel.O3],
-        flags=[],
-        include_paths=[],
         system_include_paths=["/usr/include/csmith-2.3.0/"],
-        repo=llvm_repo,
+        repo=gcc_repo,
     )[0]
 
     generator = DeadGenerator()
@@ -170,66 +183,71 @@ if __name__ == "__main__":
         "ccomp",
     )
 
-    interesting_candidate_futures = []
-    interesting_candidates = []
-    with ProcessPoolExecutor() as p:
-        n = 1000
-        for candidate in tqdm(
-            generator.generate_code_parallel(n, p),
-            desc="Generating candidates",
-            total=n,
-            dynamic_ncols=True,
-        ):
-            interesting_candidate_futures.append(
-                p.submit(
-                    check_interestingness,
-                    checker,
-                    candidate,
-                    target,
-                    attackers,
+    if False:
+        interesting_candidate_futures = []
+        interesting_candidates = []
+        with ProcessPoolExecutor() as p:
+            n = 1024
+            for candidate in tqdm(
+                generator.generate_code_parallel(n, p),
+                desc="Generating candidates",
+                total=n,
+                dynamic_ncols=True,
+            ):
+                interesting_candidate_futures.append(
+                    p.submit(
+                        check_interestingness,
+                        checker,
+                        candidate,
+                        target,
+                        attackers,
+                    )
                 )
-            )
 
-        print("Filtering interesting candidates")
-        for fut in tqdm(
-            as_completed(interesting_candidate_futures),
-            desc="Filtering candidates",
-            total=n,
-            dynamic_ncols=True,
-        ):
-            r = fut.result()
-            if not r:
-                continue
-            interesting_candidates.append(r)
+            print("Filtering interesting candidates")
+            for fut in tqdm(
+                as_completed(interesting_candidate_futures),
+                desc="Filtering candidates",
+                total=n,
+                dynamic_ncols=True,
+            ):
+                r = fut.result()
+                if not r:
+                    continue
+                interesting_candidates.append(r)
 
-        print(f"Found {len(interesting_candidates)} interesting candidates")
+            print(f"Found {len(interesting_candidates)} interesting candidates")
+
+    else:
+        with open("case.pickle", "rb") as f:
+            interesting_candidates = [pickle.load(f)]
 
     print("Bisecting")
-    bsctr = Bisector(bldr)
+    bsctr = Bisector(bldr.cache_prefix)
 
     for code, markersettings in interesting_candidates:
+        # with open("case.pickle", "wb") as f:
+        # pickle.dump((code, markersettings), f)
+        # exit(0)
+
+        callback = DeadBisectionCallback(code, target, markersettings[0][0], bldr)
+        assert callback.check(target.compiler.revision)
         print(
             bsctr.bisect(
-                (code, markersettings[0][0], target),
-                bisection_test,
+                callback,
                 target.compiler.revision,
                 markersettings[0][1][0].compiler.revision,
-                ccbuilder.CompilerProject.LLVM,
-                llvm_repo,
+                ccbuilder.CompilerProject.GCC,
+                gcc_repo,
             )
         )
 
     print("Reducing")
     for code, markersettings in interesting_candidates:
-        check = make_interestingness_check(
-            reduction_check,
-            {
-                "clang": str(llvm),
-                "gcc": str(gcc),
-                "ccc": str(ccc),
-                "marker": markersettings[0][0],
-                "bad_setting": str(target),
-                "good_setting": str(markersettings[0][1][0]),
-            },
+        code = preprocess_csmith_code(
+            code, str(gcc.exe), ["-isystem/usr/include/csmith-2.3.0"]
         )
-        Reducer().reduce(code, check)
+        rcallback = DeadReductionCallback(
+            markersettings[0][0], target, markersettings[0][1][0], checker
+        )
+        Reducer().reduce(code, rcallback)
