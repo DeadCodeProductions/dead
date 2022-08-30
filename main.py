@@ -84,6 +84,32 @@ def get_all_bisections(ddb: database.CaseDatabase) -> list[str]:
     return [r[0] for r in res]
 
 
+def update_trunk(last_update_time: float, scenario: utils.Scenario) -> float:
+    if (time.time() - last_update_time) / 3600 > args.update_trunk_after_X_hours:
+
+        logging.info("Updating repositories...")
+
+        last_update_time = time.time()
+
+        known: Dict[str, list[int]] = dict()
+        for i, s in enumerate(scenario.target_settings):
+            cname = s.compiler_project.name
+            if cname not in known:
+                known[cname] = []
+            known[cname].append(i)
+
+        for cname, l in known.items():
+            repo = scenario.target_settings[l[0]].repo
+            old_trunk_commit = repo.rev_to_commit("trunk")
+            repo.pull()
+            new_trunk_commit = repo.rev_to_commit("trunk")
+
+            for i in l:
+                if scenario.target_settings[i].rev == old_trunk_commit:
+                    scenario.target_settings[i].rev = new_trunk_commit
+    return last_update_time
+
+
 def _run() -> None:
     scenario = utils.get_scenario(config, args)
 
@@ -117,31 +143,7 @@ def _run() -> None:
                 break
 
         if args.update_trunk_after_X_hours is not None:
-            if (
-                time.time() - last_update_time
-            ) / 3600 > args.update_trunk_after_X_hours:
-
-                logging.info("Updating repositories...")
-
-                last_update_time = time.time()
-
-                known: Dict[str, list[int]] = dict()
-                for i, s in enumerate(scenario.target_settings):
-                    cname = s.compiler_project.name
-                    if cname not in known:
-                        known[cname] = []
-                    known[cname].append(i)
-
-                for cname, l in known.items():
-                    repo = scenario.target_settings[l[0]].repo
-                    old_trunk_commit = repo.rev_to_commit("trunk")
-                    repo.pull()
-                    new_trunk_commit = repo.rev_to_commit("trunk")
-
-                    for i in l:
-                        if scenario.target_settings[i].rev == old_trunk_commit:
-                            scenario.target_settings[i].rev = new_trunk_commit
-
+            last_update_time = update_trunk(last_update_time, scenario)
         # Time db values
         generator_time: Optional[float] = None
         generator_try_count: Optional[int] = None
