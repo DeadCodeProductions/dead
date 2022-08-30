@@ -196,7 +196,9 @@ class Checker:
         if preprocess:
             # we should read the include path from DiopterContext
             if pp_code := preprocessor.preprocess_csmith_code(
-                code, str(self.gcc.exe), ["-isystem/usr/include/csmith-2.3.0"]
+                code,
+                str(self.gcc.exe),
+                [f"-isystem{utils.DeadConfig.get_config().csmith_include_path}"],
             ):
                 code = pp_code
 
@@ -222,7 +224,7 @@ class Checker:
 
         return True
 
-    def interesting_markers(
+    def find_interesting_markers(
         self,
         code: str,
         bad_setting: compiler.CompilationSetting,
@@ -246,7 +248,9 @@ class Checker:
 
         if preprocess:
             if pp_code := preprocessor.preprocess_csmith_code(
-                code, str(self.gcc.exe), ["-isystem/usr/include/csmith-2.3.0"]
+                code,
+                str(self.gcc.exe),
+                [f"-isystem{utils.DeadConfig.get_config().csmith_include_path}"],
             ):
                 code = pp_code
 

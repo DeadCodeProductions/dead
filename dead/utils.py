@@ -29,72 +29,36 @@ from ccbuilder import (
 )
 
 
-class Executable(object):
-    pass
+from diopter import compiler
+
+import utils as old_utils
 
 
-# @dataclass
-# class CompilerSetting:
-    # compiler_project: CompilerProject
-    # compiler_exe: str
-    # repo: Repo
-    # rev: str
-    # opt_level: str
-    # additional_flags: Optional[list[str]] = None
+@dataclass
+class DeadConfig:
+    llvm: compiler.CompilerExe
+    gcc: compiler.CompilerExe
+    ccc: compiler.ClangTool
+    ccomp: Optional[str]
+    csmith_include_path: str
 
-    # def __str__(self) -> str:
-        # #FIXME: dump everything that is needed to rebuild this
-        # if self.additional_flags is None:
-            # return f"{self.compiler_project.name} {self.compiler_exe} {self.rev} {self.opt_level}"
-        # else:
-            # return (
-                # f"{self.compiler_project.name} {self.compiler_exe} {self.rev} {self.opt_level} "
-                # + " ".join(self.additional_flags)
-            # )
+    @classmethod
+    def init(
+        cls,
+        llvm: compiler.CompilerExe,
+        gcc: compiler.CompilerExe,
+        ccc: compiler.ClangTool,
+        ccomp: Optional[str],
+        csmith_include_path: str,
+    ) -> None:
+        setattr(cls, "config", DeadConfig(llvm, gcc, ccc, ccomp, csmith_include_path))
 
-    # def report_string(self) -> str:
-        # """String to use in the report generation
-
-        # Args:
-
-        # Returns:
-            # str: String to use in the report
-        # """
-
-        # return f"{self.compiler_project.name}-{self.rev} -O{self.opt_level}"
-
-    # def add_flag(self, flag: str) -> None:
-        # if not self.additional_flags:
-            # self.additional_flags = [flag]
-        # elif flag not in self.additional_flags:
-            # self.additional_flags.append(flag)
-
-    # def get_flag_str(self) -> str:
-        # if self.additional_flags:
-            # return " ".join(self.additional_flags)
-        # else:
-            # return ""
-
-    # def get_flag_cmd(self) -> list[str]:
-        # s = self.get_flag_str()
-        # if s == "":
-            # return []
-        # else:
-            # return s.split(" ")
-
-    # @staticmethod
-    # def from_str(s: str) -> CompilerSetting:
-        # #FIXME: update with fixed __str__
-        # s = s.strip()
-        # parts = s.split(" ")
-
-        # compiler = parts[0]
-        # exe = parts[1]
-        # rev = parts[2]
-        # opt_level = parts[3]
-        # additional_flags = parts[4:]
-        # project, repo = ccbuilder.get_compiler_info(compiler, Path(repodir))  # type: ignore
-        # return CompilerSetting(project, repo, rev, opt_level, additional_flags)
+    @classmethod
+    def get_config(cls) -> DeadConfig:
+        assert hasattr(cls, "config"), "DeadConfig is not initialized"
+        config = getattr(cls, "config")
+        assert type(config) is DeadConfig
+        return config
 
 
 def run_cmd(
@@ -195,28 +159,28 @@ def check_and_get(tf: tarfile.TarFile, member: str) -> str:
 
 
 # def get_latest_compiler_setting_from_list(
-    # repo: Repo, l: list[CompilerSetting]
+# repo: Repo, l: list[CompilerSetting]
 # ) -> CompilerSetting:
-    # """Finds and returns newest compiler setting wrt main branch
-    # in the list. Assumes all compilers to be of the same 'type' i.e. gcc, clang,...
+# """Finds and returns newest compiler setting wrt main branch
+# in the list. Assumes all compilers to be of the same 'type' i.e. gcc, clang,...
 
-    # Args:
-        # repo (repository.Repo): Repositiory of compiler type
-        # l (list[CompilerSetting]): List of compilers to sort
+# Args:
+# repo (repository.Repo): Repositiory of compiler type
+# l (list[CompilerSetting]): List of compilers to sort
 
-    # Returns:
-        # CompilerSetting: Compiler closest to main
-    # """
+# Returns:
+# CompilerSetting: Compiler closest to main
+# """
 
-    # def cmp_func(a: CompilerSetting, b: CompilerSetting) -> int:
-        # if a.rev == b.rev:
-            # return 0
-        # if repo.is_branch_point_ancestor_wrt_master(a.rev, b.rev):
-            # return -1
-        # else:
-            # return 1
+# def cmp_func(a: CompilerSetting, b: CompilerSetting) -> int:
+# if a.rev == b.rev:
+# return 0
+# if repo.is_branch_point_ancestor_wrt_master(a.rev, b.rev):
+# return -1
+# else:
+# return 1
 
-    # return max(l, key=functools.cmp_to_key(cmp_func))
+# return max(l, key=functools.cmp_to_key(cmp_func))
 
 
 # =================== Builder Helper ====================
@@ -229,7 +193,6 @@ class CompileError(Exception):
     """
 
     pass
-
 
 
 class CompileContext:
@@ -267,88 +230,128 @@ class CompileContext:
             raise BuildException("Compier context exited but was not entered")
 
 
-# def get_asm_str(code: str, compiler_setting: CompilerSetting) -> str:
-    # """Get assembly of `code` compiled by `compiler_setting`.
-
-    # Args:
-        # code (str): Code to compile to assembly
-        # compiler_setting (utils.CompilerSetting): Compiler to use
-
-    # Returns:
-        # str: Assembly of `code`
-
-    # Raises:
-        # CompileError: Is raised when compilation failes i.e. has a non-zero exit code.
-    # """
-    # # Get the assembly output of `code` compiled with `compiler_setting` as str
-
-    # with CompileContext(code) as context_res:
-        # code_file, asm_file = context_res
-
-        # cmd = f"{compiler_setting.compiler_exe} -S {code_file} -o{asm_file} -O{compiler_setting.opt_level}".split(
-            # " "
-        # )
-        # cmd += compiler_setting.get_flag_cmd()
-        # try:
-            # run_cmd(cmd)
-        # except subprocess.CalledProcessError:
-            # raise CompileError()
-
-        # with open(asm_file, "r") as f:
-            # return f.read()
+class Scenario:
+    def __init__(
+        self,
+        target_settings: list[compiler.CompilationSetting],
+        attacker_settings: list[compiler.CompilationSetting],
+    ):
+        self.target_settings = target_settings
+        self.attacker_settings = attacker_settings
 
 
-# def get_compiler_executable(compiler_setting: CompilerSetting, bldr: Builder) -> Path:
-    # """Get the path to the compiler *binary* i.e. [...]/bin/clang
+def old_compiler_setting_to_new_compilation_setting(
+    compiler_setting_old: old_utils.CompilerSetting, builder: Builder
+) -> compiler.CompilationSetting:
+    project = compiler_setting_old.compiler_project
+    exe = compiler.CompilerExe(
+        project,
+        builder.build(project, compiler_setting_old.rev, True),
+        compiler_setting_old.repo.rev_to_commit(compiler_setting_old.rev),
+    )
+    match compiler_setting_old.opt_level:
+        case "0":
+            opt_level = compiler.OptLevel.O0
+        case "1":
+            opt_level = compiler.OptLevel.O1
+        case "2":
+            opt_level = compiler.OptLevel.O2
+        case "3":
+            opt_level = compiler.OptLevel.O3
+        case "s":
+            opt_level = compiler.OptLevel.Os
+        case "z":
+            opt_level = compiler.OptLevel.Oz
+        case _:
+            assert (
+                False
+            ), f"Unknown optimization level: {compiler_setting_old.opt_level}"
+    return compiler.CompilationSetting(
+        exe, opt_level, [], [], [DeadConfig.get_config().csmith_include_path]
+    )
 
-    # Args:
-        # compiler_setting (utils.CompilerSetting): Compiler to get the binary of
-        # bldr (Builder): Builder to get/build the requested compiler.
 
-    # Returns:
-        # Path: Path to compiler binary
-    # """
-    # return bldr.build(
-        # project=compiler_setting.compiler_project,
-        # rev=compiler_setting.rev,
-        # get_executable=True,
-    # )
+def compilation_setting_to_old_compiler_setting(
+    setting: compiler.CompilationSetting, gcc_repo: Repo, llvm_repo: Repo
+) -> old_utils.CompilerSetting:
+
+    repo = gcc_repo if setting.compiler.project == CompilerProject.GCC else llvm_repo
+
+    match setting.opt_level:
+        case compiler.OptLevel.O0:
+            opt_level = "0"
+        case compiler.OptLevel.O1:
+            opt_level = "1"
+        case compiler.OptLevel.O2:
+            opt_level = "2"
+        case compiler.OptLevel.O3:
+            opt_level = "3"
+        case compiler.OptLevel.Os:
+            opt_level = "s"
+        case compiler.OptLevel.Oz:
+            opt_level = "z"
+        case _:
+            assert False, f"Unknown optimization level: {setting.opt_level}"
+
+    return old_utils.CompilerSetting(
+        setting.compiler.project,
+        repo,
+        setting.compiler.revision,
+        opt_level,
+        [f"-I{inc}" for inc in setting.include_paths]
+        + [f"-isystem{inc}" for inc in setting.system_include_paths],
+    )
 
 
-# def get_verbose_compiler_info(compiler_setting: CompilerSetting) -> str:
-    # cpath = compiler_setting.compiler_exe
+def old_scenario_to_new_scenario(
+    scenario_old: old_utils.Scenario, builder: Builder
+) -> Scenario:
+    return Scenario(
+        [
+            old_compiler_setting_to_new_compilation_setting(setting, builder)
+            for setting in scenario_old.target_settings
+        ],
+        [
+            old_compiler_setting_to_new_compilation_setting(setting, builder)
+            for setting in scenario_old.attacker_settings
+        ],
+    )
 
-    # return (
-        # subprocess.run(
-            # f"{cpath} -v".split(),
-            # stderr=subprocess.STDOUT,
-            # stdout=subprocess.PIPE,
-        # )
-        # .stdout.decode("utf-8")
-        # .strip()
-    # )
 
+@dataclass
+class Case:
+    code: str
+    marker: str
+    bad_setting: compiler.CompilationSetting
+    good_settings: list[compiler.CompilationSetting]
+    scenario: Scenario
 
-# def get_llvm_IR(code: str, compiler_setting: CompilerSetting) -> str:
-    # if (
-        # compiler_setting.compiler_project.name != "clang"
-        # and compiler_setting.compiler_project.name != "llvm"
-    # ):
-        # raise CompileError("Requesting LLVM IR from non-clang compiler!")
+    reduced_code: Optional[str]
+    bisection: Optional[str]
+    timestamp: float
 
-    # compiler_exe = compiler_setting.compiler_exe
+    path: Optional[Path]
 
-    # with CompileContext(code) as context_res:
-        # code_file, asm_file = context_res
+    def __init__(
+        self,
+        code: str,
+        marker: str,
+        bad_setting: compiler.CompilationSetting,
+        good_settings: list[compiler.CompilationSetting],
+        scenario: Scenario,
+        reduced_code: Optional[str],
+        bisection: Optional[str],
+        path: Optional[Path] = None,
+        timestamp: Optional[float] = None,
+    ):
 
-        # cmd = f"{compiler_exe} -emit-llvm -S {code_file} -o{asm_file} -O{compiler_setting.opt_level}".split(
-            # " "
-        # )
-        # cmd += compiler_setting.get_flag_cmd()
-        # try:
-            # run_cmd(cmd)
-        # except subprocess.CalledProcessError:
-            # raise CompileError()
+        self.code = code
+        self.marker = marker
+        self.bad_setting = bad_setting
+        self.good_settings = good_settings
+        self.scenario = scenario
+        self.reduced_code = reduced_code
+        self.bisection = bisection
+        self.path = path
 
-        # with open(asm_file, "r") as f:
-            # return f.read()
+        self.timestamp = timestamp if timestamp else time.time()
