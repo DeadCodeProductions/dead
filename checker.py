@@ -12,7 +12,14 @@ from pathlib import Path
 from types import TracebackType
 from typing import Optional
 
-from ccbuilder import Builder, BuildException, PatchDB, Repo
+from ccbuilder import (
+    Builder,
+    BuildException,
+    PatchDB,
+    Repo,
+    get_gcc_repo,
+    get_llvm_repo,
+)
 from dead_instrumenter.instrumenter import annotate_with_static
 
 import parsers
@@ -487,8 +494,8 @@ if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.checker_parser())
 
     patchdb = PatchDB(Path(config.patchdb))
-    gcc_repo = Repo.gcc_repo(config.gcc.repo)
-    llvm_repo = Repo.llvm_repo(config.llvm.repo)
+    gcc_repo = get_gcc_repo(config.gcc.repo)
+    llvm_repo = get_llvm_repo(config.llvm.repo)
     bldr = Builder(
         cache_prefix=Path(config.cachedir),
         gcc_repo=gcc_repo,
