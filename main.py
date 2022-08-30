@@ -18,16 +18,33 @@ from typing import Any, Dict, Optional, cast
 
 import ccbuilder
 import requests
-from ccbuilder import Builder, BuildException, PatchDB, Repo
+from ccbuilder import (
+    Builder,
+    BuildException,
+    PatchDB,
+    Repo,
+    get_gcc_repo,
+    get_llvm_repo,
+    CompilerProject,
+)
 
 import bisector
 import checker
 import database
-import generator
 import parsers
 import preprocessing
 import reducer
 import utils
+
+from dead.utils import (
+    DeadConfig,
+    old_compiler_setting_to_new_compilation_setting,
+    old_scenario_to_new_scenario,
+    compilation_setting_to_old_compiler_setting,
+)
+from dead.generator import generate_interesting_cases
+
+from diopter import compiler
 
 
 def get_llvm_github_commit_author(rev: str) -> Optional[str]:
@@ -118,13 +135,8 @@ def _run() -> None:
         Path(args.output_directory).absolute() if args.output_directory else None
     )
 
-    parallel_generator = (
-        gnrtr.parallel_interesting_case(config, scenario, args.cores, start_stop=True)
-        if args.parallel_generation
-        else None
-    )
     pipeline_components = (
-        ["Generator<" + "parallel>" if args.parallel_generation else "single>"]
+        ["Generator<parallel>"]
         + (["Bisector"] if args.bisector else [])
         + (
             ["Reducer<Only New>"]
@@ -144,74 +156,82 @@ def _run() -> None:
 
         if args.update_trunk_after_X_hours is not None:
             last_update_time = update_trunk(last_update_time, scenario)
-        # Time db values
-        generator_time: Optional[float] = None
-        generator_try_count: Optional[int] = None
-        bisector_time: Optional[float] = None
-        bisector_steps: Optional[int] = None
-        reducer_time: Optional[float] = None
 
-        if parallel_generator:
-            case = next(parallel_generator)
-        else:
-            time_start_gen = time.perf_counter()
-            case = gnrtr.generate_interesting_case(scenario)
-            time_end_gen = time.perf_counter()
-            generator_time = time_end_gen - time_start_gen
-            generator_try_count = gnrtr.try_counter
-
-        if args.bisector:
-            try:
-                time_start_bisector = time.perf_counter()
-                bisect_worked = bsctr.bisect_case(case)
-                time_end_bisector = time.perf_counter()
-                bisector_time = time_end_bisector - time_start_bisector
-                bisector_steps = bsctr.steps
-                if not bisect_worked:
-                    continue
-            except bisector.BisectionException as e:
-                print(f"BisectionException: '{e}'", file=sys.stderr)
-                continue
-            except AssertionError as e:
-                print(f"AssertionError: '{e}'", file=sys.stderr)
-                continue
-            except BuildException as e:
-                print(f"BuildException: '{e}'", file=sys.stderr)
-                continue
-
-        if args.reducer is not False:
-            if (
-                args.reducer
-                or case.bisection
-                and not case.bisection in get_all_bisections(ddb)
-            ):
-                try:
-                    time_start_reducer = time.perf_counter()
-                    worked = rdcr.reduce_case(case)
-                    time_end_reducer = time.perf_counter()
-                    reducer_time = time_end_reducer - time_start_reducer
-                except BuildException as e:
-                    print(f"BuildException: {e}")
-                    continue
-
-        if not output_directory:
-            case_id = ddb.record_case(case)
-            ddb.record_timing(
-                case_id,
-                generator_time,
-                generator_try_count,
-                bisector_time,
-                bisector_steps,
-                reducer_time,
+        for case_new in generate_interesting_cases(
+            old_scenario_to_new_scenario(scenario, bldr), args.cores, 1024
+        ):
+            print("FOUND A CASE")
+            case_old = utils.Case(
+                case_new.code,
+                case_new.marker,
+                compilation_setting_to_old_compiler_setting(
+                    case_new.bad_setting, gcc_repo, llvm_repo
+                ),
+                [
+                    compilation_setting_to_old_compiler_setting(
+                        setting, gcc_repo, llvm_repo
+                    )
+                    for setting in case_new.good_settings
+                ],
+                scenario,
+                None,
+                None,
+                None,
+                case_new.timestamp,
             )
+            if args.bisector:
+                try:
+                    time_start_bisector = time.perf_counter()
+                    bisect_worked = bsctr.bisect_case(case_old)
+                    time_end_bisector = time.perf_counter()
+                    bisector_time = time_end_bisector - time_start_bisector
+                    bisector_steps = bsctr.steps
+                    if not bisect_worked:
+                        print("Bisection failed")
+                        continue
+                except bisector.BisectionException as e:
+                    print(f"BisectionException: '{e}'", file=sys.stderr)
+                    continue
+                except AssertionError as e:
+                    print(f"AssertionError: '{e}'", file=sys.stderr)
+                    continue
+                except BuildException as e:
+                    print(f"BuildException: '{e}'", file=sys.stderr)
+                    continue
 
-        else:
-            h = abs(hash(str(case)))
-            path = output_directory / Path(f"case_{counter:08}-{h:019}.tar")
-            logging.debug("Writing case to {path}...")
-            case.to_file(path)
+            if args.reducer is not False:
+                if (
+                    args.reducer
+                    or case_old.bisection
+                    and not case_old.bisection in get_all_bisections(ddb)
+                ):
+                    try:
+                        time_start_reducer = time.perf_counter()
+                        worked = rdcr.reduce_case(case_old)
+                        time_end_reducer = time.perf_counter()
+                        reducer_time = time_end_reducer - time_start_reducer
+                    except BuildException as e:
+                        print(f"BuildException: {e}")
+                        continue
 
-        counter += 1
+            if not output_directory:
+                case_id = ddb.record_case(case_old)
+                ddb.record_timing(
+                    case_id,
+                    None,
+                    None,
+                    bisector_time,
+                    bisector_steps,
+                    reducer_time,
+                )
+
+            else:
+                h = abs(hash(str(case_old)))
+                path = output_directory / Path(f"case_{counter:08}-{h:019}.tar")
+                logging.debug("Writing case to {path}...")
+                case_old.to_file(path)
+
+            counter += 1
 
 
 def _absorb() -> None:
@@ -1326,9 +1346,25 @@ def _findby() -> None:
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.main_parser())
 
-    patchdb = PatchDB(config.patchdb)
-    gcc_repo = Repo.gcc_repo(config.gcc.repo)
-    llvm_repo = Repo.llvm_repo(config.llvm.repo)
+    system_llvm = compiler.CompilerExe(
+        ccbuilder.CompilerProject.LLVM, Path("clang"), "system"
+    )
+    system_gcc = compiler.CompilerExe(
+        ccbuilder.CompilerProject.GCC, Path("gcc"), "system"
+    )
+    DeadConfig.init(
+        system_gcc,
+        system_llvm,
+        compiler.ClangTool.init_with_paths_from_llvm(
+            Path("/home/theo/dead/callchain_checker/build/bin/ccc"), system_llvm
+        ),
+        "ccomp",
+        "/usr/include/csmith-2.3.0/",
+    )
+
+    patchdb = PatchDB(Path(config.patchdb))
+    gcc_repo = get_gcc_repo(config.gcc.repo)
+    llvm_repo = get_llvm_repo(config.llvm.repo)
     bldr = Builder(
         cache_prefix=Path(config.cachedir),
         gcc_repo=gcc_repo,
@@ -1338,7 +1374,6 @@ if __name__ == "__main__":
         logdir=Path(config.logdir),
     )
     chkr = checker.Checker(config, bldr)
-    gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
     rdcr = reducer.Reducer(config, bldr)
     bsctr = bisector.Bisector(config, bldr, chkr)
 
@@ -1382,5 +1417,3 @@ if __name__ == "__main__":
         _reported()
     elif args.sub == "findby":
         _findby()
-
-    gnrtr.terminate_processes()
