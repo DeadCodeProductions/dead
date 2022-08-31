@@ -32,7 +32,6 @@ import checker
 import database
 import parsers
 import preprocessing
-import reducer
 import utils
 
 from dead.utils import (
@@ -44,9 +43,12 @@ from dead.utils import (
 )
 from dead.generator import generate_interesting_cases
 from dead.bisector import bisect_case
+from dead.reducer import reduce_case
+import dead.checker as checker_new
 
 from diopter import compiler
 from diopter import bisector
+from diopter import reducer
 
 
 def get_llvm_github_commit_author(rev: str) -> Optional[str]:
@@ -178,6 +180,19 @@ def _run() -> None:
                     print(f"BuildException: '{e}'", file=sys.stderr)
                     continue
 
+            if args.reducer is not False:
+                if (
+                    args.reducer
+                    or case_new.bisection
+                    and not case_new.bisection in get_all_bisections(ddb)
+                ):
+                    try:
+                        # XXX: we don't really need to pass the checker here
+                        worked = reduce_case(case_new, rdcr, chkr_new)
+                    except BuildException as e:
+                        print(f"BuildException: {e}")
+                        continue
+
             case_old = utils.Case(
                 case_new.code,
                 case_new.marker,
@@ -196,21 +211,6 @@ def _run() -> None:
                 None,
                 case_new.timestamp,
             )
-
-            if args.reducer is not False:
-                if (
-                    args.reducer
-                    or case_old.bisection
-                    and not case_old.bisection in get_all_bisections(ddb)
-                ):
-                    try:
-                        time_start_reducer = time.perf_counter()
-                        worked = rdcr.reduce_case(case_old)
-                        time_end_reducer = time.perf_counter()
-                        reducer_time = time_end_reducer - time_start_reducer
-                    except BuildException as e:
-                        print(f"BuildException: {e}")
-                        continue
 
             if not output_directory:
                 case_id = ddb.record_case(case_old)
@@ -280,16 +280,18 @@ def _rereduce() -> None:
 
     case = ddb.get_case_from_id_or_die(args.case_id)
     print(f"Re-reducing code with respect to Case {args.case_id}", file=sys.stderr)
-    res = rdcr.reduce_code(
-        rereduce_code,
-        case.marker,
-        case.bad_setting,
-        case.good_settings,
-        bisection=case.bisection,
+    case_new = old_case_to_new_case(case, bldr)
+    case_new.code = rereduce_code
+    if reduce_case(
+        case_new,
+        rdcr,
+        chkr_new,
+        force=True,
         preprocess=False,
-    )
-
-    print(res)
+    ):
+        print(case_new.reduced_code)
+    else:
+        print("Could not reduce code")
 
 
 def _report() -> None:
@@ -314,7 +316,9 @@ def _report() -> None:
     # check for reduced and massaged code
     if not case.reduced_code:
         print("Case is not reduced. Starting reduction...", file=sys.stderr)
-        if rdcr.reduce_case(case):
+        case_new = old_case_to_new_case(case, bldr)
+        if reduce_case(case_new, rdcr, chkr_new):
+            case.reduced_code = case_new.reduced_code
             ddb.update_case(args.case_id, case)
         else:
             print("Could not reduce case. Aborting...", file=sys.stderr)
@@ -1051,7 +1055,9 @@ def _reduce() -> None:
         else:
             case = pre_case
         start_time = time.perf_counter()
-        if rdcr.reduce_case(case, force=args.force):
+        case_new = old_case_to_new_case(case, bldr)
+        if reduce_case(case_new, rdcr, chkr_new, force=args.force):
+            case.reduced_code = case_new.reduced_code
             ddb.update_case(case_id, case)
             reducer_time = time.perf_counter() - start_time
             # If the reduction takes less than 5 seconds,
@@ -1356,7 +1362,14 @@ if __name__ == "__main__":
         logdir=Path(config.logdir),
     )
     chkr = checker.Checker(config, bldr)
-    rdcr = reducer.Reducer(config, bldr)
+    chkr_new = checker_new.Checker(
+        DeadConfig.get_config().llvm,
+        DeadConfig.get_config().gcc,
+        DeadConfig.get_config().ccc,
+        DeadConfig.get_config().ccomp,
+    )
+
+    rdcr = reducer.Reducer()
     bsctr = bisector.Bisector(config.cachedir)
 
     ddb = database.CaseDatabase(config, config.casedb)
