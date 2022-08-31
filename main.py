@@ -28,7 +28,6 @@ from ccbuilder import (
     CompilerProject,
 )
 
-import bisector
 import checker
 import database
 import parsers
@@ -40,11 +39,14 @@ from dead.utils import (
     DeadConfig,
     old_compiler_setting_to_new_compilation_setting,
     old_scenario_to_new_scenario,
+    old_case_to_new_case,
     compilation_setting_to_old_compiler_setting,
 )
 from dead.generator import generate_interesting_cases
+from dead.bisector import bisect_case
 
 from diopter import compiler
+from diopter import bisector
 
 
 def get_llvm_github_commit_author(rev: str) -> Optional[str]:
@@ -161,6 +163,21 @@ def _run() -> None:
             old_scenario_to_new_scenario(scenario, bldr), args.cores, 1024
         ):
             print("FOUND A CASE")
+            if args.bisector:
+                try:
+                    if not bisect_case(case_new, bsctr, bldr):
+                        print("Bisection failed")
+                        continue
+                except bisector.BisectionException as e:
+                    print(f"BisectionException: '{e}'", file=sys.stderr)
+                    continue
+                except AssertionError as e:
+                    print(f"AssertionError: '{e}'", file=sys.stderr)
+                    continue
+                except BuildException as e:
+                    print(f"BuildException: '{e}'", file=sys.stderr)
+                    continue
+
             case_old = utils.Case(
                 case_new.code,
                 case_new.marker,
@@ -174,30 +191,11 @@ def _run() -> None:
                     for setting in case_new.good_settings
                 ],
                 scenario,
-                None,
-                None,
+                case_new.reduced_code,
+                case_new.bisection,
                 None,
                 case_new.timestamp,
             )
-            if args.bisector:
-                try:
-                    time_start_bisector = time.perf_counter()
-                    bisect_worked = bsctr.bisect_case(case_old)
-                    time_end_bisector = time.perf_counter()
-                    bisector_time = time_end_bisector - time_start_bisector
-                    bisector_steps = bsctr.steps
-                    if not bisect_worked:
-                        print("Bisection failed")
-                        continue
-                except bisector.BisectionException as e:
-                    print(f"BisectionException: '{e}'", file=sys.stderr)
-                    continue
-                except AssertionError as e:
-                    print(f"AssertionError: '{e}'", file=sys.stderr)
-                    continue
-                except BuildException as e:
-                    print(f"BuildException: '{e}'", file=sys.stderr)
-                    continue
 
             if args.reducer is not False:
                 if (
@@ -216,15 +214,6 @@ def _run() -> None:
 
             if not output_directory:
                 case_id = ddb.record_case(case_old)
-                ddb.record_timing(
-                    case_id,
-                    None,
-                    None,
-                    bisector_time,
-                    bisector_steps,
-                    reducer_time,
-                )
-
             else:
                 h = abs(hash(str(case_old)))
                 path = output_directory / Path(f"case_{counter:08}-{h:019}.tar")
@@ -313,16 +302,11 @@ def _report() -> None:
 
     if not case.bisection:
         print("Case is not bisected. Starting bisection...", file=sys.stderr)
-        start_time = time.perf_counter()
-        worked = bsctr.bisect_case(case)
-        bisector_time = time.perf_counter() - start_time
+        case_new = old_case_to_new_case(case, bldr)
+        worked = bisect_case(case_new, bsctr, bldr)
         if worked:
+            case.bisection = case_new.bisection
             ddb.update_case(args.case_id, case)
-            g_time, gtc, b_time, b_steps, r_time = ddb.get_timing_from_id(args.case_id)
-            b_time = bisector_time
-            b_steps = bsctr.steps
-            ddb.record_timing(args.case_id, g_time, gtc, b_time, b_steps, r_time)
-
         else:
             print("Could not bisect case. Aborting...", file=sys.stderr)
             exit(1)
@@ -1010,9 +994,11 @@ def _set() -> None:
         case.code = new_mcode
         if chkr.is_interesting(case):
             print("Checking bisection...")
-            if not bsctr.bisect_case(case, force=True):
+            case_new = old_case_to_new_case(case, bldr)
+            if not bisect_case(case_new, bsctr, bldr, force=True):
                 logging.critical("Checking bisection failed...")
                 exit(1)
+            case.bisection = case_new.bisection
             if case.bisection != old_bisection:
                 logging.critical(
                     "Bisection of provided massaged code does not match the original bisection!"
@@ -1092,16 +1078,10 @@ def _bisect() -> None:
         else:
             case = pre_case
         start_time = time.perf_counter()
-        if bsctr.bisect_case(case, force=args.force):
+        case_new = old_case_to_new_case(case, bldr)
+        if bisect_case(case_new, bsctr, bldr, force=args.force):
+            case.bisection = case_new.bisection
             ddb.update_case(case_id, case)
-            bisector_time = time.perf_counter() - start_time
-            # if the bisection took less than 5 seconds
-            # we can assume that it was already bisected
-            if bisector_time > 5.0:
-                gtime, gtc, _, _, rtime = ddb.get_timing_from_id(case_id)
-                ddb.record_timing(
-                    case_id, gtime, gtc, bisector_time, bsctr.steps, rtime
-                )
         else:
             print(f"{case_id} failed...", file=sys.stderr)
     print("Done", file=sys.stderr)
@@ -1352,9 +1332,13 @@ if __name__ == "__main__":
     system_gcc = compiler.CompilerExe(
         ccbuilder.CompilerProject.GCC, Path("gcc"), "system"
     )
+    gcc_repo = get_gcc_repo(config.gcc.repo)
+    llvm_repo = get_llvm_repo(config.llvm.repo)
     DeadConfig.init(
-        system_gcc,
         system_llvm,
+        llvm_repo,
+        system_gcc,
+        gcc_repo,
         compiler.ClangTool.init_with_paths_from_llvm(
             Path("/home/theo/dead/callchain_checker/build/bin/ccc"), system_llvm
         ),
@@ -1363,8 +1347,6 @@ if __name__ == "__main__":
     )
 
     patchdb = PatchDB(Path(config.patchdb))
-    gcc_repo = get_gcc_repo(config.gcc.repo)
-    llvm_repo = get_llvm_repo(config.llvm.repo)
     bldr = Builder(
         cache_prefix=Path(config.cachedir),
         gcc_repo=gcc_repo,
@@ -1375,7 +1357,7 @@ if __name__ == "__main__":
     )
     chkr = checker.Checker(config, bldr)
     rdcr = reducer.Reducer(config, bldr)
-    bsctr = bisector.Bisector(config, bldr, chkr)
+    bsctr = bisector.Bisector(config.cachedir)
 
     ddb = database.CaseDatabase(config, config.casedb)
 

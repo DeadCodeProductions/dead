@@ -37,7 +37,9 @@ import utils as old_utils
 @dataclass
 class DeadConfig:
     llvm: compiler.CompilerExe
+    llvm_repo: Repo
     gcc: compiler.CompilerExe
+    gcc_repo: Repo
     ccc: compiler.ClangTool
     ccomp: Optional[str]
     csmith_include_path: str
@@ -46,12 +48,18 @@ class DeadConfig:
     def init(
         cls,
         llvm: compiler.CompilerExe,
+        llvm_repo: Repo,
         gcc: compiler.CompilerExe,
+        gcc_repo: Repo,
         ccc: compiler.ClangTool,
         ccomp: Optional[str],
         csmith_include_path: str,
     ) -> None:
-        setattr(cls, "config", DeadConfig(llvm, gcc, ccc, ccomp, csmith_include_path))
+        setattr(
+            cls,
+            "config",
+            DeadConfig(llvm, llvm_repo, gcc, gcc_repo, ccc, ccomp, csmith_include_path),
+        )
 
     @classmethod
     def get_config(cls) -> DeadConfig:
@@ -322,9 +330,11 @@ def old_scenario_to_new_scenario(
 class Case:
     code: str
     marker: str
-    bad_setting: compiler.CompilationSetting
-    good_settings: list[compiler.CompilationSetting]
-    scenario: Scenario
+    bad_setting: compiler.CompilationSetting  # should we switch to signature based cases?
+    good_settings: list[
+        compiler.CompilationSetting
+    ]  # should we switch to a single good setting?
+    scenario: Scenario  # do we really need this here?
 
     reduced_code: Optional[str]
     bisection: Optional[str]
@@ -355,3 +365,20 @@ class Case:
         self.path = path
 
         self.timestamp = timestamp if timestamp else time.time()
+
+
+def old_case_to_new_case(case_old: old_utils.Case, builder: Builder) -> Case:
+    return Case(
+        case_old.code,
+        case_old.marker,
+        old_compiler_setting_to_new_compilation_setting(case_old.bad_setting, builder),
+        [
+            old_compiler_setting_to_new_compilation_setting(setting, builder)
+            for setting in case_old.good_settings
+        ],
+        old_scenario_to_new_scenario(case_old.scenario, builder),
+        case_old.reduced_code,
+        case_old.bisection,
+        case_old.path,
+        case_old.timestamp,
+    )
