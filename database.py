@@ -12,7 +12,10 @@ from typing import ClassVar, Optional
 import ccbuilder
 
 import utils
-from utils import Case, CompilerSetting, NestedNamespace, Scenario
+from utils import NestedNamespace
+from dead.utils import RegressionCase
+
+from diopter.compiler import CompilerExe, CompilationSetting
 
 
 class DatabaseError(Exception):
@@ -41,12 +44,12 @@ class CaseDatabase:
             ColumnInfo("code_sha1", "", "REFERENCES code(code_sha1) NOT NULL"),
             ColumnInfo("marker", "TEXT", "NOT NULL"),
             ColumnInfo("bad_setting_id", "INTEGER", "NOT NULL"),
-            ColumnInfo("scenario_id", "INTEGER", "NOT NULL"),
+            ColumnInfo("good_setting_id", "INTEGER", "NOT NULL"),
             ColumnInfo("bisection", "CHAR(40)"),
             ColumnInfo("reduced_code_sha1", "CHAR(40)"),
             ColumnInfo("timestamp", "FLOAT", "NOT NULL"),
             ColumnInfo(
-                "UNIQUE(code_sha1, marker, bad_setting_id, scenario_id, bisection, reduced_code_sha1) "
+                "UNIQUE(code_sha1, marker, bad_setting_id, good_setting_id_id, bisection, reduced_code_sha1) "
                 "ON CONFLICT REPLACE",
                 "",
             ),
@@ -61,63 +64,12 @@ class CaseDatabase:
             ColumnInfo("bug_report_link", "TEXT"),
             ColumnInfo("fixed_by", "CHAR(40)"),
         ],
-        "compiler_setting": [
+        "compilation_setting": [
             ColumnInfo("compiler_setting_id", "INTEGER", "PRIMARY KEY AUTOINCREMENT"),
             ColumnInfo("compiler", "TEXT", "NOT NULL"),
             ColumnInfo("rev", "CHAR(40)", "NOT NULL"),
-            ColumnInfo("opt_level", "TEXT", "NOT NULL"),
+            ColumnInfo("opt_level", "INT", "NOT NULL"),
             ColumnInfo("additional_flags", "TEXT"),
-        ],
-        "good_settings": [
-            ColumnInfo("case_id", "", "REFERENCES cases(case_id) NOT NULL"),
-            ColumnInfo(
-                "compiler_setting_id",
-                "",
-                "REFERENCES compiler_setting(compiler_setting_id) NOT NULL",
-            ),
-        ],
-        "scenario_ids": [
-            ColumnInfo("scenario_id", "INTEGER", "PRIMARY KEY AUTOINCREMENT"),
-        ],
-        "scenario": [
-            ColumnInfo(
-                "scenario_id", "", "REFERENCES scenario_ids(scenario_id) PRIMARY KEY"
-            ),
-            ColumnInfo("generator_version", "INTEGER", "NOT NULL"),
-            ColumnInfo("bisector_version", "INTEGER", "NOT NULL"),
-            ColumnInfo("reducer_version", "INTEGER", "NOT NULL"),
-            ColumnInfo("instrumenter_version", "INTEGER", "NOT NULL"),
-            ColumnInfo("csmith_min", "INTEGER", "NOT NULL"),
-            ColumnInfo("csmith_max", "INTEGER", "NOT NULL"),
-            ColumnInfo("reduce_program", "TEXT", "NOT NULL"),
-        ],
-        "scenario_attacker": [
-            ColumnInfo(
-                "scenario_id", "", "REFERENCES scenario_ids(scenario_id) NOT NULL"
-            ),
-            ColumnInfo(
-                "compiler_setting_id",
-                "",
-                "REFERENCES compiler_setting(compiler_setting_id) NOT NULL",
-            ),
-        ],
-        "scenario_target": [
-            ColumnInfo(
-                "scenario_id", "", "REFERENCES scenario_ids(scenario_id) NOT NULL"
-            ),
-            ColumnInfo(
-                "compiler_setting_id",
-                "",
-                "REFERENCES compiler_setting(compiler_setting_id) NOT NULL",
-            ),
-        ],
-        "timing": [
-            ColumnInfo("case_id", "", "REFERENCES cases(case_id) PRIMARY KEY"),
-            ColumnInfo("generator_time", "FLOAT"),
-            ColumnInfo("generator_try_count", "INTEGER"),
-            ColumnInfo("bisector_time", "FLOAT"),
-            ColumnInfo("bisector_steps", "INTEGER"),
-            ColumnInfo("reducer_time", "FLOAT"),
         ],
     }
 
@@ -206,23 +158,18 @@ class CaseDatabase:
                 ),
             )
 
-    def record_case(self, case: Case) -> RowID:
+    def record_case(self, case: RegressionCase) -> RowID:
         """Save a case to the DB and get its ID.
 
         Args:
-            case (Case): Case to save.
+            case (RegressionCase): Case to save.
 
         Returns:
             RowID: ID of case.
         """
 
-        bad_setting_id = self.record_compiler_setting(case.bad_setting)
-        with self.con:
-            good_setting_ids = [
-                self.record_compiler_setting(good_setting)
-                for good_setting in case.good_settings
-            ]
-        scenario_id = self.record_scenario(case.scenario)
+        bad_setting_id = self.record_compilation_setting(case.bad_setting)
+        good_setting_id = self.record_compilation_setting(case.good_setting)
 
         with self.con:
             cur = self.con.cursor()
@@ -239,7 +186,7 @@ class CaseDatabase:
                     code_sha1,
                     case.marker,
                     bad_setting_id,
-                    scenario_id,
+                    good_setting_id,
                     bisection,
                     reduced_code_sha1,
                     case.timestamp,
@@ -248,34 +195,33 @@ class CaseDatabase:
             if not cur.lastrowid:
                 raise DatabaseError("No last row id was returned")
             case_id = RowID(cur.lastrowid)
-            cur.executemany(
-                "INSERT INTO good_settings VALUES (?,?)",
-                ((case_id, gs_id) for gs_id in good_setting_ids),
-            )
-
         return case_id
 
-    def record_compiler_setting(self, compiler_setting: CompilerSetting) -> RowID:
+    def record_compilation_setting(self, compiler_setting: CompilationSetting) -> RowID:
         """Save a compiler setting to the DB and get its ID.
 
         Args:
             self:
-            compiler_setting (CompilerSetting): compiler setting to save.
+            compiler_setting (CompilationSetting): compiler setting to save.
 
         Returns:
             RowID: ID of saved compiler setting.
         """
-        if s_id := self.get_compiler_setting_id(compiler_setting):
+        if s_id := self.get_compilation_setting_id(compiler_setting):
             return s_id
         with self.con:
             cur = self.con.cursor()
             cur.execute(
                 "INSERT INTO compiler_setting VALUES (NULL,?,?,?,?)",
                 (
-                    compiler_setting.compiler_project.name,
-                    compiler_setting.rev,
-                    compiler_setting.opt_level,
-                    compiler_setting.get_flag_str(),
+                    compiler_setting.compiler.project.to_string(),
+                    compiler_setting.compiler.revision,
+                    compiler_setting.opt_level.value,
+                    "|".join(compiler_setting.flags)
+                    + "###"
+                    + "|".join(compiler_setting.include_paths)
+                    + "###"
+                    + "|".join(compiler_setting.system_include_paths),
                 ),
             )
             if not cur.lastrowid:
@@ -284,164 +230,13 @@ class CaseDatabase:
 
         return ns_id
 
-    def record_scenario(self, scenario: Scenario) -> RowID:
-        """Save a scenario to the DB and get its ID.
-
-        Args:
-            scenario (Scenario): Scenario to save.
-
-        Returns:
-            RowID: ID of `scenario`
-        """
-        if s_id := self.get_scenario_id(scenario):
-            return s_id
-        target_ids = [
-            self.record_compiler_setting(target_setting)
-            for target_setting in scenario.target_settings
-        ]
-        attacker_ids = [
-            self.record_compiler_setting(attacker_setting)
-            for attacker_setting in scenario.attacker_settings
-        ]
-        with self.con:
-            ns_id = self.get_new_scenario_id(no_commit=True)
-
-            def insert_settings(table: str, settings: list[RowID]) -> None:
-                self.con.executemany(
-                    f"INSERT INTO {table} VALUES (?,?)",
-                    ((ns_id, s) for s in settings),
-                )
-
-            insert_settings("scenario_target", target_ids)
-            insert_settings("scenario_attacker", attacker_ids)
-
-            self.con.execute(
-                "INSERT INTO scenario VALUES (?,?,?,?,?,?,?,?)",
-                (
-                    ns_id,
-                    scenario.generator_version,
-                    scenario.bisector_version,
-                    scenario.reducer_version,
-                    scenario.instrumenter_version,
-                    self.config.csmith.min_size,
-                    self.config.csmith.max_size,
-                    os.path.basename(self.config.creduce),
-                ),
-            )
-        return ns_id
-
-    def get_new_scenario_id(self, no_commit: bool) -> RowID:
-        """Get a new scenario ID.
-
-        Args:
-            no_commit (bool): Don't commit the change.
-
-        Returns:
-            RowID: New scenario id
-        """
-        cur = self.con.cursor()
-        cur.execute("INSERT INTO scenario_ids VALUES (NULL)")
-        if not no_commit:
-            self.con.commit()
-        if not cur.lastrowid:
-            raise DatabaseError("No row id was returned")
-        return RowID(cur.lastrowid)
-
-    def get_scenario_id(self, scenario: Scenario) -> Optional[RowID]:
-        """See if there is already an ID for `scenario` in the database
-        and return it if it does.
-
-        Args:
-            scenario (Scenario): scenario to get an ID for
-
-        Returns:
-            Optional[RowID]: RowID if the scenario exists
-        """
-
-        def get_scenario_ids(id_: RowID, table: str, id_str: str) -> set[int]:
-            cursor = self.con.cursor()
-            return set(
-                s_id[0]
-                for s_id in cursor.execute(
-                    f"SELECT scenario_id FROM {table} WHERE {id_str}== ? ",
-                    (id_,),
-                ).fetchall()
-            )
-
-        # Get all scenario's which have the same versions
-        candidate_ids: set[RowID] = set(
-            [
-                r[0]
-                for r in self.con.execute(
-                    "SELECT scenario_id FROM scenario"
-                    " WHERE generator_version == ?"
-                    " AND bisector_version == ?"
-                    " AND reducer_version == ?"
-                    " AND instrumenter_version == ?"
-                    " AND csmith_min == ?"
-                    " AND csmith_max == ?"
-                    " AND reduce_program == ?",
-                    (
-                        scenario.generator_version,
-                        scenario.bisector_version,
-                        scenario.reducer_version,
-                        scenario.instrumenter_version,
-                        self.config.csmith.min_size,
-                        self.config.csmith.max_size,
-                        self.config.creduce,
-                    ),
-                ).fetchall()
-            ]
-        )
-
-        # Get compiler setting ids of scenario
-        target_ids: list[RowID] = []
-        for setting in scenario.target_settings:
-            if not (s_id := self.get_compiler_setting_id(setting)):
-                return None
-            target_ids.append(s_id)
-
-        attacker_ids: list[RowID] = []
-        for setting in scenario.attacker_settings:
-            if not (s_id := self.get_compiler_setting_id(setting)):
-                return None
-            attacker_ids.append(s_id)
-
-        # Compare compiler setting IDs
-        candidate_ids = candidate_ids & reduce(
-            lambda x, y: x & y,
-            (
-                get_scenario_ids(target_id, "scenario_target", "compiler_setting_id")
-                for target_id in target_ids
-            ),
-        )
-        if not candidate_ids:
-            return None
-
-        candidate_ids = reduce(
-            lambda x, y: x & y,
-            chain(
-                (
-                    get_scenario_ids(
-                        attacker_id, "scenario_attacker", "compiler_setting_id"
-                    )
-                    for attacker_id in attacker_ids
-                ),
-                (candidate_ids,),
-            ),
-        )
-
-        if not candidate_ids:
-            return None
-        return RowID(next(candidate_ids.__iter__()))
-
-    def get_compiler_setting_id(
-        self, compiler_setting: CompilerSetting
+    def get_compilation_setting_id(
+        self, compiler_setting: CompilationSetting
     ) -> Optional[RowID]:
         """Get the ID of a given CompilerSetting, if it is in the DB.
 
         Args:
-            compiler_setting (CompilerSetting): CompilerSetting to get the id of.
+            compiler_setting (CompilationSetting): CompilerSetting to get the id of.
 
         Returns:
             Optional[RowID]: The ID, if found.
@@ -451,10 +246,14 @@ class CaseDatabase:
             "FROM compiler_setting "
             "WHERE compiler == ? AND rev == ? AND opt_level == ? AND additional_flags == ?",
             (
-                compiler_setting.compiler_project.name,
-                compiler_setting.rev,
-                compiler_setting.opt_level,
-                "|".join(compiler_setting.get_flag_cmd()),
+                compiler_setting.compiler.project.to_string(),
+                compiler_setting.compiler.revision,
+                compiler_setting.opt_level.value,
+                "|".join(compiler_setting.flags)
+                + "###"
+                + "|".join(compiler_setting.include_paths)
+                + "###"
+                + "|".join(compiler_setting.system_include_paths),
             ),
         ).fetchone()
 
@@ -465,14 +264,15 @@ class CaseDatabase:
         return s_id
 
     @cache
-    def get_compiler_setting_from_id(
-        self, compiler_setting_id: int
-    ) -> Optional[CompilerSetting]:
+    def get_compilation_setting_from_id(
+        self, compiler_setting_id: int, builder: ccbuilder.Builder
+    ) -> Optional[CompilationSetting]:
         """Get a compiler setting from a compiler_setting_id, if the ID exists.
 
         Args:
             self:
             compiler_setting_id (int): Compiler setting ID to get the compiler setting of
+            builder (ccbuilder.Builder)
 
         Returns:
             Optional[CompilerSetting]: Compiler setting with ID `compiler_setting_id`
@@ -488,67 +288,23 @@ class CaseDatabase:
         if not res:
             return None
 
-        compiler, rev, opt_level, flags = res
+        compiler, rev, opt_level, flags_includes = res
+        flags, include_paths, system_include_paths = flags_includes.split("###")
         project, repo = ccbuilder.get_compiler_info(
             compiler.lower(), Path(self.config.repodir)
         )
-        return CompilerSetting(
-            compiler_project=project,
-            repo=repo,
-            rev=rev,
-            opt_level=opt_level,
-            additional_flags=[s for s in flags.split("|") if s],
+        # we shouldn't really be building here, we need a ccbuilder.cache_lookup()
+        return CompilationSetting(
+            compiler=compiler.CompilerExe(
+                project, rev, builder.build(project, rev, True)
+            ),
+            opt_level=compiler.OptLevel(int(opt_level)),
+            flags=flags.split("|"),
+            include_paths=include_paths.split("|"),
+            system_include_paths=system_include_paths.split("|"),
         )
 
-    @cache
-    def get_scenario_from_id(self, scenario_id: RowID) -> Optional[Scenario]:
-        """Get a scenario from a specified ID.
-
-        Args:
-            scenario_id (RowID): ID of scenario to get
-
-        Returns:
-            Optional[Scenario]: Scenario corresponding to RowID
-        """
-
-        def get_settings(
-            self: CaseDatabase, table: str, s_id: int
-        ) -> list[CompilerSetting]:
-
-            ids = self.con.execute(
-                f"SELECT compiler_setting_id FROM {table} WHERE scenario_id == ?",
-                (s_id,),
-            ).fetchall()
-            pre = [self.get_compiler_setting_from_id(row[0]) for row in ids]
-
-            # For the type checker. It can't possibly know about the constraints
-            # in the DB.
-            settings = [c for c in pre if c]
-
-            return settings
-
-        target_settings = get_settings(self, "scenario_target", scenario_id)
-        attacker_settings = get_settings(self, "scenario_attacker", scenario_id)
-        scenario = Scenario(target_settings, attacker_settings)
-
-        res = self.con.execute(
-            "SELECT generator_version, bisector_version, reducer_version, instrumenter_version FROM scenario WHERE scenario_id == ?",
-            (scenario_id,),
-        ).fetchone()
-
-        if not res:
-            return None
-
-        generator_version, bisector_version, reducer_version, instrumenter_version = res
-
-        scenario.generator_version = generator_version
-        scenario.bisector_version = bisector_version
-        scenario.reducer_version = reducer_version
-        scenario.instrumenter_version = instrumenter_version
-
-        return scenario
-
-    def get_case_from_id(self, case_id: RowID) -> Optional[Case]:
+    def get_case_from_id(self, case_id: RowID) -> Optional[RegressionCase]:
         """Get a case from the database based on its ID.
         Note: the case will *NOT* replace reduced code with
         massaged code.
@@ -557,7 +313,7 @@ class CaseDatabase:
             case_id (int): ID of wanted case
 
         Returns:
-            Optional[Case]: Returns case if it exists
+            Optional[RegressionCase]: Returns case if it exists
         """
         if not (
             res := self.con.execute(
@@ -571,16 +327,11 @@ class CaseDatabase:
             code_sha1,
             marker,
             bad_setting_id,
-            scenario_id,
+            good_setting_id,
             bisection,
             reduced_code_sha1,
             timestamp,
         ) = res
-
-        good_settings_ids = self.con.execute(
-            "SELECT compiler_setting_id FROM good_settings WHERE case_id == ?",
-            (case_id,),
-        ).fetchall()
 
         code = self.get_code_from_id(code_sha1)
         if not code:
@@ -588,37 +339,28 @@ class CaseDatabase:
 
         reduced_code = self.get_code_from_id(reduced_code_sha1)
 
-        scenario = self.get_scenario_from_id(scenario_id)
-
         # Get Settings
-        bad_setting = self.get_compiler_setting_from_id(bad_setting_id)
-        pre_good_settings = [
-            self.get_compiler_setting_from_id(row[0]) for row in good_settings_ids
-        ]
+        bad_setting = self.get_compilation_setting_from_id(bad_setting_id)
+        good_setting = self.get_compilation_setting_from_id(good_setting_id)
 
         # There should never be a problem here (TM) because of the the DB
         # FOREIGN KEY constraints.
-        good_settings = [gs for gs in pre_good_settings if gs]
         if not bad_setting:
             raise DatabaseError("Bad setting id was not found")
-        if not scenario:
-            raise DatabaseError("Scenario id was not found")
+        if not good_setting:
+            raise DatabaseError("Good setting id was not found")
 
-        case = Case(
+        return RegressionCase(
             code,
             marker,
             bad_setting,
-            good_settings,
-            scenario,
+            good_setting,
             reduced_code=reduced_code,
             bisection=bisection,
-            path=None,
             timestamp=timestamp,
         )
 
-        return case
-
-    def get_case_from_id_or_die(self, case_id: RowID) -> Case:
+    def get_case_from_id_or_die(self, case_id: RowID) -> RegressionCase:
         pre_check_case = self.get_case_from_id(case_id)
         if not pre_check_case:
             print("No case with this ID.", file=sys.stderr)
@@ -627,7 +369,7 @@ class CaseDatabase:
             case = pre_check_case
         return case
 
-    def update_case(self, case_id: RowID, case: Case) -> None:
+    def update_case(self, case_id: RowID, case: RegressionCase) -> None:
         """Update case with ID `case_id` with the values of `case`
 
         Args:
@@ -644,8 +386,8 @@ class CaseDatabase:
         else:
             reduced_code_sha1 = None
 
-        bad_setting_id = self.record_compiler_setting(case.bad_setting)
-        scenario_id = self.record_scenario(case.scenario)
+        bad_setting_id = self.record_compilation_setting(case.bad_setting)
+        good_setting_id = self.record_compilation_setting(case.good_setting)
 
         with self.con:
             # REPLACE is just an alias for INSERT OR REPLACE
@@ -656,73 +398,12 @@ class CaseDatabase:
                     code_sha1,
                     case.marker,
                     bad_setting_id,
-                    scenario_id,
+                    good_setting_id,
                     case.bisection,
                     reduced_code_sha1,
                     case.timestamp,
                 ),
             )
-
-    def record_timing(
-        self,
-        case_id: RowID,
-        generator_time: Optional[float] = None,
-        generator_try_count: Optional[int] = None,
-        bisector_time: Optional[float] = None,
-        bisector_steps: Optional[int] = None,
-        reducer_time: Optional[float] = None,
-    ) -> None:
-        """Record timing metric for `case_id`
-
-        Args:
-            case_id (RowID):
-            generator_time (Optional[float]): Time the generator took
-            generator_try_count (Optional[int]): How often the generator tried
-            bisector_time (Optional[float]): How long the bisector took
-            bisector_steps (Optional[int]): How many steps the bisector made
-            reducer_time (Optional[float]): How long the reducer took
-
-        Returns:
-            None:
-        """
-
-        with self.con:
-            self.con.execute(
-                "INSERT OR REPLACE INTO timing VALUES(?,?,?,?,?,?)",
-                (
-                    case_id,
-                    generator_time,
-                    generator_try_count,
-                    bisector_time,
-                    bisector_steps,
-                    reducer_time,
-                ),
-            )
-
-    def get_timing_from_id(
-        self, case_id: RowID
-    ) -> tuple[
-        Optional[float], Optional[int], Optional[float], Optional[int], Optional[float]
-    ]:
-        """Get the timing entries for a case.
-
-        Args:
-            self:
-            case_id (RowID): case_id
-
-        Returns:
-            tuple[
-                Optional[float], Optional[int], Optional[float], Optional[int], Optional[float]
-            ]: Generator time, generator try count, bisector time, bisector steps, reducer time
-        """
-
-        res = self.con.execute(
-            "SELECT * FROM timing WHERE case_id == ?", (case_id,)
-        ).fetchone()
-        if not res:
-            return (None, None, None, None, None)
-        _, g_time, gtc, b_time, b_steps, r_time = res
-        return g_time, gtc, b_time, b_steps, r_time
 
     def get_report_info_from_id(
         self, case_id: RowID

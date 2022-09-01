@@ -12,13 +12,13 @@ from typing import Optional
 from dead_instrumenter.instrumenter import annotate_with_static
 from diopter import preprocessor, sanitizer, compiler
 
-import dead.utils as utils
+from dead.utils import DeadConfig, RegressionCase
 
 
 def find_alive_markers(
     code: str,
     compiler_setting: compiler.CompilationSetting,
-    marker_prefix: str,
+    marker_prefix: str,  # get this from dead_instrumenter?
 ) -> set[str]:
     """Return set of markers which are found in the assembly.
 
@@ -173,7 +173,7 @@ class Checker:
         code: str,
         marker: str,
         bad_setting: compiler.CompilationSetting,
-        good_settings: list[compiler.CompilationSetting],
+        good_setting: compiler.CompilationSetting,
         sanitize: bool = True,
         make_globals_static: bool = True,
         preprocess: bool = False,
@@ -200,7 +200,7 @@ class Checker:
             if pp_code := preprocessor.preprocess_csmith_code(
                 code,
                 str(self.gcc.exe),
-                [f"-isystem{utils.DeadConfig.get_config().csmith_include_path}"],
+                [f"-isystem{DeadConfig.get_config().csmith_include_path}"],
             ):
                 code = pp_code
 
@@ -210,7 +210,7 @@ class Checker:
         if make_globals_static:
             code = self.get_code_with_static_globals(code, bad_setting)
 
-        if not self.is_interesting_wrt_marker(code, marker, bad_setting, good_settings):
+        if not self.is_interesting_wrt_marker(code, marker, bad_setting, [good_setting]):
             return False
 
         if sanitize:
@@ -252,7 +252,7 @@ class Checker:
             if pp_code := preprocessor.preprocess_csmith_code(
                 code,
                 str(self.gcc.exe),
-                [f"-isystem{utils.DeadConfig.get_config().csmith_include_path}"],
+                [f"-isystem{DeadConfig.get_config().csmith_include_path}"],
             ):
                 code = pp_code
 
@@ -278,7 +278,7 @@ class Checker:
 
     def is_interesting_case(
         self,
-        case_: utils.Case,
+        case_: RegressionCase,
         sanitize: bool = True,
         make_globals_static: bool = True,
         preprocess: bool = False,
@@ -287,7 +287,7 @@ class Checker:
             case_.code,
             case_.marker,
             case_.bad_setting,
-            case_.good_settings,
+            case_.good_setting,
             sanitize=sanitize,
             make_globals_static=make_globals_static,
             preprocess=preprocess,
