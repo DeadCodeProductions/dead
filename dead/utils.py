@@ -327,58 +327,86 @@ def old_scenario_to_new_scenario(
 
 
 @dataclass
-class Case:
+class RegressionCase:
     code: str
     marker: str
-    bad_setting: compiler.CompilationSetting  # should we switch to signature based cases?
-    good_settings: list[
-        compiler.CompilationSetting
-    ]  # should we switch to a single good setting?
-    scenario: Scenario  # do we really need this here?
+    bad_setting: compiler.CompilationSetting
+    good_setting: compiler.CompilationSetting
 
     reduced_code: Optional[str]
     bisection: Optional[str]
     timestamp: float
-
-    path: Optional[Path]
 
     def __init__(
         self,
         code: str,
         marker: str,
         bad_setting: compiler.CompilationSetting,
-        good_settings: list[compiler.CompilationSetting],
-        scenario: Scenario,
-        reduced_code: Optional[str],
-        bisection: Optional[str],
-        path: Optional[Path] = None,
+        good_setting: compiler.CompilationSetting,
+        reduced_code: Optional[str] = None,
+        bisection: Optional[str] = None,
         timestamp: Optional[float] = None,
     ):
-
         self.code = code
         self.marker = marker
         self.bad_setting = bad_setting
-        self.good_settings = good_settings
-        self.scenario = scenario
+        self.good_setting = good_setting
         self.reduced_code = reduced_code
         self.bisection = bisection
-        self.path = path
-
         self.timestamp = timestamp if timestamp else time.time()
 
+    def to_file(self, file: Path) -> None:
+        print("RegressionCase.to_file: NYI")
+        exit(1)
 
-def old_case_to_new_case(case_old: old_utils.Case, builder: Builder) -> Case:
-    return Case(
-        case_old.code,
-        case_old.marker,
-        old_compiler_setting_to_new_compilation_setting(case_old.bad_setting, builder),
-        [
-            old_compiler_setting_to_new_compilation_setting(setting, builder)
-            for setting in case_old.good_settings
-        ],
-        old_scenario_to_new_scenario(case_old.scenario, builder),
-        case_old.reduced_code,
-        case_old.bisection,
-        case_old.path,
-        case_old.timestamp,
+    @staticmethod
+    def from_file(config: old_utils.NestedNamespace, file: Path) -> RegressionCase:
+        print("RegressionCase.from_file: NYI")
+        exit(1)
+
+
+def repo_from_setting(setting: compiler.CompilationSetting) -> Repo:
+    match setting.compiler.project:
+        case ccbuilder.CompilerProject.GCC:
+            return DeadConfig.get_config().gcc_repo
+        case ccbuilder.CompilerProject.LLVM:
+            return DeadConfig.get_config().llvm_repo
+        case _:
+            assert False, f"Unknown compiler project {setting.compiler.project}"
+
+
+def get_verbose_compiler_info(compiler_setting: compiler.CompilationSetting) -> str:
+    return (
+        subprocess.run(
+            f"{compiler_setting.compiler.exe} -v".split(),
+            stderr=subprocess.STDOUT,
+            stdout=subprocess.PIPE,
+        )
+        .stdout.decode("utf-8")
+        .strip()
     )
+
+
+# TODO: move this to diopter.compiler
+def get_llvm_IR(code: str, compiler_setting: compiler.CompilationSetting) -> str:
+    if compiler_setting.compiler.project != ccbuilder.CompilerProject.LLVM:
+        raise CompileError("Requesting LLVM IR from non-clang compiler!")
+
+    with CompileContext(code) as context_res:
+        code_file, asm_file = context_res
+
+        cmd = f"{compiler_setting.compiler.exe} -emit-llvm -S {code_file} -o{asm_file} -O{compiler_setting.opt_level.name}".split(
+            " "
+        )
+        cmd += compiler_setting.flags_str()
+        try:
+            run_cmd(cmd)
+        except subprocess.CalledProcessError:
+            raise CompileError()
+
+        with open(asm_file, "r") as f:
+            return f.read()
+
+
+def setting_report_str(setting: compiler.CompilationSetting) -> str:
+    return f"{setting.compiler.project.name}-{setting.compiler.revision} -O{setting.opt_level.name}"

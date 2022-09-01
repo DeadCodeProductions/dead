@@ -3,7 +3,7 @@ from diopter.reducer import ReductionCallback, Reducer
 from diopter.preprocessor import preprocess_csmith_code
 
 from dead.checker import Checker
-from dead.utils import DeadConfig, Case
+from dead.utils import DeadConfig, RegressionCase
 
 
 class DeadReductionCallback(ReductionCallback):
@@ -23,12 +23,17 @@ class DeadReductionCallback(ReductionCallback):
     def test(self, code: str) -> bool:
         # TODO: check bisection as well
         return self.checker.is_interesting_marker(
-            code, self.marker, self.bad_setting, [self.good_setting], preprocess=False
+            code,
+            self.marker,
+            self.bad_setting,
+            self.good_setting,
+            preprocess=False,
+            make_globals_static=True,
         )
 
 
 def reduce_case(
-    case_: Case,
+    case_: RegressionCase,
     reducer: Reducer,
     checker: Checker,
     force: bool = False,
@@ -36,16 +41,6 @@ def reduce_case(
 ) -> bool:
     if case_.reduced_code and not force:
         return True
-    # TODO: drop this once we/if we switch to RegressionCase
-    def get_good_setting_for_reduction() -> CompilationSetting:
-        for setting in case_.good_settings:
-            if (
-                setting.opt_level == case_.bad_setting.opt_level
-                and setting.compiler.project == case_.bad_setting.compiler.project
-            ):
-                return setting
-        assert False, "reduction_case: this is not a regression"
-
     if preprocess:
         pcode = preprocess_csmith_code(
             case_.code,
@@ -58,7 +53,7 @@ def reduce_case(
     else:
         pcode = case_.code
     rcallback = DeadReductionCallback(
-        case_.marker, case_.bad_setting, get_good_setting_for_reduction(), checker
+        case_.marker, case_.bad_setting, case_.good_setting, checker
     )
     assert rcallback.test(pcode)
     # TODO: pass number of jobs and logfile

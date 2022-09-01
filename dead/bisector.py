@@ -6,7 +6,7 @@ from diopter.compiler import CompilationSetting, CompilerExe
 import ccbuilder
 
 from dead.checker import find_alive_markers
-from dead.utils import Case, DeadConfig
+from dead.utils import RegressionCase, DeadConfig
 
 
 # TODO: move this to diopter.CompilationSetting.with_commit
@@ -27,7 +27,7 @@ def get_setting_with_commit(
 
 
 class DeadBisectionCallback(BisectionCallback):
-    #TODO: this should operate directly on a case
+    # TODO: this should operate directly on a case
     def __init__(
         self,
         code: str,
@@ -53,19 +53,13 @@ class DeadBisectionCallback(BisectionCallback):
 
 
 def bisect_case(
-    case_: Case, bisector: Bisector, builder: ccbuilder.Builder, force: bool = False
+    case_: RegressionCase,
+    bisector: Bisector,
+    builder: ccbuilder.Builder,
+    force: bool = False,
 ) -> bool:
     if case_.bisection and not force:
         return True
-    #TODO: drop this once we/if we switch to RegressionCase
-    def get_good_rev_for_bisection() -> ccbuilder.Revision:
-        for setting in case_.good_settings:
-            if (
-                setting.opt_level == case_.bad_setting.opt_level
-                and setting.compiler.project == case_.bad_setting.compiler.project
-            ):
-                return setting.compiler.revision
-        assert False, "bisect_case: this is not a regression"
 
     callback = DeadBisectionCallback(
         case_.code,
@@ -75,11 +69,11 @@ def bisect_case(
     )
     assert callback.check(case_.bad_setting.compiler.revision)
 
-    #TODO: pass number of jobs and logfile
+    # TODO: pass number of jobs and logfile
     bisection_commit = bisector.bisect(
         callback,
         case_.bad_setting.compiler.revision,
-        get_good_rev_for_bisection(),
+        case_.good_setting.compiler.revision,
         case_.bad_setting.compiler.project,
         DeadConfig.get_config().gcc_repo
         if case_.bad_setting.compiler.project == ccbuilder.CompilerProject.GCC
