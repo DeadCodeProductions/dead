@@ -28,7 +28,6 @@ from ccbuilder import (
     CompilerProject,
 )
 
-import database
 import parsers
 import utils
 
@@ -41,6 +40,7 @@ from dead.utils import (
     get_llvm_IR,
     setting_report_str,
 )
+import dead.database as database
 from dead.generator import generate_interesting_cases
 from dead.bisector import bisect_case
 from dead.reducer import reduce_case
