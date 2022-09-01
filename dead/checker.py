@@ -47,6 +47,8 @@ def find_alive_markers(
 
 
 # TODO: we could write a more generic checker, e.g., one that checks also for signatures
+# TODO: the checker should probably not deal with making globals static, it
+# should be done externally
 class Checker:
     def __init__(
         self,
@@ -174,7 +176,7 @@ class Checker:
         good_settings: list[compiler.CompilationSetting],
         sanitize: bool = True,
         make_globals_static: bool = True,
-        preprocess: bool = True,
+        preprocess: bool = False,
     ) -> bool:
         """Check if a code passes all the 'interestingness'-checks.
         Preprocesses code by default to prevent surprises when preprocessing
@@ -229,7 +231,7 @@ class Checker:
         code: str,
         bad_setting: compiler.CompilationSetting,
         good_settings: list[compiler.CompilationSetting],
-        make_globals_static: bool = False,
+        make_globals_static: bool = True,
         preprocess: bool = False,
     ) -> list[tuple[str, list[compiler.CompilationSetting]]]:
         """Check if a code passes all the 'interestingness'-checks.
@@ -273,3 +275,20 @@ class Checker:
             for marker, settings in interesting_markers_to_settings.items()
             if self.is_marker_in_callchain_from_main(code, marker, bad_setting)
         ]
+
+    def is_interesting_case(
+        self,
+        case_: utils.Case,
+        sanitize: bool = True,
+        make_globals_static: bool = True,
+        preprocess: bool = False,
+    ) -> bool:
+        return self.is_interesting_marker(
+            case_.code,
+            case_.marker,
+            case_.bad_setting,
+            case_.good_settings,
+            sanitize=sanitize,
+            make_globals_static=make_globals_static,
+            preprocess=preprocess,
+        )

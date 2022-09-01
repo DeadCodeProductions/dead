@@ -28,7 +28,6 @@ from ccbuilder import (
     CompilerProject,
 )
 
-import checker
 import database
 import parsers
 import preprocessing
@@ -44,8 +43,8 @@ from dead.utils import (
 from dead.generator import generate_interesting_cases
 from dead.bisector import bisect_case
 from dead.reducer import reduce_case
-import dead.checker as checker_new
-import dead.diagnose import diagnose_case
+from dead.checker import Checker
+from dead.diagnose import diagnose_case
 
 from diopter import compiler
 from diopter import bisector
@@ -189,7 +188,7 @@ def _run() -> None:
                 ):
                     try:
                         # XXX: we don't really need to pass the checker here
-                        worked = reduce_case(case_new, rdcr, chkr_new)
+                        worked = reduce_case(case_new, rdcr, chkr)
                     except BuildException as e:
                         print(f"BuildException: {e}")
                         continue
@@ -286,7 +285,7 @@ def _rereduce() -> None:
     if reduce_case(
         case_new,
         rdcr,
-        chkr_new,
+        chkr,
         force=True,
         preprocess=False,
     ):
@@ -318,7 +317,7 @@ def _report() -> None:
     if not case.reduced_code:
         print("Case is not reduced. Starting reduction...", file=sys.stderr)
         case_new = old_case_to_new_case(case, bldr)
-        if reduce_case(case_new, rdcr, chkr_new):
+        if reduce_case(case_new, rdcr, chkr):
             case.reduced_code = case_new.reduced_code
             ddb.update_case(args.case_id, case)
         else:
@@ -338,7 +337,10 @@ def _report() -> None:
     cpy = copy.deepcopy(case)
     cpy.code = cast(str, case.reduced_code)
     print("Normal interestingness test...", end="", file=sys.stderr, flush=True)
-    if not chkr.is_interesting(cpy, preprocess=False):
+    case_new = old_case_to_new_case(case, bldr)
+    if not chkr.is_interesting_case(
+        case_new, preprocess=False, make_globals_static=False
+    ):
         print("\nCase is not interesting! Aborting...", file=sys.stderr)
         exit(1)
     else:
@@ -350,7 +352,8 @@ def _report() -> None:
         bad_repo.pull()
     print("Interestingness test against main...", end="", file=sys.stderr)
     cpy.bad_setting.rev = bad_repo.rev_to_commit(f"{bad_repo.main_branch}")
-    if not chkr.is_interesting(cpy, preprocess=False):
+    case_new = old_case_to_new_case(case, bldr)
+    if not chkr.is_interesting_case(case_new, preprocess=False, make_globals_static=False):
         print(
             "\nCase is not interesting on main! Might be fixed. Stopping...",
             file=sys.stderr,
@@ -636,7 +639,8 @@ def _check_reduced() -> None:
     else:
         print("No bisection found! Please bisect the case first.")
 
-    nice_print("Check", ok_fail(chkr.is_interesting(case, preprocess=False)))
+    case_new = old_case_to_new_case(case, bldr)
+    nice_print("Check", ok_fail(chkr.is_interesting_case(case_new, preprocess=False)))
     # Useful when working with watch -n 0 to see that something happened
     print(random.randint(0, 1000))
 
@@ -753,7 +757,8 @@ def _set() -> None:
         with open(args.var, "r") as f:
             new_code = f.read()
         case.code = new_code
-        if chkr.is_interesting(case):
+        case_new = old_case_to_new_case(case, bldr)
+        if chkr.is_interesting_case(case_new):
             ddb.update_case(case_id, case)
         else:
             logging.critical(
@@ -773,7 +778,8 @@ def _set() -> None:
             rcode = f.read()
         old_code = case.code
         case.code = rcode
-        if chkr.is_interesting(case):
+        case_new = old_case_to_new_case(case, bldr)
+        if chkr.is_interesting_case(case_new):
             case.code = old_code
             case.reduced_code = rcode
             ddb.update_case(case_id, case)
@@ -815,7 +821,8 @@ def _set() -> None:
         rev = repo.rev_to_commit(args.var)
 
         case.bad_setting.rev = rev
-        if not chkr.is_interesting(case):
+        case_new = old_case_to_new_case(case, bldr)
+        if not chkr.is_interesting_case(case_new):
             ddb.record_reported_case(case_id, mcode, link, rev)
             print("Fixed")
         else:
@@ -838,7 +845,8 @@ def _set() -> None:
             new_mcode = f.read()
         old_bisection = case.bisection
         case.code = new_mcode
-        if chkr.is_interesting(case):
+        case_new = old_case_to_new_case(case, bldr)
+        if chkr.is_interesting_case(case_new):
             print("Checking bisection...")
             case_new = old_case_to_new_case(case, bldr)
             if not bisect_case(case_new, bsctr, bldr, force=True):
@@ -898,7 +906,7 @@ def _reduce() -> None:
             case = pre_case
         start_time = time.perf_counter()
         case_new = old_case_to_new_case(case, bldr)
-        if reduce_case(case_new, rdcr, chkr_new, force=args.force):
+        if reduce_case(case_new, rdcr, chkr, force=args.force):
             case.reduced_code = case_new.reduced_code
             ddb.update_case(case_id, case)
             reducer_time = time.perf_counter() - start_time
@@ -1203,8 +1211,7 @@ if __name__ == "__main__":
         jobs=args.cores,
         logdir=Path(config.logdir),
     )
-    chkr = checker.Checker(config, bldr)
-    chkr_new = checker_new.Checker(
+    chkr = Checker(
         DeadConfig.get_config().llvm,
         DeadConfig.get_config().gcc,
         DeadConfig.get_config().ccc,
