@@ -261,6 +261,7 @@ def _rereduce() -> None:
         rereduce_code = f.read()
 
     case = ddb.get_case_from_id_or_die(args.case_id)
+    case.code = rereduce_code
     print(f"Re-reducing code with respect to Case {args.case_id}", file=sys.stderr)
     if reduce_case(
         case,
