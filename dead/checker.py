@@ -69,7 +69,7 @@ class Checker:
         code: str,
         marker: str,
         bad_setting: compiler.CompilationSetting,
-        good_settings: list[compiler.CompilationSetting],
+        good_setting: compiler.CompilationSetting,
     ) -> bool:
         """Checks if the marker is eliminated by all good compilers/setting
         and not eliminated by the bad compiler/setting.
@@ -87,12 +87,7 @@ class Checker:
         if marker not in find_alive_markers(code, bad_setting, self.marker_prefix):
             return False
 
-        # This is too restrictive, e.g., if we are testing {O3} vs {O2, O3} then
-        # we miss cases where O2 could eliminate
-        return all(
-            marker not in find_alive_markers(code, good_setting, self.marker_prefix)
-            for good_setting in good_settings
-        )
+        return marker not in find_alive_markers(code, good_setting, self.marker_prefix)
 
     def is_marker_in_callchain_from_main(
         self,
@@ -210,7 +205,7 @@ class Checker:
         if make_globals_static:
             code = self.get_code_with_static_globals(code, bad_setting)
 
-        if not self.is_interesting_wrt_marker(code, marker, bad_setting, [good_setting]):
+        if not self.is_interesting_wrt_marker(code, marker, bad_setting, good_setting):
             return False
 
         if sanitize:
