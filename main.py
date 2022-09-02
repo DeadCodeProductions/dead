@@ -1135,11 +1135,9 @@ if __name__ == "__main__":
         llvm_repo,
         system_gcc,
         gcc_repo,
-        compiler.ClangTool.init_with_paths_from_llvm(
-            Path("/home/theo/dead/callchain_checker/build/bin/ccc"), system_llvm
-        ),
-        "ccomp",
-        "/usr/include/csmith-2.3.0/",
+        compiler.ClangTool.init_with_paths_from_llvm(config.ccc, system_llvm),
+        config.ccomp,
+        config.csmith.include_path,
     )
 
     patchdb = PatchDB(Path(config.patchdb))
