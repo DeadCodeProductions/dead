@@ -36,8 +36,6 @@ from dead.utils import (
     RegressionCase,
     repo_from_setting,
     old_scenario_to_new_scenario,
-    get_verbose_compiler_info,
-    get_llvm_IR,
     setting_report_str,
 )
 import dead.database as database
@@ -494,15 +492,15 @@ def _report() -> None:
         print()
         print("----- Build information -----")
         print(f"----- {bad_setting_tag}")
-        print(get_verbose_compiler_info(bad_setting).split("lto-wrapper\n")[-1])
+        print(bad_setting.compiler.get_verbose_info().split("lto-wrapper\n")[-1])
         print(f"\n----- {good_setting_tag}")
-        print(get_verbose_compiler_info(good_setting).split("lto-wrapper\n")[-1])
+        print(good_setting.compiler.get_verbose_info().split("lto-wrapper\n")[-1])
 
     else:
 
         print("Target: `x86_64-unknown-linux-gnu`")
-        ir_bad = get_llvm_IR(source, case.bad_setting)
-        ir_good = get_llvm_IR(source, good_setting)
+        ir_bad = case.bad_setting.get_llvm_ir_from_code(source)
+        ir_good = good_setting.get_llvm_ir_from_code(source)
 
         asm_bad = case.bad_setting.get_asm_from_code(source)
         asm_good = good_setting.get_asm_from_code(source)
@@ -527,7 +525,7 @@ def _report() -> None:
         if author:
             print(f"Committed by: @{author}")
         print("\n------------------------------------------------\n")
-        bisection_ir = get_llvm_IR(source, bisection_setting)
+        bisection_ir = bisection_setting.get_llvm_ir_from_code(source)
         print(
             to_cody_str(
                 f"{setting_report_str(bisection_setting)} -emit-llvm -S -o /dev/stdout case.c",
@@ -548,7 +546,7 @@ def _report() -> None:
                 is_gcc,
             )
         )
-        prebisection_ir = get_llvm_IR(source, prebisection_setting)
+        prebisection_ir = prebisection_setting.get_llvm_ir_from_code(source)
         print()
         print(prep_IR(prebisection_ir))
 

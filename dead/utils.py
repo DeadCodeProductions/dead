@@ -327,39 +327,5 @@ def repo_from_setting(setting: compiler.CompilationSetting) -> Repo:
         case _:
             assert False, f"Unknown compiler project {setting.compiler.project}"
 
-
-def get_verbose_compiler_info(compiler_setting: compiler.CompilationSetting) -> str:
-    return (
-        subprocess.run(
-            f"{compiler_setting.compiler.exe} -v".split(),
-            stderr=subprocess.STDOUT,
-            stdout=subprocess.PIPE,
-        )
-        .stdout.decode("utf-8")
-        .strip()
-    )
-
-
-# TODO: move this to diopter.compiler
-def get_llvm_IR(code: str, compiler_setting: compiler.CompilationSetting) -> str:
-    if compiler_setting.compiler.project != ccbuilder.CompilerProject.LLVM:
-        raise CompileError("Requesting LLVM IR from non-clang compiler!")
-
-    with CompileContext(code) as context_res:
-        code_file, asm_file = context_res
-
-        cmd = f"{compiler_setting.compiler.exe} -emit-llvm -S {code_file} -o{asm_file} -O{compiler_setting.opt_level.name}".split(
-            " "
-        )
-        cmd += compiler_setting.flags_str()
-        try:
-            run_cmd(cmd)
-        except subprocess.CalledProcessError:
-            raise CompileError()
-
-        with open(asm_file, "r") as f:
-            return f.read()
-
-
 def setting_report_str(setting: compiler.CompilationSetting) -> str:
     return f"{setting.compiler.project.name}-{setting.compiler.revision} -O{setting.opt_level.name}"
