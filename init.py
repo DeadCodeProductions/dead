@@ -12,6 +12,8 @@ from dead_instrumenter.utils import Binary, find_binary
 
 import utils
 
+from diopter.utils import run_cmd
+
 
 def main() -> None:
     print(
@@ -51,7 +53,7 @@ def main() -> None:
     # Git clone repo
     print("Cloning gcc to ./gcc ...")
     if not Path("./gcc").exists():
-        utils.run_cmd("git clone git://gcc.gnu.org/git/gcc.git")
+        run_cmd("git clone git://gcc.gnu.org/git/gcc.git")
     gcc["repo"] = "./gcc"
 
     if shutil.which("gcc"):
@@ -95,7 +97,7 @@ def main() -> None:
     # Git clone repo
     print("Cloning llvm to ./llvm-project ...")
     if not Path("./llvm-project").exists():
-        utils.run_cmd("git clone https://github.com/llvm/llvm-project")
+        run_cmd("git clone https://github.com/llvm/llvm-project")
     llvm["repo"] = "./llvm-project"
 
     if shutil.which("clang"):
@@ -146,7 +148,7 @@ def main() -> None:
     csmith["min_size"] = 10000
     if shutil.which("csmith"):
         csmith["executable"] = "csmith"
-        res = utils.run_cmd("csmith --version")
+        res = run_cmd("csmith --version")
         # $ csmith --version csmith 2.3.0
         # Git version: 30dccd7
         version = res.split("\n")[0].split()[1]
@@ -167,8 +169,8 @@ def main() -> None:
 
     print("Compiling callchain checker (ccc)...")
     os.makedirs("./callchain_checker/build", exist_ok=True)
-    utils.run_cmd("cmake ..", working_dir=Path("./callchain_checker/build/"))
-    utils.run_cmd("make -j", working_dir=Path("./callchain_checker/build/"))
+    run_cmd("cmake ..", working_dir=Path("./callchain_checker/build/"))
+    run_cmd("make -j", working_dir=Path("./callchain_checker/build/"))
     config["ccc"] = "./callchain_checker/build/bin/ccc"
 
     # ====== Rest ======

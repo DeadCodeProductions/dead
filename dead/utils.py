@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import copy
 import functools
 import json
@@ -201,82 +202,88 @@ class Scenario:
         self.attacker_settings = attacker_settings
 
 
-def old_compiler_setting_to_new_compilation_setting(
-    compiler_setting_old: old_utils.CompilerSetting, builder: Builder
-) -> compiler.CompilationSetting:
-    project = compiler_setting_old.compiler_project
-    exe = compiler.CompilerExe(
-        project,
-        builder.build(project, compiler_setting_old.rev, True),
-        compiler_setting_old.repo.rev_to_commit(compiler_setting_old.rev),
-    )
-    match compiler_setting_old.opt_level:
-        case "0":
-            opt_level = compiler.OptLevel.O0
-        case "1":
-            opt_level = compiler.OptLevel.O1
-        case "2":
-            opt_level = compiler.OptLevel.O2
-        case "3":
-            opt_level = compiler.OptLevel.O3
-        case "s":
-            opt_level = compiler.OptLevel.Os
-        case "z":
-            opt_level = compiler.OptLevel.Oz
-        case _:
-            assert (
-                False
-            ), f"Unknown optimization level: {compiler_setting_old.opt_level}"
-    return compiler.CompilationSetting(
-        exe, opt_level, [], [], [DeadConfig.get_config().csmith_include_path]
-    )
-
-
-def compilation_setting_to_old_compiler_setting(
-    setting: compiler.CompilationSetting, gcc_repo: Repo, llvm_repo: Repo
-) -> old_utils.CompilerSetting:
-
-    repo = gcc_repo if setting.compiler.project == CompilerProject.GCC else llvm_repo
-
-    match setting.opt_level:
-        case compiler.OptLevel.O0:
-            opt_level = "0"
-        case compiler.OptLevel.O1:
-            opt_level = "1"
-        case compiler.OptLevel.O2:
-            opt_level = "2"
-        case compiler.OptLevel.O3:
-            opt_level = "3"
-        case compiler.OptLevel.Os:
-            opt_level = "s"
-        case compiler.OptLevel.Oz:
-            opt_level = "z"
-        case _:
-            assert False, f"Unknown optimization level: {setting.opt_level}"
-
-    return old_utils.CompilerSetting(
-        setting.compiler.project,
-        repo,
-        setting.compiler.revision,
-        opt_level,
-        [f"-I{inc}" for inc in setting.include_paths]
-        + [f"-isystem{inc}" for inc in setting.system_include_paths],
-    )
-
-
-def old_scenario_to_new_scenario(
-    scenario_old: old_utils.Scenario, builder: Builder
+def get_scenario(
+    config: old_utils.NestedNamespace, args: argparse.Namespace, builder: Builder
 ) -> Scenario:
-    return Scenario(
-        [
-            old_compiler_setting_to_new_compilation_setting(setting, builder)
-            for setting in scenario_old.target_settings
-        ],
-        [
-            old_compiler_setting_to_new_compilation_setting(setting, builder)
-            for setting in scenario_old.attacker_settings
-        ],
+    """Extract the scenario from the parser and config.
+    This function the following options be part of the parser.
+    args.targets
+    args.targets-default_opt_levels and
+    args.additional_compilers
+    args.additional_compilers_default_opt_levels
+
+    Args:
+        config (NestedNamespace): config
+        args (argparse.Namespace): parsed arguments.
+
+    Returns:
+        Scenario:
+    """
+
+    scenario = Scenario([], [])
+
+    target_settings = get_compilation_settings(
+        config,
+        args.targets,
+        default_opt_levels=args.targets_default_opt_levels,
+        builder=builder,
     )
+    scenario.target_settings = target_settings
+
+    additional_compilers = get_compilation_settings(
+        config,
+        args.additional_compilers,
+        default_opt_levels=args.additional_compilers_default_opt_levels,
+        builder=builder,
+    )
+    scenario.attacker_settings = additional_compilers
+
+    assert scenario.attacker_settings, "No attacker compilers specified"
+    assert scenario.target_settings, "No target compilers specified"
+
+    return scenario
+
+
+def get_compilation_settings(
+    config: old_utils.NestedNamespace,
+    args: list[str],
+    default_opt_levels: list[str],
+    builder: Builder,
+) -> list[compiler.CompilationSetting]:
+    settings: list[compiler.CompilationSetting] = []
+
+    possible_opt_levels = ["1", "2", "3", "s", "z"]
+
+    pos = 0
+    while len(args[pos:]) > 1:
+        project, repo = ccbuilder.get_compiler_info(args[pos], Path(config.repodir))  # type: ignore
+        rev = repo.rev_to_commit(args[pos + 1])
+        pos += 2
+
+        opt_levels: set[compiler.OptLevel] = set(
+            compiler.OptLevel.from_str(ol) for ol in default_opt_levels
+        )
+        while pos < len(args) and args[pos] in possible_opt_levels:
+            opt_levels.add(compiler.OptLevel.from_str(args[pos]))
+            pos += 1
+
+        settings.extend(
+            compiler.CompilationSetting(
+                compiler.CompilerExe(project, builder.build(project, rev, True), rev),
+                lvl,
+                [],
+                [],
+                [DeadConfig.get_config().csmith_include_path],
+            )
+            for lvl in opt_levels
+        )
+
+    if len(args[pos:]) != 0:
+        raise Exception(
+            f"Couldn't completely parse compiler settings. Parsed {args[:pos]}; missed {args[pos:]}"
+        )
+
+    return settings
 
 
 @dataclass
@@ -326,6 +333,7 @@ def repo_from_setting(setting: compiler.CompilationSetting) -> Repo:
             return DeadConfig.get_config().llvm_repo
         case _:
             assert False, f"Unknown compiler project {setting.compiler.project}"
+
 
 def setting_report_str(setting: compiler.CompilationSetting) -> str:
     return f"{setting.compiler.project.name}-{setting.compiler.revision} -O{setting.opt_level.name}"

@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 import urllib.parse
+from collections import defaultdict
 from multiprocessing import Pool
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
@@ -32,11 +33,12 @@ import parsers
 import utils
 
 from dead.utils import (
+    Scenario,
     DeadConfig,
     RegressionCase,
     repo_from_setting,
-    old_scenario_to_new_scenario,
     setting_report_str,
+    get_scenario,
 )
 import dead.database as database
 from dead.generator import generate_interesting_cases
@@ -104,34 +106,34 @@ def get_all_bisections(ddb: database.CaseDatabase) -> list[str]:
     return [r[0] for r in res]
 
 
-def update_trunk(last_update_time: float, scenario: utils.Scenario) -> float:
+def update_trunk(last_update_time: float, scenario: Scenario) -> float:
     if (time.time() - last_update_time) / 3600 > args.update_trunk_after_X_hours:
 
         logging.info("Updating repositories...")
 
         last_update_time = time.time()
 
-        known: Dict[str, list[int]] = dict()
+        known: Dict[str, list[int]] = defaultdict(list)
         for i, s in enumerate(scenario.target_settings):
-            cname = s.compiler_project.name
-            if cname not in known:
-                known[cname] = []
+            cname = s.compiler.project.name
             known[cname].append(i)
 
         for cname, l in known.items():
-            repo = scenario.target_settings[l[0]].repo
+            repo = repo_from_setting(scenario.target_settings[l[0]])
             old_trunk_commit = repo.rev_to_commit("trunk")
             repo.pull()
             new_trunk_commit = repo.rev_to_commit("trunk")
 
             for i in l:
-                if scenario.target_settings[i].rev == old_trunk_commit:
-                    scenario.target_settings[i].rev = new_trunk_commit
+                if scenario.target_settings[i].compiler.revision == old_trunk_commit:
+                    scenario.target_settings[i] = scenario.target_settings[
+                        i
+                    ].with_revision(new_trunk_commit, bldr)
     return last_update_time
 
 
 def _run() -> None:
-    scenario = utils.get_scenario(config, args)
+    scenario = get_scenario(config, args, bldr)
 
     counter = 0
     output_directory = (
@@ -160,9 +162,7 @@ def _run() -> None:
         if args.update_trunk_after_X_hours is not None:
             last_update_time = update_trunk(last_update_time, scenario)
 
-        for case_ in generate_interesting_cases(
-            old_scenario_to_new_scenario(scenario, bldr), args.cores, 1024
-        ):
+        for case_ in generate_interesting_cases(scenario, args.cores, 1024):
             print("FOUND A CASE")
             if args.bisector:
                 try:
