@@ -1,6 +1,6 @@
 from typing import Optional
 
-from diopter.bisector import Bisector, BisectionCallback
+from diopter.bisector import Bisector, BisectionCallback, BisectionException
 from diopter.compiler import CompilationSetting, CompilerExe
 
 import ccbuilder
@@ -44,13 +44,12 @@ class DeadBisectionCallback(BisectionCallback):
         # try:
         return self.marker in find_alive_markers(
             self.code,
-            get_setting_with_commit(commit, self.setting, self.bldr),
+            self.setting.with_revision(commit, self.bldr),
             "DCEMarker",
         )
         # except Exception as e:
         # logging.warning(f"Test failed with: '{e}'. Continuing...")
         return None
-
 
 def bisect_case(
     case_: RegressionCase,
@@ -67,7 +66,9 @@ def bisect_case(
         case_.marker,
         builder,
     )
-    assert callback.check(case_.bad_setting.compiler.revision)
+
+    if not callback.check(case_.bad_setting.compiler.revision):
+        raise BisectionException("The case marker is not interesting")
 
     # TODO: pass number of jobs and logfile
     bisection_commit = bisector.bisect(

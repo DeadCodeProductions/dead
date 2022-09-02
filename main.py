@@ -285,7 +285,18 @@ def _report() -> None:
 
     if not case.bisection:
         print("Case is not bisected. Starting bisection...", file=sys.stderr)
-        worked = bisect_case(case, bsctr, bldr)
+        try:
+            worked = bisect_case(case, bsctr, bldr)
+        except bisector.BisectionException as e:
+            print(f"BisectionException: '{e}'", file=sys.stderr)
+            worked = False
+        except AssertionError as e:
+            print(f"AssertionError: '{e}'", file=sys.stderr)
+            worked = False
+        except BuildException as e:
+            print(f"BuildException: '{e}'", file=sys.stderr)
+            worked = False
+
         if worked:
             ddb.update_case(args.case_id, case)
         else:
@@ -800,7 +811,19 @@ def _set() -> None:
         case.code = new_mcode
         if chkr.is_interesting_case(case):
             print("Checking bisection...")
-            if not bisect_case(case, bsctr, bldr, force=True):
+            try:
+                worked = bisect_case(case, bsctr, bldr, force=True)
+            except bisector.BisectionException as e:
+                print(f"BisectionException: '{e}'", file=sys.stderr)
+                worked = False
+            except AssertionError as e:
+                print(f"AssertionError: '{e}'", file=sys.stderr)
+                worked = False
+            except BuildException as e:
+                print(f"BuildException: '{e}'", file=sys.stderr)
+                worked = False
+
+            if not worked:
                 logging.critical("Checking bisection failed...")
                 exit(1)
             if case.bisection != old_bisection:
@@ -874,10 +897,24 @@ def _bisect() -> None:
             continue
         else:
             case = pre_case
-        if bisect_case(case, bsctr, bldr, force=args.force):
+
+        try:
+            worked = bisect_case(case, bsctr, bldr, force=args.force)
+        except bisector.BisectionException as e:
+            print(f"BisectionException: '{e}'", file=sys.stderr)
+            worked = False
+        except AssertionError as e:
+            print(f"AssertionError: '{e}'", file=sys.stderr)
+            worked = False
+        except BuildException as e:
+            print(f"BuildException: '{e}'", file=sys.stderr)
+            worked = False
+
+        if worked:
             ddb.update_case(case_id, case)
         else:
             print(f"{case_id} failed...", file=sys.stderr)
+
     print("Done", file=sys.stderr)
 
 
