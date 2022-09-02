@@ -8,24 +8,6 @@ import ccbuilder
 from dead.checker import find_alive_markers
 from dead.utils import RegressionCase, DeadConfig
 
-
-# TODO: move this to diopter.CompilationSetting.with_commit
-def get_setting_with_commit(
-    commit: ccbuilder.Commit, setting: CompilationSetting, bldr: ccbuilder.Builder
-) -> CompilationSetting:
-    return CompilationSetting(
-        CompilerExe(
-            setting.compiler.project,
-            bldr.build(setting.compiler.project, commit, True),
-            commit,
-        ),
-        setting.opt_level,
-        setting.flags,
-        setting.include_paths,
-        setting.system_include_paths,
-    )
-
-
 class DeadBisectionCallback(BisectionCallback):
     # TODO: this should operate directly on a case
     def __init__(
