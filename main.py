@@ -466,8 +466,6 @@ def _report() -> None:
 
     # Compile
     if is_gcc:
-        case.bad_setting.flags.append("-emit-llvm")
-        good_setting.flags.append("-emit-llvm")
         asm_bad = case.bad_setting.get_asm_from_code(source)
         asm_good = good_setting.get_asm_from_code(source)
 
