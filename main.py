@@ -326,7 +326,7 @@ def _report() -> None:
         bad_repo.pull()
     print("Interestingness test against main...", end="", file=sys.stderr)
     cpy.bad_setting = cpy.bad_setting.with_revision(
-        bad_repo.rev_to_commit(f"{bad_repo.main_branch}"), bldr
+        bad_repo.rev_to_commit(bad_repo.main_branch), bldr
     )
     if not chkr.is_interesting_case(cpy, preprocess=False, make_globals_static=False):
         print(
