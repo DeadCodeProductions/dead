@@ -30,6 +30,7 @@ from ccbuilder import (
 
 
 from diopter import compiler
+from diopter.utils import run_cmd
 
 import utils as old_utils
 
@@ -67,54 +68,6 @@ class DeadConfig:
         config = getattr(cls, "config")
         assert type(config) is DeadConfig
         return config
-
-
-def run_cmd(
-    cmd: Union[str, list[str]],
-    working_dir: Optional[Path] = None,
-    additional_env: dict[str, str] = {},
-    **kwargs: Any,  # https://github.com/python/mypy/issues/8772
-) -> str:
-
-    if working_dir is None:
-        working_dir = Path(os.getcwd())
-    env = os.environ.copy()
-    env.update(additional_env)
-
-    if isinstance(cmd, str):
-        cmd = cmd.strip().split(" ")
-    output = subprocess.run(
-        cmd, cwd=str(working_dir), check=True, env=env, capture_output=True, **kwargs
-    )
-
-    res: str = output.stdout.decode("utf-8").strip()
-    return res
-
-
-def run_cmd_to_logfile(
-    cmd: Union[str, list[str]],
-    log_file: Optional[TextIO] = None,
-    working_dir: Optional[Path] = None,
-    additional_env: dict[str, str] = {},
-) -> None:
-
-    if working_dir is None:
-        working_dir = Path(os.getcwd())
-    env = os.environ.copy()
-    env.update(additional_env)
-
-    if isinstance(cmd, str):
-        cmd = cmd.strip().split(" ")
-
-    subprocess.run(
-        cmd,
-        cwd=working_dir,
-        check=True,
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
-        env=env,
-        capture_output=False,
-    )
 
 
 def find_include_paths(clang: str, file: str, flags: str) -> list[str]:
