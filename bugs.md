@@ -28,9 +28,9 @@
 - [100188](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100188)
 - [100191](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100191)
 - [100220](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100220)
-- [100221](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100221)
+- ~~[100221](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100221)~~ Fixed
 - [100314](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100314)
-- [100315](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100315)
+- ~~[100315](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100315)~~ Invalid
 - ~~[100359](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100359)~~ Fixed
 - [102540](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102540)
 - ~~[102546](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102546)~~ Fixed
@@ -40,7 +40,7 @@
 - [102705](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102705)
 - [102879](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102879)
 - ~~[102880](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102880)~~ Fixed
-- ~~[102892](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102892)~~ Fixed
+- ~~[102892](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102892)~~ ~~Fixed~~ Reopened
 - ~~[102895](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102895)~~ Duplicate
 - ~~[103280](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103280)~~ Duplicate
 - [103281](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103281)
@@ -91,7 +91,7 @@
 - [51688](https://github.com/llvm/llvm-project/issues/51688)
 - ~~[52525](https://github.com/llvm/llvm-project/issues/52525)~~ Fixed
 - ~~[52965](https://github.com/llvm/llvm-project/issues/52965)~~ Fixed
-- [53130](https://github.com/llvm/llvm-project/issues/53130)
+- ~~[53130](https://github.com/llvm/llvm-project/issues/53130)~~ Fixed
 - ~~[53131](https://github.com/llvm/llvm-project/issues/53131)~~ Fixed
 - ~~[53130](https://github.com/llvm/llvm-project/issues/53130)~~ Fixed
 - ~~[53131](https://github.com/llvm/llvm-project/issues/53131)~~ Fixed
