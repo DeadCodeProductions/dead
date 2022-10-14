@@ -32,7 +32,7 @@
 - [100314](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100314)
 - ~~[100315](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100315)~~ Invalid
 - ~~[100359](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100359)~~ Fixed
-- [102540](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102540)
+- ~~[102540](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102540)~~ Fixed
 - ~~[102546](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102546)~~ Fixed
 - ~~[102648](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102648)~~ Fixed
 - [102650](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102650)
