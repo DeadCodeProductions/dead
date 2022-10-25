@@ -5,33 +5,27 @@ from diopter.compiler import CompilationSetting, CompilerExe
 
 import ccbuilder
 
-from dead.checker import find_alive_markers
 from dead.utils import RegressionCase, DeadConfig
+
 
 class DeadBisectionCallback(BisectionCallback):
     # TODO: this should operate directly on a case
     def __init__(
         self,
-        code: str,
-        setting: CompilationSetting,
-        marker: str,
+        case: RegressionCase,
         bldr: ccbuilder.Builder,
     ):
-        self.code = code
-        self.setting = setting
-        self.marker = marker
+        self.case = case
         self.bldr = bldr
 
     def check(self, commit: ccbuilder.Commit) -> Optional[bool]:
-        # try:
-        return self.marker in find_alive_markers(
-            self.code,
-            self.setting.with_revision(commit, self.bldr),
-            "DCEMarker",
-        )
-        # except Exception as e:
-        # logging.warning(f"Test failed with: '{e}'. Continuing...")
-        return None
+        try:
+            return self.case.marker in self.case.program.find_alive_markers(
+                self.case.bad_setting.with_revision(commit, self.bldr)
+            )
+        except Exception:
+            return None
+
 
 def bisect_case(
     case_: RegressionCase,
@@ -43,9 +37,7 @@ def bisect_case(
         return True
 
     callback = DeadBisectionCallback(
-        case_.code,
-        case_.bad_setting,
-        case_.marker,
+        case_,
         builder,
     )
 

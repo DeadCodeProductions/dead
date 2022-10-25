@@ -1,63 +1,57 @@
+from dataclasses import replace
+
+from diopter.sanitizer import Sanitizer
 from diopter.compiler import CompilationSetting
 from diopter.reducer import ReductionCallback, Reducer
-from diopter.preprocessor import preprocess_csmith_code
+from diopter.preprocessor import preprocess_csmith_program
 
-from dead.checker import Checker
+from dead_instrumenter.instrumenter import InstrumentedProgram
+
+from dead.checker import find_interesting_markers
 from dead.utils import DeadConfig, RegressionCase
 
 
 class DeadReductionCallback(ReductionCallback):
     # TODO: this should operate directly on a case
-    def __init__(
-        self,
-        marker: str,
-        bad_setting: CompilationSetting,
-        good_setting: CompilationSetting,
-        checker: Checker,
-    ):
-        self.marker = marker
-        self.bad_setting = bad_setting
-        self.good_setting = good_setting
-        self.checker = checker
+    def __init__(self, case_: RegressionCase, sanitizer: Sanitizer):
+        self.case = case_
+        self.sanitizer = sanitizer
 
     def test(self, code: str) -> bool:
         # TODO: check bisection as well
-        return self.checker.is_interesting_marker(
-            code,
-            self.marker,
-            self.bad_setting,
-            self.good_setting,
-            preprocess=False,
-            make_globals_static=True,
+        # TODO: globalize
+
+        program = replace(self.case.program, code=code)
+
+        if not self.sanitizer.sanitize(program):
+            return False
+
+        return self.case.marker in find_interesting_markers(
+            program, self.case.bad_setting, self.case.good_setting
         )
 
 
 def reduce_case(
     case_: RegressionCase,
     reducer: Reducer,
-    checker: Checker,
+    sanitizer: Sanitizer,
     force: bool = False,
     preprocess: bool = True,
 ) -> bool:
     if case_.reduced_code and not force:
         return True
     if preprocess:
-        pcode = preprocess_csmith_code(
-            case_.code,
-            str(DeadConfig.get_config().gcc.exe),
-            [f"-I{DeadConfig.get_config().csmith_include_path}"],
-        )
-        if not pcode:
+        pprogram = preprocess_csmith_program(case_.program, DeadConfig.get_config().gcc)
+        if not pprogram:
             # XXX: log something here?
             return False
+        code = pprogram.code
     else:
-        pcode = case_.code
-    rcallback = DeadReductionCallback(
-        case_.marker, case_.bad_setting, case_.good_setting, checker
-    )
-    assert rcallback.test(pcode)
+        code = case_.program.code
+    rcallback = DeadReductionCallback(case_, sanitizer)
+    assert rcallback.test(code)
     # TODO: pass number of jobs and logfile
-    reduced_code = reducer.reduce(pcode, rcallback)
+    reduced_code = reducer.reduce(code, rcallback)
 
     if not reduced_code:
         return False

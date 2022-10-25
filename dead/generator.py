@@ -5,78 +5,60 @@ from concurrent.futures import ProcessPoolExecutor, as_completed, Future, wait
 from pathlib import Path
 
 from dead.utils import Scenario, RegressionCase, DeadConfig
-from dead.checker import Checker
+from dead.checker import find_interesting_markers
 
 from dead_instrumenter.instrumenter import instrument_program
+
 from diopter.generator import CSmithGenerator
-from diopter.compiler import CompilationSetting
+from diopter.compiler import CompilationSetting, SourceProgram
+from diopter.sanitizer import Sanitizer
 
 from tqdm import tqdm  # type:ignore
 
 
-class DeadCodeGenerator(CSmithGenerator):
-    def generate_code(self) -> str:
-        csmith_code = super().generate_code()
-        with tempfile.NamedTemporaryFile(suffix=".c") as tfile:
-            with open(tfile.name, "w") as f:
-                f.write(csmith_code)
-            instrument_program(
-                Path(tfile.name),
-                flags=[f"-I{DeadConfig.get_config().csmith_include_path}"],
-            )
-            with open(tfile.name, "r") as f:
-                return f.read()
-
-
-# TODO: Fold this into the generator, check PR#42
-def extract_interesting_cases_from_generated(
-    checker: Checker, candidate: str, scenario: Scenario
+def extract_regression_cases_from_candidate(
+    candidate: SourceProgram, scenario: Scenario
 ) -> list[RegressionCase]:
+    # XXX: we need a RegressionScenario that is guaranteed to have attackers
+    # and targets with the same opt_level
+
     # TODO:the Checker should check against a scenario, this is suboptimal
+    # TODO: error checking and exception handling
+    icandidate = instrument_program(candidate)
     cases: list[RegressionCase] = []
     for bad_setting in scenario.target_settings:
-        for marker, good_settings in checker.find_interesting_markers(
-            candidate, bad_setting, scenario.attacker_settings
-        ):
-            for good_setting in good_settings:
-                if (
-                    bad_setting.compiler.project == good_setting.compiler.project
-                    and bad_setting.opt_level == good_setting.opt_level
-                ):
-                    cases.append(
-                        RegressionCase(
-                            candidate,
-                            marker,
-                            bad_setting,
-                            good_setting,
-                            None,
-                            None,
-                        )
-                    )
+        for good_setting in scenario.attacker_settings:
+            if bad_setting.opt_level != good_setting.opt_level:
+                continue
+            for marker in find_interesting_markers(
+                icandidate, bad_setting, good_setting
+            ):
+                cases.append(
+                    RegressionCase(icandidate, marker, bad_setting, good_setting)
+                )
     return cases
 
 
-def generate_interesting_cases(
+def generate_regression_cases(
     scenario: Scenario, jobs: int = cpu_count(), chunk: int = 256
 ) -> list[RegressionCase]:
     config = DeadConfig.get_config()
-    checker = Checker(config.llvm, config.gcc, config.ccc, config.ccomp)
-    gnrtr = DeadCodeGenerator()
+    sanitizer = Sanitizer(ccomp=config.ccomp, gcc=config.gcc, clang=config.llvm)
+    gnrtr = CSmithGenerator(sanitizer, include_path=config.csmith_include_path)
     interesting_candidates: list[RegressionCase] = []
 
     while len(interesting_candidates) == 0:
         interesting_candidate_futures = []
         with ProcessPoolExecutor(jobs) as p:
             for candidate in tqdm(
-                gnrtr.generate_code_parallel(chunk, p),
+                gnrtr.generate_programs_parallel(chunk, p),
                 desc="Generating candidates",
                 total=chunk,
                 dynamic_ncols=True,
             ):
                 interesting_candidate_futures.append(
                     p.submit(
-                        extract_interesting_cases_from_generated,
-                        checker,
+                        extract_regression_cases_from_candidate,
                         candidate,
                         scenario,
                     )

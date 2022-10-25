@@ -33,6 +33,8 @@ from ccbuilder import (
 from diopter import compiler
 from diopter.utils import run_cmd
 
+from dead_instrumenter.instrumenter import InstrumentedProgram
+
 import utils as old_utils
 
 
@@ -42,8 +44,7 @@ class DeadConfig:
     llvm_repo: Repo
     gcc: compiler.CompilerExe
     gcc_repo: Repo
-    ccc: compiler.ClangTool
-    ccomp: Optional[str]
+    ccomp: Optional[compiler.CComp]
     csmith_include_path: str
 
     @classmethod
@@ -53,14 +54,13 @@ class DeadConfig:
         llvm_repo: Repo,
         gcc: compiler.CompilerExe,
         gcc_repo: Repo,
-        ccc: compiler.ClangTool,
-        ccomp: Optional[str],
+        ccomp: Optional[compiler.CComp],
         csmith_include_path: str,
     ) -> None:
         setattr(
             cls,
             "config",
-            DeadConfig(llvm, llvm_repo, gcc, gcc_repo, ccc, ccomp, csmith_include_path),
+            DeadConfig(llvm, llvm_repo, gcc, gcc_repo, ccomp, csmith_include_path),
         )
 
     @classmethod
@@ -269,11 +269,11 @@ def get_compilation_settings(
 
         settings.extend(
             compiler.CompilationSetting(
-                compiler.CompilerExe(project, builder.build(project, rev, True), rev),
-                lvl,
-                [],
-                [],
-                [DeadConfig.get_config().csmith_include_path],
+                compiler=compiler.CompilerExe(
+                    project, builder.build(project, rev, True), rev
+                ),
+                opt_level=lvl,
+                system_include_paths=(DeadConfig.get_config().csmith_include_path,),
             )
             for lvl in opt_levels
         )
@@ -288,7 +288,7 @@ def get_compilation_settings(
 
 @dataclass
 class RegressionCase:
-    code: str
+    program: InstrumentedProgram
     marker: str
     bad_setting: compiler.CompilationSetting
     good_setting: compiler.CompilationSetting
@@ -299,7 +299,7 @@ class RegressionCase:
 
     def __init__(
         self,
-        code: str,
+        program: InstrumentedProgram,
         marker: str,
         bad_setting: compiler.CompilationSetting,
         good_setting: compiler.CompilationSetting,
@@ -307,7 +307,7 @@ class RegressionCase:
         bisection: Optional[str] = None,
         timestamp: Optional[float] = None,
     ):
-        self.code = code
+        self.program = program
         self.marker = marker
         self.bad_setting = bad_setting
         self.good_setting = good_setting
