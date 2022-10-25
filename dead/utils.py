@@ -35,8 +35,6 @@ from diopter.utils import run_cmd
 
 from dead_instrumenter.instrumenter import InstrumentedProgram
 
-import utils as old_utils
-
 
 @dataclass
 class DeadConfig:
@@ -202,88 +200,88 @@ class Scenario:
         self.attacker_settings = attacker_settings
 
 
-def get_scenario(
-    config: old_utils.NestedNamespace, args: argparse.Namespace, builder: Builder
-) -> Scenario:
-    """Extract the scenario from the parser and config.
-    This function the following options be part of the parser.
-    args.targets
-    args.targets-default_opt_levels and
-    args.additional_compilers
-    args.additional_compilers_default_opt_levels
+# def get_scenario(
+    # config: old_utils.NestedNamespace, args: argparse.Namespace, builder: Builder
+# ) -> Scenario:
+    # """Extract the scenario from the parser and config.
+    # This function the following options be part of the parser.
+    # args.targets
+    # args.targets-default_opt_levels and
+    # args.additional_compilers
+    # args.additional_compilers_default_opt_levels
 
-    Args:
-        config (NestedNamespace): config
-        args (argparse.Namespace): parsed arguments.
+    # Args:
+        # config (NestedNamespace): config
+        # args (argparse.Namespace): parsed arguments.
 
-    Returns:
-        Scenario:
-    """
+    # Returns:
+        # Scenario:
+    # """
 
-    scenario = Scenario([], [])
+    # scenario = Scenario([], [])
 
-    target_settings = get_compilation_settings(
-        config,
-        args.targets,
-        default_opt_levels=args.targets_default_opt_levels,
-        builder=builder,
-    )
-    scenario.target_settings = target_settings
+    # target_settings = get_compilation_settings(
+        # config,
+        # args.targets,
+        # default_opt_levels=args.targets_default_opt_levels,
+        # builder=builder,
+    # )
+    # scenario.target_settings = target_settings
 
-    additional_compilers = get_compilation_settings(
-        config,
-        args.additional_compilers,
-        default_opt_levels=args.additional_compilers_default_opt_levels,
-        builder=builder,
-    )
-    scenario.attacker_settings = additional_compilers
+    # additional_compilers = get_compilation_settings(
+        # config,
+        # args.additional_compilers,
+        # default_opt_levels=args.additional_compilers_default_opt_levels,
+        # builder=builder,
+    # )
+    # scenario.attacker_settings = additional_compilers
 
-    assert scenario.attacker_settings, "No attacker compilers specified"
-    assert scenario.target_settings, "No target compilers specified"
+    # assert scenario.attacker_settings, "No attacker compilers specified"
+    # assert scenario.target_settings, "No target compilers specified"
 
-    return scenario
+    # return scenario
 
 
-def get_compilation_settings(
-    config: old_utils.NestedNamespace,
-    args: list[str],
-    default_opt_levels: list[str],
-    builder: Builder,
-) -> list[compiler.CompilationSetting]:
-    settings: list[compiler.CompilationSetting] = []
+# def get_compilation_settings(
+    # config: old_utils.NestedNamespace,
+    # args: list[str],
+    # default_opt_levels: list[str],
+    # builder: Builder,
+# ) -> list[compiler.CompilationSetting]:
+    # settings: list[compiler.CompilationSetting] = []
 
-    possible_opt_levels = ["1", "2", "3", "s", "z"]
+    # possible_opt_levels = ["1", "2", "3", "s", "z"]
 
-    pos = 0
-    while len(args[pos:]) > 1:
-        project, repo = ccbuilder.get_compiler_info(args[pos], Path(config.repodir))  # type: ignore
-        rev = repo.rev_to_commit(args[pos + 1])
-        pos += 2
+    # pos = 0
+    # while len(args[pos:]) > 1:
+        # project, repo = ccbuilder.get_compiler_info(args[pos], Path(config.repodir))  # type: ignore
+        # rev = repo.rev_to_commit(args[pos + 1])
+        # pos += 2
 
-        opt_levels: set[compiler.OptLevel] = set(
-            compiler.OptLevel.from_str(ol) for ol in default_opt_levels
-        )
-        while pos < len(args) and args[pos] in possible_opt_levels:
-            opt_levels.add(compiler.OptLevel.from_str(args[pos]))
-            pos += 1
+        # opt_levels: set[compiler.OptLevel] = set(
+            # compiler.OptLevel.from_str(ol) for ol in default_opt_levels
+        # )
+        # while pos < len(args) and args[pos] in possible_opt_levels:
+            # opt_levels.add(compiler.OptLevel.from_str(args[pos]))
+            # pos += 1
 
-        settings.extend(
-            compiler.CompilationSetting(
-                compiler=compiler.CompilerExe(
-                    project, builder.build(project, rev, True), rev
-                ),
-                opt_level=lvl,
-                system_include_paths=(DeadConfig.get_config().csmith_include_path,),
-            )
-            for lvl in opt_levels
-        )
+        # settings.extend(
+            # compiler.CompilationSetting(
+                # compiler=compiler.CompilerExe(
+                    # project, builder.build(project, rev, True), rev
+                # ),
+                # opt_level=lvl,
+                # system_include_paths=(DeadConfig.get_config().csmith_include_path,),
+            # )
+            # for lvl in opt_levels
+        # )
 
-    if len(args[pos:]) != 0:
-        raise Exception(
-            f"Couldn't completely parse compiler settings. Parsed {args[:pos]}; missed {args[pos:]}"
-        )
+    # if len(args[pos:]) != 0:
+        # raise Exception(
+            # f"Couldn't completely parse compiler settings. Parsed {args[:pos]}; missed {args[pos:]}"
+        # )
 
-    return settings
+    # return settings
 
 
 @dataclass
@@ -315,14 +313,14 @@ class RegressionCase:
         self.bisection = bisection
         self.timestamp = timestamp if timestamp else time.time()
 
-    def to_file(self, file: Path) -> None:
-        print("RegressionCase.to_file: NYI")
-        exit(1)
+    # def to_file(self, file: Path) -> None:
+        # print("RegressionCase.to_file: NYI")
+        # exit(1)
 
-    @staticmethod
-    def from_file(config: old_utils.NestedNamespace, file: Path) -> RegressionCase:
-        print("RegressionCase.from_file: NYI")
-        exit(1)
+    # @staticmethod
+    # def from_file(config: old_utils.NestedNamespace, file: Path) -> RegressionCase:
+        # print("RegressionCase.from_file: NYI")
+        # exit(1)
 
 
 def repo_from_setting(setting: compiler.CompilationSetting) -> Repo:
