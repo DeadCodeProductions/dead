@@ -1,4 +1,4 @@
-on: [ push, pull_request ]
+on: [ push ]
 name: Lint Python and Format
 jobs:
   mypy:
