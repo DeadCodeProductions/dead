@@ -35,7 +35,7 @@
 - ~~[102540](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102540)~~ Fixed
 - ~~[102546](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102546)~~ Fixed
 - ~~[102648](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102648)~~ Fixed
-- [102650](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102650)
+- ~~[102650](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102650)~~ Fixed
 - ~~[102703](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102703)~~ Fixed
 - [102705](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102705)
 - [102879](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=102879)
