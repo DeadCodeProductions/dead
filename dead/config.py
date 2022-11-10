@@ -81,10 +81,13 @@ class DeadConfig:
 def handle_field(
     stored_value: str, field: Field[Any]
 ) -> CompilerExe | Repo | Optional[CComp] | Path:
+    print(field.type)
+    print(type(field.type))
+    assert isinstance(field.type, str)
     match field.type:
-        case t if t is CompilerExe:
+        case "CompilerExe":
             return CompilerExe.from_path(Path(stored_value))
-        case t if t is Repo:
+        case "Repo":
             match stored_value.split(","):
                 case ("llvm", p):
                     return Repo.llvm_repo(p)
@@ -96,7 +99,7 @@ def handle_field(
                         "it should be (llvm|gcc, path_to_repo). Exiting..."
                     )
                     exit(1)
-        case t if t is Path:
+        case "Path":
             return Path(stored_value)
         case t if t is Optional[CComp]:
             if stored_value != "None":
@@ -105,7 +108,7 @@ def handle_field(
         case _:
             print(
                 f"config: Unknown field {field.name} with "
-                "unknown type: {field.type}. Exiting..."
+                f"unknown type: {field.type}. Exiting..."
             )
             exit(1)
     # Make mypy happy
@@ -128,7 +131,10 @@ def init_config_from_file(json_file: Path) -> None:
             )
             exit(1)
         loaded_fields[field.name] = handle_field(stored_config[field.name], field)
-        assert loaded_fields[field.name] is field.type  # type: ignore
+        print(type(loaded_fields[field.name]).__name__)
+        print(field.type)
+        #TODO: write a unit test for this
+        assert type(loaded_fields[field.name]).__name__ == field.type  # type: ignore
     DeadConfig.init(**loaded_fields)  # type: ignore
 
 
