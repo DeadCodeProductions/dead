@@ -1,3 +1,5 @@
+# type:ignore
+
 from pathlib import Path
 
 from diopter.compiler import CompilerExe, CComp, CompilationSetting, OptLevel

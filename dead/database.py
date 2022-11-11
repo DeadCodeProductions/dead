@@ -1,3 +1,4 @@
+# type:ignore
 import hashlib
 import os
 import sqlite3
