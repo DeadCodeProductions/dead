@@ -27,7 +27,7 @@ RUN rm -r yay/
 # These need compilation
 RUN yay -S --noconfirm --noprogressbar csmith\
                                         creduce-git\
-                                        compcert-git
+                                        compcert
 
 # These don't
 RUN yay -S --noconfirm --noprogressbar python\
