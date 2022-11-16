@@ -58,6 +58,7 @@
             "llvmorg-4.0.0"
         ]
     },
+    "repodir": "/persistent",
     "csmith": {
         "max_size": 50000,
         "min_size": 10000,

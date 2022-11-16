@@ -14,7 +14,8 @@ docker run -it \
     -v $(realpath ./patches/):/patches \
     deaddocker \
     sudo su -c "cp /patches/patchdb.json /persistent/patchdb.json &&\
-                mkdir /persistent/logs && mkdir /persistent/compiler_cache &&\
+                (if [[ ! -d /persistent/logs ]]; then mkdir /persistent/logs; fi) &&\
+                (if [[ ! -d /persistent/compiler_cache ]]; then mkdir /persistent/compiler_cache; fi) &&\
                 chown dead:dead -R /persistent"
 docker run -it \
     -v deadpersistent:/persistent\
@@ -30,9 +31,9 @@ docker run -it \
 docker run -it \
     -v deadpersistent:/persistent\
     deaddocker \
-    sh -c "cd /persistent && git clone git://gcc.gnu.org/git/gcc.git"
+    sh -c "cd /persistent && (if [[ ! -d gcc ]]; then git clone git://gcc.gnu.org/git/gcc.git; fi)"
 
 docker run -it \
     -v deadpersistent:/persistent\
     deaddocker \
-    sh -c "cd /persistent && git clone https://github.com/llvm/llvm-project"
+    sh -c "cd /persistent && (if [[ ! -d llvm-project ]]; then git clone https://github.com/llvm/llvm-project; fi)"
