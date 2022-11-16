@@ -57,6 +57,9 @@ RUN python3 -c 'from pathlib import Path; from dead_instrumenter import utils; u
 
 COPY dockerconfig.json /home/dead/.config/dead/config.json
 
+COPY --chown=dead *.py /home/dead/
 COPY --chown=dead patches/ /home/dead/patches/
 
 COPY --chown=dead ./run_parallel.sh /home/dead/run_parallel.sh
+
+ENV PATH="/home/dead/.local/bin:${PATH}"
