@@ -568,7 +568,7 @@ def main_parser() -> argparse.ArgumentParser:
         "--pull",
         help="Pull the repo to check against upsteam.",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
     )
 
     tofile_parser = subparser.add_parser(
