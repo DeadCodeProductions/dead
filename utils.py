@@ -10,6 +10,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -316,6 +317,16 @@ def get_config_and_parser(
         arg_val = args_parser.__dict__[".".join(path)]
         if arg_val is not None:
             config[path] = arg_val
+
+    # Fix for Issue 17
+    # "Using the --casedb should not fail with 'file not found' but create new file."
+    if args_parser.casedb:
+        casedb_path = Path(args_parser.casedb)
+        if casedb_path.is_dir():
+            print("Error: the specified casedb can not be a directory", file=sys.stderr)
+            exit(1)
+        if not casedb_path.exists():
+            casedb_path.touch()
 
     validate_config(config)
 
