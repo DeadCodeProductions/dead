@@ -992,18 +992,26 @@ def _set() -> None:
             exit(1)
         with open(args.var, "r") as f:
             new_mcode = f.read()
-        old_bisection = case.bisection
         case.code = new_mcode
         if chkr.is_interesting(case):
             print("Checking bisection...")
-            if not bsctr.bisect_case(case, force=True):
+
+            # Test bisection commit
+            cpy = copy.deepcopy(case)
+            cpy.bad_setting.rev = case.bisection
+            bis_res = chkr.is_interesting(cpy, preprocess=False)
+
+            # Test pre bisection commit
+            prev_bis_commit = repo.rev_to_commit(f"{case.bisection}~")
+            cpy = copy.deepcopy(case)
+            cpy.bad_setting.rev = prev_bis_commit
+            prev_bis_res = chkr.is_interesting(cpy, preprocess=False)
+
+            # bis_res should be interesting and prev_bis_res not
+            if not bis_res or prev_bis_res:
                 logging.critical("Checking bisection failed...")
                 exit(1)
-            if case.bisection != old_bisection:
-                logging.critical(
-                    "Bisection of provided massaged code does not match the original bisection!"
-                )
-                exit(1)
+
             ddb.record_reported_case(case_id, new_mcode, link, fixed)
         else:
             logging.critical("The provided massaged code is not interesting!")
