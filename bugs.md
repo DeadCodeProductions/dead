@@ -58,6 +58,8 @@
 - [105833](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105833)
 - [105834](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105834)
 - ~~[105835](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105835)~~ Fixed
+- [107822](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=107822)
+- [107823](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=107823)
 
 
 ### LLVM
