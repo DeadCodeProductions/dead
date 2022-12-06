@@ -1,3 +1,0 @@
-dead-instrumenter==0.1.0
-ccbuilder==0.0.6
-requests>=2.27.1
