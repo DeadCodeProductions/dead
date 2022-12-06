@@ -1,7 +1,0 @@
-./gcc
-./llvm-project
-./logs
-./compiler_cache
-
-./dce_instrumenter/build/
-./callchain_checker/build/
