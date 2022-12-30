@@ -1,6 +1,7 @@
 attrs>=21.4.0
 black>=21.12b0,<=22.12.0
-ccbuilder==0.0.5
+ccbuilder==0.0.9
+ccbuilder==0.0.9
 click>=8.0.3
 dead-instrumenter==0.0.3
 importlab>=0.7

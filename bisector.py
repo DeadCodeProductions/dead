@@ -10,14 +10,16 @@ import tarfile
 from pathlib import Path
 from typing import Optional
 
+import ccbuilder
 from ccbuilder import (
-    BuilderWithCache,
+    Builder,
     BuildException,
-    CompilerConfig,
+    CompilerProject,
     PatchDB,
     Repo,
-    get_compiler_config,
+    get_compiler_info,
 )
+from ccbuilder.utils.utils import select_repo
 
 import checker
 import generator
@@ -52,7 +54,7 @@ class Bisector:
     def __init__(
         self,
         config: utils.NestedNamespace,
-        bldr: BuilderWithCache,
+        bldr: Builder,
         chkr: checker.Checker,
     ) -> None:
         self.config = config
@@ -159,8 +161,12 @@ class Bisector:
             None,
         )
 
-        bad_compiler_config = case.bad_setting.compiler_config
-        repo = bad_compiler_config.repo
+        bad_compiler_config = case.bad_setting.compiler_project
+        repo = select_repo(
+            bad_setting.compiler_project,
+            gcc_repo=self.bldr.gcc_repo,
+            llvm_repo=self.bldr.llvm_repo,
+        )
 
         # ===== Get good and bad commits
         bad_commit = case.bad_setting.rev
@@ -169,7 +175,7 @@ class Bisector:
             gs.rev
             for gs in case.good_settings
             if gs.opt_level == case.bad_setting.opt_level
-            and gs.compiler_config.name == bad_compiler_config.name
+            and gs.compiler_project.to_string() == bad_compiler_config.to_string()
         ]
 
         if len(possible_good_commits) == 0:
@@ -311,7 +317,7 @@ class Bisector:
         # check cache
         possible_revs = repo.direct_first_parent_path(good_rev, bad_rev)
         cached_revs = find_cached_revisions(
-            case.bad_setting.compiler_config.name, self.config
+            case.bad_setting.compiler_project.to_string(), self.config
         )
         cached_revs = [r for r in cached_revs if r in possible_revs]
 
@@ -346,7 +352,7 @@ class Bisector:
                 test: bool = self._is_interesting(case, midpoint)
             except utils.CompileError:
                 logging.warning(
-                    f"Failed to compile code with {case.bad_setting.compiler_config.name}-{midpoint}"
+                    f"Failed to compile code with {case.bad_setting.compiler_project.to_string()}-{midpoint}"
                 )
                 failed_to_compile = True
                 continue
@@ -423,13 +429,13 @@ class Bisector:
                 test = self._is_interesting(case, midpoint)
             except BuildException:
                 logging.warning(
-                    f"Could not build {case.bad_setting.compiler_config.name} {midpoint}!"
+                    f"Could not build {case.bad_setting.compiler_project.to_string()} {midpoint}!"
                 )
                 failed_to_build_or_compile = True
                 continue
             except utils.CompileError:
                 logging.warning(
-                    f"Failed to compile code with {case.bad_setting.compiler_config.name}-{midpoint}"
+                    f"Failed to compile code with {case.bad_setting.compiler_project.to_string()}-{midpoint}"
                 )
                 failed_to_build_or_compile = True
                 continue
@@ -453,9 +459,16 @@ class Bisector:
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.bisector_parser())
 
-    patchdb = PatchDB(config.patchdb)
-    bldr = BuilderWithCache(
-        Path(config.cachedir), patchdb, args.cores, logdir=Path(config.logdir)
+    patchdb = PatchDB(Path(config.patchdb))
+    _, llvm_repo = get_compiler_info("llvm", Path(config.repodir))
+    _, gcc_repo = get_compiler_info("gcc", Path(config.repodir))
+    bldr = Builder(
+        Path(config.cachedir),
+        gcc_repo,
+        llvm_repo,
+        patchdb,
+        args.cores,
+        logdir=Path(config.logdir),
     )
     chkr = checker.Checker(config, bldr)
     gnrtr = generator.CSmithCaseGenerator(config, patchdb, args.cores)
@@ -513,7 +526,7 @@ if __name__ == "__main__":
             scenario.attacker_settings = tmp.attacker_settings
 
         gen = gnrtr.parallel_interesting_case_file(
-            config, scenario, bldr.cores, output_dir, start_stop=True
+            config, scenario, bldr.jobs, output_dir, start_stop=True
         )
 
         if args.amount == 0:
