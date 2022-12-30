@@ -12,13 +12,14 @@ from pathlib import Path
 from types import TracebackType
 from typing import Optional
 
+import ccbuilder
 from ccbuilder import (
-    BuilderWithCache,
+    Builder,
     BuildException,
-    CompilerConfig,
+    CompilerProject,
     PatchDB,
+    get_compiler_info,
     Repo,
-    get_compiler_config,
 )
 from dead_instrumenter.instrumenter import annotate_with_static
 
@@ -268,7 +269,7 @@ def sanitize(
 
 
 class Checker:
-    def __init__(self, config: utils.NestedNamespace, bldr: BuilderWithCache):
+    def __init__(self, config: utils.NestedNamespace, bldr: Builder):
         self.config = config
         self.builder = bldr
         return
@@ -493,9 +494,16 @@ def override_good(
 if __name__ == "__main__":
     config, args = utils.get_config_and_parser(parsers.checker_parser())
 
-    patchdb = PatchDB(config.patchdb)
-    bldr = BuilderWithCache(
-        Path(config.cachedir), patchdb, args.cores, logdir=Path(config.logdir)
+    patchdb = PatchDB(Path(config.patchdb))
+    _, llvm_repo = ccbuilder.get_compiler_info("llvm", Path(config.repodir))
+    _, gcc_repo = ccbuilder.get_compiler_info("gcc", Path(config.repodir))
+    bldr = Builder(
+        Path(config.cachedir),
+        gcc_repo,
+        llvm_repo,
+        patchdb,
+        args.cores,
+        logdir=Path(config.logdir),
     )
     chkr = Checker(config, bldr)
 
