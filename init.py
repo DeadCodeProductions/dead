@@ -177,10 +177,7 @@ def main() -> None:
     os.makedirs("logs", exist_ok=True)
     config["logdir"] = "./logs"
 
-    config["cache_group"] = grp.getgrgid(os.getgid()).gr_name
-
     os.makedirs("compiler_cache", exist_ok=True)
-    shutil.chown("compiler_cache", group=config["cache_group"])
     os.chmod("compiler_cache", 0o770 | stat.S_ISGID)
     config["cachedir"] = "./compiler_cache"
 
@@ -201,7 +198,6 @@ def main() -> None:
     config["casedb"] = "./casedb.sqlite3"
 
     Path(config["casedb"]).touch()
-    shutil.chown(config["casedb"], group=config["cache_group"])
     os.chmod(config["casedb"], 0o660)
 
     print("Saving config...")

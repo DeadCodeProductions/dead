@@ -16,6 +16,8 @@ from types import TracebackType
 from typing import Any, Optional
 
 import ccbuilder
+
+from ccbuilder.utils.utils import select_repo
 from ccbuilder import (
     Builder,
     BuildException,
@@ -118,8 +120,10 @@ class Reducer:
         if bisection:
             bad_settings.append(copy(bad_setting))
             bad_settings[-1].rev = bisection
-            repo = ccbuilder.utils.utils.select_repo(
-                bad_setting.compiler_project, self.bldr.gcc_repo, self.bldr.llvm_repo
+            repo = select_repo(
+                bad_setting.compiler_project,
+                llvm_repo=self.bldr.llvm_repo,
+                gcc_repo=self.bldr.gcc_repo,
             )
             good_settings = good_settings + [copy(bad_setting)]
             good_settings[-1].rev = repo.rev_to_commit(f"{bisection}~")
@@ -197,7 +201,6 @@ class Reducer:
                 )
                 build_log_path.touch()
                 # Set permissions of logfile
-                shutil.chown(build_log_path, group=self.config.cache_group)
                 os.chmod(build_log_path, 0o660)
                 logging.info(f"creduce logfile at {build_log_path}")
                 with open(build_log_path, "a") as build_log:

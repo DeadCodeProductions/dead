@@ -69,7 +69,6 @@
     "ccc": "./callchain_checker/build/bin/ccc",
     "patchdb": "/persistent/patchdb.json",
     "logdir": "/persistent/logs",
-    "cache_group": "dead",
     "cachedir": "/persistent/compiler_cache",
     "creduce": "creduce",
     "ccomp": "ccomp",

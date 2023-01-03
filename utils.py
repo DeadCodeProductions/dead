@@ -65,7 +65,6 @@ EXPECTED_ENTRIES = [
     (Executable,("ccomp", ),                "Path to executable or name in PATH for ccomp" ),
     (Path,      ("patchdb", ),              "Path where the patchDB file is"),
     (Path,      ("logdir", ),               "Where build log files should be saved to"),
-    (str,       ("cache_group", ),          "Name of group owning the cache"),
     (Executable,("ccc",),                   "Path to executable or name in PATH for the callchain checker"),
     (Path,      ("casedb", ),               "Path to the database holding the cases."),
 ]
@@ -250,27 +249,8 @@ def import_config(
     cache_path = Path(config.cachedir)
     if not cache_path.exists():
         os.makedirs(config.cachedir, exist_ok=True)
-        shutil.chown(config.cachedir, group=config.cache_group)
         os.chmod(config.cachedir, 0o770 | stat.S_ISGID)
-    elif cache_path.is_dir() or cache_path.is_symlink():
-        while cache_path.is_symlink():
-            cache_path = Path(os.readlink(cache_path))
-            if cache_path.group() != config.cache_group:
-                raise Exception(
-                    f"Link {cache_path} in the symlink-chain to the cache directory is not owned by {config.cache_group}"
-                )
-
-        if cache_path.group() != config.cache_group:
-            raise Exception(
-                f"Cache {config.cachedir} is not owned by {config.cache_group}"
-            )
-
-        if cache_path.stat().st_mode != 17912:
-            raise Exception(
-                f"Cache {config.cachedir} seems to have the wrong permissions. Please run `chmod g+rwxs {config.cachedir}`."
-            )
-
-    else:
+    elif not (cache_path.is_dir() or cache_path.is_symlink()):
         raise Exception(
             f"config.cachedir {config.cachedir} already exists but is not a path or a symlink"
         )
