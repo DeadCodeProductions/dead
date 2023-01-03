@@ -2,6 +2,7 @@
 ./llvm-project
 ./logs
 ./compiler_cache
+./docker_storage
 
 ./dce_instrumenter/build/
 ./callchain_checker/build/
