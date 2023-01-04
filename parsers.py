@@ -1,4 +1,5 @@
 import argparse
+import multiprocessing as mp
 from typing import Any, Sequence
 
 
@@ -20,7 +21,10 @@ def config_parser(
     )
 
     parser.add_argument(
-        "--cores", help="Amount of build cores to use. Defaults to all.", type=int
+        "--cores",
+        help="Amount of build cores to use. Defaults to all.",
+        type=int,
+        default=mp.cpu_count(),
     )
 
     return parser
