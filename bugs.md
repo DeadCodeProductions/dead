@@ -60,6 +60,16 @@
 - ~~[105835](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105835)~~ Fixed
 - [107822](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=107822)
 - [107823](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=107823)
+- [108351](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108351)
+- [108352](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108352)
+- [108353](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108353)
+- [108354](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108354)
+- [108355](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108355)
+- [108356](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108356)
+- [108357](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108357)
+- [108358](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108358)
+- [108359](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108359)
+- [108360](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108360)
 
 
 ### LLVM
