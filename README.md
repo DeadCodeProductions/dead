@@ -7,7 +7,7 @@ It is based on the paper [Finding missed optimizations through the lens of dead 
 For a list of reported bugs look at [bugs.md](./bugs.md).
 
 ## Setup
-Clone the latest release with, for example, `git clone -b v0.0.1 https://github.com/DeadCodeProductions/dead`.
+Clone the latest release with, for example, `git clone -b v0.0.2 https://github.com/DeadCodeProductions/dead`.
 
 After navigating into the cloned repository, choose if you want to run DEAD [locally](#local-setup) or in a [Docker container](#setup-with-docker).
 ### Setup with Docker
@@ -15,7 +15,7 @@ After navigating into the cloned repository, choose if you want to run DEAD [loc
 ./build_docker.sh 
 
 # Enter the container
-docker run -it -v deadpersistent:/persistent deaddocker
+docker run -it -v $(realpath ./docker_storage):/persistent deaddocker
 ```
 Continue by reading the [Run Section](#run).
 
@@ -28,7 +28,7 @@ The following programs or libraries must be installed:
 - `creduce`
 - `cmake`
 - `ccomp` (CompCert)
-- `llvm 13.0.0` (for the include files)
+- `llvm 13.0.0` or `llvm 14.0.0` (for the include files)
 - `compiler-rt` (for the sanitization libraries. It's also part of LLVM)
 - `boost`
 - `ninja`
@@ -66,7 +66,7 @@ pip install -r requirements.txt
 ```
 `init.py` will:
 - create a config file located at `~/.config/dead/config.json`
-- Compile tooling to instrument and check programs: `dcei`, `static-annotator`, `ccc`
+- Compile the callchain-checker: `ccc`
 - Clone repositories of `gcc` and `llvm` into the local directory
 - Create the `compiler_cache` and `logs` directory
 - Check if it can find the programs and paths required in the prerequisite-section and complain if not.
