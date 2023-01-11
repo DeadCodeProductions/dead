@@ -488,9 +488,31 @@ def _report() -> None:
         ir = to_collapsed(ir, False, summary="Emitted IR")
         return ir
 
-    print(
-        f"Dead Code Elimination Regression at -O{bad_setting.opt_level} (trunk vs. {good_setting_tag.split('-')[-1]}) {args.case_id}"
-    )
+    # Title
+    gcc_describe_name_parts: list[str] = []
+    gcc_describe_name: str = ""
+    if is_gcc:
+        # GCC uses something close to `git describe` to identify commits in bugzilla.
+        # Example: r13-1759-gdbb093f4f15
+        # We were asked to use this style in the title and the report.
+        gcc_describe_name_parts = utils.run_cmd(
+            f"git -C {repo.path} describe {case.bisection}"
+        ).split("-")[1:]
+        gcc_describe_name = "r" + "-".join(gcc_describe_name_parts)
+        print(
+            f"[{gcc_describe_name_parts[0]} Regression] Dead Code Elimination Regression at -O{bad_setting.opt_level} since {gcc_describe_name}"
+        )
+
+        # Get email to CC
+        print(
+            "CC to include:",
+            utils.run_cmd(f"git -C {repo.path} log -1 --format='%ae' {case.bisection}"),
+        )
+    else:
+        print(
+            f"Dead Code Elimination Regression at -O{bad_setting.opt_level} (trunk vs. {good_setting_tag.split('-')[-1]}) {args.case_id}"
+        )
+
     print("---------------")
     print(to_cody_str(f"cat case.c #{args.case_id}", is_gcc))
     print(to_code(source, is_gcc, "c"))
@@ -501,8 +523,6 @@ def _report() -> None:
 
     # Compile
     if is_gcc:
-        case.bad_setting.add_flag("-emit-llvm")
-        good_setting.add_flag("-emit-llvm")
         asm_bad = utils.get_asm_str(source, case.bad_setting, bldr)
         asm_good = utils.get_asm_str(source, good_setting, bldr)
 
@@ -513,10 +533,9 @@ def _report() -> None:
         print_cody_str(f"{good_setting_str} -S -o /dev/stdout case.c", is_gcc)
         print(prep_asm(asm_good, is_gcc))
         print()
-        print(
-            "Bisects to: https://gcc.gnu.org/git/?p=gcc.git;a=commit;h="
-            + str(case.bisection)
-        )
+        print(f"Bisects to: {gcc_describe_name}")
+        print()
+        print(utils.run_cmd(f"git -C {repo.path} log -1 {case.bisection}"))
         print()
         print("----- Build information -----")
         print(f"----- {bad_setting_tag}")
@@ -586,8 +605,17 @@ def _report() -> None:
 
     with open("case.txt", "w") as f:
         f.write(source)
-    print("Saved case.txt...", file=sys.stderr)
+    with open("case.c", "w") as f:
+        f.write(source)
+    print("Saved case.txt and case.c...", file=sys.stderr)
 
+    print("Manual check commands:", file=sys.stderr)
+    for s in [bad_setting, good_setting]:
+        exe_path = bldr.build(s.compiler_project, s.rev, get_executable=True)
+        print(
+            f"{exe_path} -O{s.opt_level} -Wall -Wextra -Wpedantic -S -o out.s case.c",
+            file=sys.stderr,
+        )
     if is_gcc:
         check_gcc_issues(cast(str, case.bisection))
     else:
@@ -648,8 +676,8 @@ def _diagnose() -> None:
             with open(tf.name, "w") as f:
                 f.write(empty_body_code)
                 res_comp_warnings = checker.check_compiler_warnings(
-                    config.gcc.sane_version,
                     config.llvm.sane_version,
+                    config.gcc.sane_version,
                     Path(tf.name),
                     case.bad_setting.get_flag_str(),
                     10,
