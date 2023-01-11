@@ -536,20 +536,6 @@ def _report() -> None:
         print(f"Bisects to: {gcc_describe_name}")
         print()
         print(utils.run_cmd(f"git -C {repo.path} log -1 {case.bisection}"))
-        print()
-        print("----- Build information -----")
-        print(f"----- {bad_setting_tag}")
-        print(
-            utils.get_verbose_compiler_info(bad_setting, bldr).split("lto-wrapper\n")[
-                -1
-            ]
-        )
-        print(f"\n----- {good_setting_tag}")
-        print(
-            utils.get_verbose_compiler_info(good_setting, bldr).split("lto-wrapper\n")[
-                -1
-            ]
-        )
 
     else:
 
