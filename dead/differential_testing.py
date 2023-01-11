@@ -51,17 +51,25 @@ class DifferentialTestingCase:
     markers_only_eliminated_by_setting1: tuple[DCEMarker | VRMarker, ...]
     markers_only_eliminated_by_setting2: tuple[DCEMarker | VRMarker, ...]
 
+    def __post_init__(self) -> None:
+        assert set(self.markers_only_eliminated_by_setting1).isdisjoint(
+            self.markers_only_eliminated_by_setting2
+        )
+
 
 class DifferentialTestingMode(Enum):
     """
-    - Unidirectional: a marker is interesting only if the first
-      compilation setting missed it and the second eliminated
-    - Bidirectional: a marker is interesting if any of the compilation settings
-      missed it and the other found it
+    - Unidirectional: any marker is interesting only if the first
+      compilation setting missed it and the second eliminated it
+    - Bidirectional: any marker is interesting if any of the compilation
+      settings missed it and the other eliminated it
+    - MarkerMissedByFirst: a particular marker is interesting if the
+      first compilation setting missed it and the other eliminated it
     """
 
-    Unidirectional = 0
+    Unidirectional = 0  # AnyMissedByFirst?
     Bidirectional = 1
+    MarkerMissedByFirst = 2
 
 
 def differential_test(
@@ -69,6 +77,7 @@ def differential_test(
     setting1: CompilationSetting,
     setting2: CompilationSetting,
     testing_mode: DifferentialTestingMode = DifferentialTestingMode.Bidirectional,
+    missed_marker: DCEMarker | VRMarker | None = None,
 ) -> DifferentialTestingCase | None:
     """Instrument `program`, compile it with `setting1` and `setting2` and
     check if the set of eliminated markers differ.
@@ -87,11 +96,16 @@ def differential_test(
         setting2 (CompilationSetting):
             the second compilation setting with which to
             compile the instrumented program
-        testing_direction (DifferentialTestingDirection):
+        testing_mode (DifferentialTestingMode):
             whether to accept cases whether where any of the two settings miss
             at least one marker (Bidirectional), or cases where markers are
-            eliminated by `setting1` and eliminated by `setting2`
-
+            missed by `setting1` and eliminated by `setting2` (Unidirectional).
+            In MarkerMissedByFirst mode, if `missed_marker` is not
+            missed by the First setting and eliminated by the other,
+            the case is not interesting and None is returned.
+        missed_marker (DCEMarker | VRMarker | None):
+            If `testing_mode` is MarkerMissecByFirst, only `missed_marker` is
+            checked: it must be missed by the first setting and found by the other.
     Returns:
         (DifferentialTestingCase | None):
             interesting case if found
@@ -103,7 +117,9 @@ def differential_test(
 
     # Instrument program
     try:
-        instr_program = instrument_program(program)
+        instr_program = instrument_program(
+            setting1.preprocess_program(program, make_compiler_agnostic=True)
+        )
     except AssertionError:
         return None
 
@@ -114,13 +130,17 @@ def differential_test(
     only_eliminated_by_setting2 = tuple(dead_markers2 - dead_markers1)
 
     # Is the candidate interesting?
-    if not only_eliminated_by_setting1 and not only_eliminated_by_setting2:
-        return None
-    if testing_mode == DifferentialTestingMode.Unidirectional:
-        if not only_eliminated_by_setting1:
-            return None
-    else:
-        assert testing_mode == DifferentialTestingMode.Bidirectional
+    match testing_mode:
+        case DifferentialTestingMode.Bidirectional:
+            if not only_eliminated_by_setting1 and not only_eliminated_by_setting2:
+                return None
+        case DifferentialTestingMode.Unidirectional:
+            if not only_eliminated_by_setting1:
+                return None
+        case DifferentialTestingMode.MarkerMissedByFirst:
+            assert missed_marker
+            if missed_marker not in only_eliminated_by_setting2:
+                return None
 
     return DifferentialTestingCase(
         program=instr_program,
@@ -131,6 +151,7 @@ def differential_test(
     )
 
 
+# XXX: does this really belong in this module?
 def generate_and_test(
     setting1: CompilationSetting,
     setting2: CompilationSetting,

@@ -7,6 +7,7 @@ from diopter.compiler import CComp, CompilerExe, parse_compilation_setting_from_
 from dead.config import dump_config, interactive_init
 from dead.differential_testing import DifferentialTestingMode, generate_and_test
 from dead.output import write_cases_to_directory
+from dead.reduction import reduce_case
 
 
 def __arg_to_compiler_exe(arg: str | None) -> CompilerExe | None:
@@ -84,7 +85,6 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         help="Make the temporary configuration overrides permanent.",
     )
-
     parser.add_argument(
         "compilation_command1",
         type=str,
@@ -106,6 +106,12 @@ def parse_args() -> argparse.Namespace:
         "mode a case is interesting if the second command misses a marker that the "
         "first command eliminated, in the bidirectional mode (default) a case is "
         "interesting as long as at least one command misses a marker",
+    )
+
+    parser.add_argument(
+        "--reduce",
+        action=argparse.BooleanOptionalAction,
+        help="Also reduce the discovered cases",
     )
     parser.add_argument(
         "--jobs",
@@ -148,7 +154,19 @@ def run_as_module() -> None:
         setting1,
         setting2,
         __arg_to_testing_mode(args.testing_mode),
-        args.number_attempts,
+        args.number_candidates,
         args.jobs,
     )
-    write_cases_to_directory(cases, args.output_directory)
+    reductions = {}
+    if args.reduce:
+        for case in cases:
+            # XXX: how to a select marker?
+            target_marker = (
+                case.markers_only_eliminated_by_setting1
+                + case.markers_only_eliminated_by_setting2
+            )[0]
+            reduction = reduce_case(case, target_marker, args.jobs)
+            assert reduction
+            reductions[case] = reduction
+
+    write_cases_to_directory(cases, reductions, args.output_directory)
