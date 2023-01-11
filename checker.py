@@ -38,7 +38,7 @@ def get_cc_output(cc: str, file: Path, flags: str, cc_timeout: int) -> tuple[int
         "-Wall",
         "-Wextra",
         "-Wpedantic",
-        "-O1",
+        "-O3",
         "-Wno-builtin-declaration-mismatch",
     ]
     if flags:
@@ -116,6 +116,7 @@ def check_compiler_warnings(
         "return type of ‘main’ is not ‘int’",
         "past the end of the array",
         "no return statement in function returning non-void",
+        "undefined behavior",
     ]
 
     ws = [w for w in warnings if w in clang_output or w in gcc_output]
@@ -199,7 +200,7 @@ def use_ub_sanitizers(
     Returns:
         bool: True if no undefined was found.
     """
-    cmd = [clang, str(file), "-O1", "-fsanitize=undefined,address"]
+    cmd = [clang, str(file), "-O0", "-fsanitize=undefined,address"]
     if flags:
         cmd.extend(flags.split())
 
