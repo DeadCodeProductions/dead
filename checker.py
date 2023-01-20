@@ -377,7 +377,7 @@ class Checker:
                     break
             return not uninteresting
 
-    def _emtpy_marker_code_str(self, case: utils.Case) -> str:
+    def _empty_marker_code_str(self, case: utils.Case) -> str:
         marker_prefix = utils.get_marker_prefix(case.marker)
         p = re.compile(rf"void {marker_prefix}(.*)\((void|)\);(.*)")
         empty_body_code = ""
@@ -407,7 +407,7 @@ class Checker:
             bool: True if the code passes the 'sanity-check'
         """
 
-        empty_body_code = self._emtpy_marker_code_str(case)
+        empty_body_code = self._empty_marker_code_str(case)
 
         with tempfile.NamedTemporaryFile(suffix=".c") as tf:
             with open(tf.name, "w") as f:
