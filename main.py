@@ -657,7 +657,7 @@ def _diagnose() -> None:
         prefix: str,
         chkr: checker.Checker,
     ) -> None:
-        empty_body_code = chkr._emtpy_marker_code_str(case)
+        empty_body_code = chkr._empty_marker_code_str(case)
         with tempfile.NamedTemporaryFile(suffix=".c") as tf:
             with open(tf.name, "w") as f:
                 f.write(empty_body_code)
