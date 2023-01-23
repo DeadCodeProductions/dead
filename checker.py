@@ -386,7 +386,7 @@ class Checker:
             if m:
                 empty_body_code += (
                     "\n"
-                    + rf"void {marker_prefix}{m.group(1)}(m.group(2)){{}}"
+                    + rf"void {marker_prefix}{m.group(1)}({m.group(2)}){{}}"
                     + "\n"
                     + rf"{m.group(3)}"
                 )
