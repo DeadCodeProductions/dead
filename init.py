@@ -150,7 +150,10 @@ def main() -> None:
         # $ csmith --version csmith 2.3.0
         # Git version: 30dccd7
         version = res.split("\n")[0].split()[1]
-        csmith["include_path"] = "/usr/include/csmith-" + version
+        if Path("/usr/include/csmith").exists():
+            csmith["include_path"] = "/usr/include/csmith"
+        else:
+            csmith["include_path"] = "/usr/include/csmith-" + version
     else:
         print(
             "Can't find csmith in $PATH. You have to specify the executable and the include path yourself"
