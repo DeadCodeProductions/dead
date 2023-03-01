@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import random
-import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -15,17 +14,8 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Optional
 
-import ccbuilder
-
+from ccbuilder import Builder, BuildException, PatchDB, get_compiler_info
 from ccbuilder.utils.utils import select_repo
-from ccbuilder import (
-    Builder,
-    BuildException,
-    CompilerProject,
-    PatchDB,
-    Repo,
-    get_compiler_info,
-)
 
 import generator
 import parsers
@@ -85,7 +75,6 @@ class Reducer:
             bool: If the reduction was successful.
         """
         if not force and case.reduced_code:
-
             return True
 
         case.reduced_code = self.reduce_code(
@@ -133,7 +122,6 @@ class Reducer:
         # Setting a temporary temporary directory for creduce to be able to clean
         # up everything
         with TempDirEnv() as tmpdir:
-
             # preprocess file
             if preprocess:
                 tmp = preprocessing.preprocess_csmith_code(
@@ -255,7 +243,7 @@ if __name__ == "__main__":
             try:
                 rdcr.reduce_file(tf, args.force)
             except BuildException as e:
-                print("{e}")
+                print(f"{e}")
 
     # if (We want to generate something and not only reduce a file)
     if args.generate:

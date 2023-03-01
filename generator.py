@@ -12,7 +12,7 @@ from os.path import join as pjoin
 from pathlib import Path
 from random import randint
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Generator, Optional, Union
+from typing import Generator, Optional
 
 from ccbuilder import Builder, PatchDB, get_compiler_info
 from dead_instrumenter.instrumenter import instrument_program

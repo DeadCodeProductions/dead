@@ -792,7 +792,7 @@ def main_parser() -> argparse.ArgumentParser:
         help="Whether or not to force another bisection. This will override the old bisection.",
     )
 
-    edit_parser = subparser.add_parser("edit", help="Open DEADs config in $EDITOR.")
+    subparser.add_parser("edit", help="Open DEADs config in $EDITOR.")
 
     unreported_parser = subparser.add_parser(
         "unreported", help="List cases which have not been reported or fixed."
