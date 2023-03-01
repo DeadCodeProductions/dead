@@ -11,18 +11,17 @@ import subprocess
 import sys
 import tempfile
 import time
-import urllib.parse
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Optional, cast
 
 import requests
-import ccbuilder
 from ccbuilder import (
     Builder,
     BuildException,
     PatchDB,
     Repo,
+    RepositoryException,
     get_compiler_info,
     get_compiler_project,
 )
@@ -32,7 +31,6 @@ import bisector
 import checker
 import database
 import generator
-import init
 import parsers
 import preprocessing
 import reducer
@@ -44,15 +42,15 @@ def get_llvm_github_commit_author(rev: str) -> Optional[str]:
         "https://github.com/llvm/llvm-project/commit/" + rev
     ).content.decode()
     p = re.compile(r'.*\/llvm\/llvm-project\/commits\?author=(.*)".*')
-    for l in html.split("\n"):
-        l = l.strip()
-        if m := p.match(l):
+    for line in html.split("\n"):
+        line = line.strip()
+        if m := p.match(line):
             return m.group(1)
     return None
 
 
 def check_llvm_issues(rev: str) -> bool:
-    print(f"Looking for existing issues...", end="", file=sys.stderr)
+    print("Looking for existing issues...", end="", file=sys.stderr)
     url_pre = f"https://api.github.com/search/issues?q={rev} repo:llvm/llvm-project"
     open_issues = json.loads(requests.get(url_pre + " is:open").content)
     closed_issues = json.loads(requests.get(url_pre + " is:closed").content)
@@ -65,12 +63,12 @@ def check_llvm_issues(rev: str) -> bool:
         for issue in issues:
             print(issue["html_url"], file=sys.stderr)
         return False
-    print(f"found none", file=sys.stderr)
+    print("found none", file=sys.stderr)
     return True
 
 
 def check_gcc_issues(rev: str) -> bool:
-    print(f"Looking for existing issues...", end="", file=sys.stderr)
+    print("Looking for existing issues...", end="", file=sys.stderr)
     url_pre = f"https://gcc.gnu.org/bugzilla/rest/bug?quicksearch={rev}"
     issues = json.loads(requests.get(url_pre).content)["bugs"]
     if issues:
@@ -84,7 +82,7 @@ def check_gcc_issues(rev: str) -> bool:
                 file=sys.stderr,
             )
         return False
-    print(f"found none", file=sys.stderr)
+    print("found none", file=sys.stderr)
     return True
 
 
@@ -112,7 +110,7 @@ def _run() -> None:
         + (
             ["Reducer<Only New>"]
             if args.reducer is None
-            else (["Reducer<Always>"] if args.reducer == True else [])
+            else (["Reducer<Always>"] if args.reducer is True else [])
         )
     )
 
@@ -129,12 +127,11 @@ def _run() -> None:
             if (
                 time.time() - last_update_time
             ) / 3600 > args.update_trunk_after_X_hours:
-
                 logging.info("Updating repositories...")
 
                 last_update_time = time.time()
 
-                known: Dict[str, list[int]] = dict()
+                known: dict[str, list[int]] = dict()
                 for i, s in enumerate(scenario.target_settings):
                     cname = s.compiler_project.to_string()
                     if cname not in known:
@@ -195,11 +192,11 @@ def _run() -> None:
             if (
                 args.reducer
                 or case.bisection
-                and not case.bisection in get_all_bisections(ddb)
+                and case.bisection not in get_all_bisections(ddb)
             ):
                 try:
                     time_start_reducer = time.perf_counter()
-                    worked = rdcr.reduce_case(case)
+                    rdcr.reduce_case(case)
                     time_end_reducer = time.perf_counter()
                     reducer_time = time_end_reducer - time_start_reducer
                 except BuildException as e:
@@ -385,7 +382,7 @@ def _report() -> None:
         cpy.code, prebisection_setting, marker_prefix, bldr
     )
 
-    if not cpy.marker in bis_set or cpy.marker in rebis_set:
+    if cpy.marker not in bis_set or cpy.marker in rebis_set:
         print("Bisection commit is not correct! Aborting...", file=sys.stderr)
         exit(1)
 
@@ -538,7 +535,6 @@ def _report() -> None:
         print(utils.run_cmd(f"git -C {repo.path} log -1 {case.bisection}"))
 
     else:
-
         print("Target: `x86_64-unknown-linux-gnu`")
         ir_bad = utils.get_llvm_IR(source, case.bad_setting, bldr)
         ir_good = utils.get_llvm_IR(source, good_setting, bldr)
@@ -807,7 +803,6 @@ def _check_reduced() -> None:
     case.reduced_code = new_code
 
     if case.bisection:
-
         project_repo = select_repo(
             case.bad_setting.compiler_project,
             llvm_repo=bldr.llvm_repo,
@@ -1155,7 +1150,6 @@ def _edit() -> None:
 
 
 def _unreported() -> None:
-
     query = """
         WITH exclude_bisections AS (
         select distinct bisection from reported_cases join cases on cases.case_id = reported_cases.case_id
@@ -1165,11 +1159,11 @@ def _unreported() -> None:
     """
 
     if args.good_version or args.OX_only:
-        query += f"""
+        query += """
         ,concrete_good AS (
           select case_id from good_settings join compiler_setting on good_settings.compiler_setting_id = compiler_setting.compiler_setting_id
           where 1 
-        """
+        """  # noqa: W291
 
         if args.good_version:
             gcc_repo = Repo(config.gcc.repo, config.gcc.main_branch)
@@ -1177,7 +1171,7 @@ def _unreported() -> None:
 
             try:
                 rev = gcc_repo.rev_to_commit(args.good_version)
-            except:
+            except RepositoryException:
                 rev = llvm_repo.rev_to_commit(args.good_version)
             query += f" and rev = '{rev}'"
 
@@ -1234,20 +1228,19 @@ def _unreported() -> None:
 
 
 def _reported() -> None:
-
     query = """
-    with rep as (	
-        select cases.case_id, bisection, bug_report_link, compiler from cases 
-        join compiler_setting on bad_setting_id = compiler_setting_id 
-        left join reported_cases on cases.case_id = reported_cases.case_id  
+    with rep as (
+        select cases.case_id, bisection, bug_report_link, compiler from cases
+        join compiler_setting on bad_setting_id = compiler_setting_id
+        left join reported_cases on cases.case_id = reported_cases.case_id
         where bug_report_link is not null order by cases.case_id
     )
 
-    select rep.case_id, bisection, bug_report_link 
+    select rep.case_id, bisection, bug_report_link
     """
 
     if args.good_settings:
-        query += """, compiler_setting.compiler, compiler_setting.rev, compiler_setting.opt_level 
+        query += """, compiler_setting.compiler, compiler_setting.rev, compiler_setting.opt_level
         from rep
         left join good_settings on rep.case_id = good_settings.case_id
         left join compiler_setting on good_settings.compiler_setting_id = compiler_setting.compiler_setting_id
@@ -1270,7 +1263,6 @@ def _reported() -> None:
         for case_id, _, _ in res:
             print(case_id)
     elif args.good_settings:
-
         gcc_repo = Repo(config.gcc.repo, config.gcc.main_branch)
         llvm_repo = Repo(config.llvm.repo, config.llvm.main_branch)
         print(
@@ -1280,7 +1272,6 @@ def _reported() -> None:
         )
         last_case_id = -1
         for case_id, bisection, link, name, rev, opt_level in res:
-
             if name == "gcc":
                 maybe_tag = gcc_repo.rev_to_tag(rev)
             else:
@@ -1316,7 +1307,6 @@ def _reported() -> None:
 
 
 def _findby() -> None:
-
     if args.what == "link":
         link_query = "SELECT case_id FROM reported_cases WHERE bug_report_link = ?"
         res = ddb.con.execute(link_query, (args.var.strip(),)).fetchall()

@@ -11,7 +11,6 @@ from typing import ClassVar, Optional
 
 from ccbuilder import get_compiler_project
 
-import utils
 from utils import Case, CompilerSetting, NestedNamespace, Scenario
 
 
@@ -510,7 +509,6 @@ class CaseDatabase:
         def get_settings(
             self: CaseDatabase, table: str, s_id: int
         ) -> list[CompilerSetting]:
-
             ids = self.con.execute(
                 f"SELECT compiler_setting_id FROM {table} WHERE scenario_id == ?",
                 (s_id,),

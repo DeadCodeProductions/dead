@@ -10,15 +10,7 @@ import tarfile
 from pathlib import Path
 from typing import Optional
 
-import ccbuilder
-from ccbuilder import (
-    Builder,
-    BuildException,
-    CompilerProject,
-    PatchDB,
-    Repo,
-    get_compiler_info,
-)
+from ccbuilder import Builder, BuildException, PatchDB, Repo, get_compiler_info
 from ccbuilder.utils.utils import select_repo
 
 import checker
@@ -115,7 +107,7 @@ class Bisector:
             bool: True if the bisection succeeded.
         """
         if not force and case.bisection:
-            logging.info(f"Ignoring case: Already bisected")
+            logging.info("Ignoring case: Already bisected")
             return True
         try:
             if res := self.bisect_code(
@@ -179,7 +171,7 @@ class Bisector:
         ]
 
         if len(possible_good_commits) == 0:
-            logging.info(f"No matching optimization level found. Aborting...")
+            logging.info("No matching optimization level found. Aborting...")
             return None
         # Sort commits based on branch point wrt to the bad commit
         # Why? Look at the following commit graph
@@ -246,7 +238,7 @@ class Bisector:
                     # b2 case
                     logging.info("B2 Case")
                     # TODO: Figure out how to save and handle b2
-                    logging.critical(f"Currently ignoring b2, sorry")
+                    logging.critical("Currently ignoring b2, sorry")
                     raise BisectionException("Currently ignoring Case type B2, sorry")
 
                     # res = self._bisection(
@@ -327,7 +319,7 @@ class Bisector:
 
         # bisect in cache
         len_region = len(repo.direct_first_parent_path(good_rev, bad_rev))
-        logging.info(f"Bisecting in cache...")
+        logging.info("Bisecting in cache...")
         midpoint = ""
         old_midpoint = ""
         failed_to_compile = False

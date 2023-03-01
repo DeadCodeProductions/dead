@@ -24,8 +24,8 @@ from typing import IO, Any, Optional, Sequence, TextIO, Union, cast
 import ccbuilder
 from ccbuilder import (
     Builder,
-    CompilerProject,
     BuildException,
+    CompilerProject,
     Repo,
     get_compiler_project,
 )
@@ -41,32 +41,32 @@ class Executable(object):
 # fmt: off
 # When adding new options, don't forget to also put them in the init script!
 EXPECTED_ENTRIES = [
-    # Type      Path in config              Description
-    (str,       ("gcc", "name"),            "Prefix for the gcc cache directory"),
-    (str,       ("gcc", "main_branch"),     "Name of main/trunk/master branch"),
-    (Path,      ("gcc", "repo"),            "Path to gcc repository"),
-    (Executable,("gcc", "sane_version",),   "Path to executable or name in PATH for a sane gcc" ),
-    (list,      ("gcc", "releases",),       "GCC releases of interest"),
+    # Type       Path in config              Description
+    (str,        ("gcc", "name"),            "Prefix for the gcc cache directory"),  # noqa: E241
+    (str,        ("gcc", "main_branch"),     "Name of main/trunk/master branch"),  # noqa: E241
+    (Path,       ("gcc", "repo"),            "Path to gcc repository"),  # noqa: E241
+    (Executable, ("gcc", "sane_version", ),  "Path to executable or name in PATH for a sane gcc"),  # noqa: E241
+    (list,       ("gcc", "releases", ),      "GCC releases of interest"),  # noqa: E241
 
-    (str,       ("llvm", "name"),           "Prefix for the llvm cache directory"),
-    (str,       ("llvm", "main_branch"),    "Name of main/trunk/master branch"),
-    (Path,      ("llvm", "repo"),           "Path to llvm-project repository"),
-    (Executable,("llvm", "sane_version",),  "Path to executable or name in PATH for a sane clang" ),
-    (list,      ("llvm", "releases",),      "LLVM releases of interest"),
+    (str,        ("llvm", "name"),           "Prefix for the llvm cache directory"),  # noqa: E241
+    (str,        ("llvm", "main_branch"),    "Name of main/trunk/master branch"),  # noqa: E241
+    (Path,       ("llvm", "repo"),           "Path to llvm-project repository"),  # noqa: E241
+    (Executable, ("llvm", "sane_version",),  "Path to executable or name in PATH for a sane clang"),  # noqa: E241
+    (list,       ("llvm", "releases",),      "LLVM releases of interest"),  # noqa: E241
 
-    (Path,      ("cachedir", ),             "Path where the cache should be"),
-    (Path,      ("repodir", ),              "Path where the repos should be"),
-    (Executable,("csmith", "executable"),   "Path to executable or name in PATH for csmith"),
-    (Path,      ("csmith", "include_path"), "Path to include directory of csmith"),
-    (int,       ("csmith", "max_size"),     "Maximum size of csmith-generated candidate"),
-    (int,       ("csmith", "min_size"),     "Minimum size of csmith-generated candidate"),
-    (Executable,("dcei",),                  "Path to executable or name in PATH for dcei" ),
-    (Executable,("creduce", ),              "Path to executable or name in PATH for creduce" ),
-    (Executable,("ccomp", ),                "Path to executable or name in PATH for ccomp" ),
-    (Path,      ("patchdb", ),              "Path where the patchDB file is"),
-    (Path,      ("logdir", ),               "Where build log files should be saved to"),
-    (Executable,("ccc",),                   "Path to executable or name in PATH for the callchain checker"),
-    (Path,      ("casedb", ),               "Path to the database holding the cases."),
+    (Path,       ("cachedir", ),             "Path where the cache should be"),  # noqa: E241
+    (Path,       ("repodir", ),              "Path where the repos should be"),  # noqa: E241
+    (Executable, ("csmith", "executable"),   "Path to executable or name in PATH for csmith"),  # noqa: E241
+    (Path,       ("csmith", "include_path"), "Path to include directory of csmith"),  # noqa: E241
+    (int,        ("csmith", "max_size"),     "Maximum size of csmith-generated candidate"),  # noqa: E241
+    (int,        ("csmith", "min_size"),     "Minimum size of csmith-generated candidate"),  # noqa: E241
+    (Executable, ("dcei", ),                 "Path to executable or name in PATH for dcei"),  # noqa: E241
+    (Executable, ("creduce", ),              "Path to executable or name in PATH for creduce"),  # noqa: E241
+    (Executable, ("ccomp", ),                "Path to executable or name in PATH for ccomp"),  # noqa: E241
+    (Path,       ("patchdb", ),              "Path where the patchDB file is"),  # noqa: E241
+    (Path,       ("logdir", ),               "Where build log files should be saved to"),  # noqa: E241
+    (Executable, ("ccc", ),                  "Path to executable or name in PATH for the callchain checker"),  # noqa: E241
+    (Path,       ("casedb", ),               "Path to the database holding the cases."),  # noqa: E241
 ]
 # fmt: on
 
@@ -223,7 +223,6 @@ def import_config(
         NestedNamespace: The config
     """
     if config_path is None:
-
         p = Path.home() / ".config/dead/config.json"
         if p.exists():
             config_path = p
@@ -272,7 +271,6 @@ def get_config_and_parser(
         tuple[NestedNamespace, argparse.Namespace]: The config and the parsed arguments.
     """
     if own_parser is not None:
-
         parser_list = [own_parser, parsers.config_parser(EXPECTED_ENTRIES)]
     else:
         parser_list = [parsers.config_parser(EXPECTED_ENTRIES)]
@@ -452,7 +450,6 @@ class Scenario:
 
     @staticmethod
     def from_jsonable_dict(config: NestedNamespace, d: dict[str, Any]) -> Scenario:
-
         target_settings = [
             CompilerSetting.from_jsonable_dict(config, cs)
             for cs in d["target_settings"]
@@ -490,7 +487,6 @@ def run_cmd(
     additional_env: dict[str, str] = {},
     **kwargs: Any,  # https://github.com/python/mypy/issues/8772
 ) -> str:
-
     if working_dir is None:
         working_dir = Path(os.getcwd())
     env = os.environ.copy()
@@ -512,7 +508,6 @@ def run_cmd_to_logfile(
     working_dir: Optional[Path] = None,
     additional_env: dict[str, str] = {},
 ) -> None:
-
     if working_dir is None:
         working_dir = Path(os.getcwd())
     env = os.environ.copy()
@@ -691,7 +686,6 @@ class Case:
         path: Optional[Path] = None,
         timestamp: Optional[float] = None,
     ):
-
         self.code = code
         self.marker = marker
         self.bad_setting = bad_setting
@@ -714,7 +708,6 @@ class Case:
     @staticmethod
     def from_file(config: NestedNamespace, file: Path) -> Case:
         with tarfile.open(file, "r") as tf:
-
             names = tf.getnames()
 
             code = check_and_get(tf, "code.c")
@@ -831,14 +824,14 @@ class Case:
 
 
 def get_latest_compiler_setting_from_list(
-    repo: Repo, l: list[CompilerSetting]
+    repo: Repo, compiler_list: list[CompilerSetting]
 ) -> CompilerSetting:
     """Finds and returns newest compiler setting wrt main branch
     in the list. Assumes all compilers to be of the same 'type' i.e. gcc, clang,...
 
     Args:
         repo (repository.Repo): Repositiory of compiler type
-        l (list[CompilerSetting]): List of compilers to sort
+        compiler_list (list[CompilerSetting]): List of compilers to sort
 
     Returns:
         CompilerSetting: Compiler closest to main
@@ -852,7 +845,7 @@ def get_latest_compiler_setting_from_list(
         else:
             return 1
 
-    return max(l, key=functools.cmp_to_key(cmp_func))
+    return max(compiler_list, key=functools.cmp_to_key(cmp_func))
 
 
 # =================== Builder Helper ====================

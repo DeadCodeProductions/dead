@@ -74,8 +74,8 @@ def preprocess_lines(lines: list[str]) -> str:
         re.compile(r".*__asm__.*"),  # CompCert has problems
     ]
 
-    def is_start(l: str) -> bool:
-        return any([p_start.match(l) for p_start in start_patterns])
+    def is_start(line: str) -> bool:
+        return any([p_start.match(line) for p_start in start_patterns])
 
     lines_to_skip: list[int] = []
     for i, line in enumerate(lines):
@@ -106,7 +106,6 @@ def preprocess_csmith_file(
     compiler_setting: utils.CompilerSetting,
     bldr: Builder,
 ) -> str:
-
     with tempfile.NamedTemporaryFile(suffix=".c") as tf:
         shutil.copy(path, tf.name)
 

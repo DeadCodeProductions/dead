@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import grp
 import json
 import os
 import shutil

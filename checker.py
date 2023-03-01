@@ -13,14 +13,7 @@ from types import TracebackType
 from typing import Optional
 
 import ccbuilder
-from ccbuilder import (
-    Builder,
-    BuildException,
-    CompilerProject,
-    PatchDB,
-    get_compiler_info,
-    Repo,
-)
+from ccbuilder import Builder, PatchDB
 from dead_instrumenter.instrumenter import annotate_with_static
 
 import parsers
