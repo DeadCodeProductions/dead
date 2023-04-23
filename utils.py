@@ -890,7 +890,7 @@ def find_alive_markers(
     alive_markers = set()
 
     # Extract alive markers
-    alive_regex = re.compile(f".*[call|jmp].*{marker_prefix}([0-9]+)_.*")
+    alive_regex = re.compile(f".*(?:call|j[a-z]{{1,2}}).*{marker_prefix}([0-9]+)_.*")
 
     asm = get_asm_str(code, compiler_setting, bldr)
 
